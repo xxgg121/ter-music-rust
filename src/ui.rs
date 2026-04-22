@@ -2235,10 +2235,7 @@ impl UserInterface {
                 KeyCode::Char('d') | KeyCode::Char('D') => {
                     // 删除收藏
                     if self.favorites_selected_index < self.favorites.len() {
-                        //let removed_path = self.favorites.remove(self.favorites_selected_index);
-                        // 获取被删除的歌曲名
-                        //let removed_name = playlist_files_name(&self.playlist, &removed_path);
-                        //self.update_status(&format!("已从收藏移除: {}", removed_name));
+                        self.favorites.remove(self.favorites_selected_index);
                         // 调整选中索引
                         if self.favorites_selected_index >= self.favorites.len() && self.favorites_selected_index > 0 {
                             self.favorites_selected_index -= 1;
