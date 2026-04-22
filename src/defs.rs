@@ -21,6 +21,7 @@ pub enum PlayMode {
 
 impl PlayMode {
     /// 获取播放模式的中文名称
+    #[allow(dead_code)]
     pub fn to_string_cn(self) -> &'static str {
         match self {
             PlayMode::Single => "单曲播放",

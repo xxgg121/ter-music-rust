@@ -123,6 +123,64 @@ impl UiTheme {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum UiLanguage {
+    ZhCn,
+    ZhTw,
+    En,
+    Ja,
+    Ko,
+}
+
+impl UiLanguage {
+    fn next(self) -> Self {
+        match self {
+            UiLanguage::ZhCn => UiLanguage::ZhTw,
+            UiLanguage::ZhTw => UiLanguage::En,
+            UiLanguage::En => UiLanguage::Ja,
+            UiLanguage::Ja => UiLanguage::Ko,
+            UiLanguage::Ko => UiLanguage::ZhCn,
+        }
+    }
+
+    fn config_key(self) -> &'static str {
+        match self {
+            UiLanguage::ZhCn => "zh-CN",
+            UiLanguage::ZhTw => "zh-TW",
+            UiLanguage::En => "en",
+            UiLanguage::Ja => "ja",
+            UiLanguage::Ko => "ko",
+        }
+    }
+
+    fn from_config_key(s: &str) -> Self {
+        if s.eq_ignore_ascii_case("zh-cn") || s.eq_ignore_ascii_case("zh_hans") || s.eq_ignore_ascii_case("cn") || s == "简体" || s == "中文简体" {
+            UiLanguage::ZhCn
+        } else if s.eq_ignore_ascii_case("zh-tw") || s.eq_ignore_ascii_case("zh_hant") || s.eq_ignore_ascii_case("tw") || s == "繁体" || s == "中文繁体" {
+            UiLanguage::ZhTw
+        } else if s.eq_ignore_ascii_case("en") || s.eq_ignore_ascii_case("english") {
+            UiLanguage::En
+        } else if s.eq_ignore_ascii_case("ja") || s.eq_ignore_ascii_case("jp") || s.eq_ignore_ascii_case("japanese") {
+            UiLanguage::Ja
+        } else if s.eq_ignore_ascii_case("ko") || s.eq_ignore_ascii_case("kr") || s.eq_ignore_ascii_case("korean") {
+            UiLanguage::Ko
+        } else {
+            UiLanguage::ZhCn
+        }
+    }
+
+    #[allow(dead_code)]
+    fn display_name(self) -> &'static str {
+        match self {
+            UiLanguage::ZhCn => "中文简体",
+            UiLanguage::ZhTw => "中文繁體",
+            UiLanguage::En => "English",
+            UiLanguage::Ja => "日本語",
+            UiLanguage::Ko => "한국어",
+        }
+    }
+}
+
 /// 进度条布局信息（用于鼠标点击定位）
 #[derive(Debug, Clone, Copy)]
 struct ProgressBarLayout {
@@ -305,6 +363,8 @@ pub struct UserInterface {
     theme: UiTheme,
     /// 当前主题颜色缓存
     theme_colors: ThemeColors,
+    /// 当前界面语言
+    language: UiLanguage,
 }
 
 impl UserInterface {
@@ -372,6 +432,7 @@ impl UserInterface {
             online_download_percent: 0,
             theme: UiTheme::Neon,
             theme_colors: UiTheme::Neon.colors(),
+            language: UiLanguage::ZhCn,
         }
     }
 
@@ -386,6 +447,57 @@ impl UserInterface {
             *scroll_offset = selected;
         } else if selected >= *scroll_offset + visible_count {
             *scroll_offset = selected - visible_count + 1;
+        }
+    }
+
+    fn i18n<'a>(&self, zh_cn: &'a str, zh_tw: &'a str, en: &'a str, ja: &'a str, ko: &'a str) -> &'a str {
+        match self.language {
+            UiLanguage::ZhCn => zh_cn,
+            UiLanguage::ZhTw => zh_tw,
+            UiLanguage::En => en,
+            UiLanguage::Ja => ja,
+            UiLanguage::Ko => ko,
+        }
+    }
+
+    fn now_playing_prefix(&self) -> &'static str {
+        self.i18n("正在播放: ", "正在播放: ", "Now Playing: ", "再生中: ", "재생 중: ")
+    }
+
+    fn is_now_playing_message(&self, message: &str) -> bool {
+        const PREFIXES: [&str; 8] = [
+            "正在播放: ",
+            "正在播放：",
+            "Now Playing: ",
+            "Now Playing：",
+            "再生中: ",
+            "再生中：",
+            "재생 중: ",
+            "재생 중：",
+        ];
+        PREFIXES.iter().any(|p| message.starts_with(p))
+    }
+
+    pub fn update_now_playing_status(&mut self, song_name: &str) {
+        let prefix = self.now_playing_prefix();
+        self.update_status(&format!("{}{}", prefix, song_name));
+    }
+
+    fn play_mode_text(&self, mode: PlayMode) -> &'static str {
+        match mode {
+            PlayMode::Single => self.i18n("单曲播放", "單曲播放", "Single", "単曲再生", "한 곡 재생"),
+            PlayMode::RepeatOne => self.i18n("单曲循环", "單曲循環", "Repeat One", "1曲リピート", "한 곡 반복"),
+            PlayMode::Sequence => self.i18n("顺序播放", "順序播放", "Sequence", "順番再生", "순차 재생"),
+            PlayMode::LoopAll => self.i18n("列表循环", "列表循環", "Loop All", "リストループ", "목록 반복"),
+            PlayMode::Random => self.i18n("随机播放", "隨機播放", "Random", "シャッフル", "셔플"),
+        }
+    }
+
+    fn play_state_text(&self, state: PlayState) -> &'static str {
+        match state {
+            PlayState::Playing => self.i18n("播放中", "播放中", "Playing", "再生中", "재생 중"),
+            PlayState::Paused => self.i18n("已暂停", "已暫停", "Paused", "一時停止", "일시정지"),
+            PlayState::Stopped => self.i18n("已停止", "已停止", "Stopped", "停止", "정지"),
         }
     }
 
@@ -609,7 +721,11 @@ impl UserInterface {
 
         // 搜索模式下，将光标定位到搜索输入位置
         if self.search_mode {
-            let prompt_text = if self.online_search_mode { "网络搜索: " } else { "本地搜索: " };
+            let prompt_text = if self.online_search_mode {
+                self.i18n("网络搜索: ", "網路搜尋: ", "Online Search: ", "オンライン検索: ", "온라인 검색: ")
+            } else {
+                self.i18n("本地搜索: ", "本地搜尋: ", "Local Search: ", "ローカル検索: ", "로컬 검색: ")
+            };
             let search_prompt_len = unicode_width::UnicodeWidthStr::width(prompt_text);
             let query_len = unicode_width::UnicodeWidthStr::width(self.search_query.as_str());
             let target_col = (search_prompt_len + query_len) as u16;
@@ -633,7 +749,13 @@ impl UserInterface {
     fn draw_header<W: Write>(&self, stdout: &mut W) -> io::Result<()> {
         // 根据终端宽度生成标题
         let width = self.terminal_width as usize;
-        let title = "🎵 Ter-Music - 终端音乐播放器 (Rust 版本) 🎵";
+        let title = self.i18n(
+            "🎵 Ter-Music - 终端音乐播放器 (Rust跨平台版本) 🎵",
+            "🎵 Ter-Music - 終端音樂播放器 (Rust跨平台版本) 🎵",
+            "🎵 Ter-Music - Terminal Music Player (Rust Cross-Platform Edition) 🎵",
+            "🎵 Ter-Music - ターミナル音楽プレーヤー (Rustクロスプラットフォーム版) 🎵",
+            "🎵 Ter-Music - 터미널 음악 플레이어 (Rust 크로스 플랫폼 버전) 🎵",
+        );
 
         // 计算标题居中位置（使用显示宽度而非字符数）
         let title_len = unicode_width::UnicodeWidthStr::width(title);
@@ -685,7 +807,13 @@ impl UserInterface {
 
         if self.dir_history_mode {
             // 音乐目录模式：标题显示音乐目录
-            let dir_title = format!("音乐目录 (共 {} 个)", self.dir_history.len());
+            let dir_title = match self.language {
+                UiLanguage::ZhCn => format!("音乐目录 (共 {} 个)", self.dir_history.len()),
+                UiLanguage::ZhTw => format!("音樂目錄 (共 {} 個)", self.dir_history.len()),
+                UiLanguage::En => format!("Music Folders ({} total)", self.dir_history.len()),
+                UiLanguage::Ja => format!("音楽フォルダ (合計 {} 件)", self.dir_history.len()),
+                UiLanguage::Ko => format!("음악 폴더 (총 {}개)", self.dir_history.len()),
+            };
             let dir_title_width = unicode_width::UnicodeWidthStr::width(dir_title.as_str());
             let padding = left_width as usize - dir_title_width;
             queue!(
@@ -778,7 +906,13 @@ impl UserInterface {
             Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
         } else if self.favorites_mode {
             // 收藏列表模式：标题显示收藏列表
-            let fav_title = format!("收藏列表 (共 {} 首)", self.favorites.len());
+            let fav_title = match self.language {
+                UiLanguage::ZhCn => format!("收藏列表 (共 {} 首)", self.favorites.len()),
+                UiLanguage::ZhTw => format!("收藏列表 (共 {} 首)", self.favorites.len()),
+                UiLanguage::En => format!("Favorites ({} songs)", self.favorites.len()),
+                UiLanguage::Ja => format!("お気に入り ({} 曲)", self.favorites.len()),
+                UiLanguage::Ko => format!("즐겨찾기 (총 {}곡)", self.favorites.len()),
+            };
             let fav_title_width = unicode_width::UnicodeWidthStr::width(fav_title.as_str());
             let padding = left_width as usize - fav_title_width;
             queue!(
@@ -904,9 +1038,17 @@ impl UserInterface {
         } else if self.search_mode {
             // 搜索模式：标题显示搜索栏
             let search_prompt = if self.online_search_mode {
-                format!("网络搜索: {}", self.search_query)
+                format!(
+                    "{}{}",
+                    self.i18n("网络搜索: ", "網路搜尋: ", "Online Search: ", "オンライン検索: ", "온라인 검색: "),
+                    self.search_query
+                )
             } else {
-                format!("本地搜索: {}", self.search_query)
+                format!(
+                    "{}{}",
+                    self.i18n("本地搜索: ", "本地搜尋: ", "Local Search: ", "ローカル検索: ", "로컬 검색: "),
+                    self.search_query
+                )
             };
             let search_width = unicode_width::UnicodeWidthStr::width(search_prompt.as_str());
             let padding = left_width as usize - search_width;
@@ -997,11 +1139,29 @@ impl UserInterface {
                 // 如果没有搜索结果
                 if total == 0 && !self.online_searching {
                     let hint = if self.search_query.is_empty() {
-                        "输入歌曲名称后按 Enter 搜索网络歌曲".to_string()
+                        self.i18n(
+                            "输入歌曲名称后按 Enter 搜索网络歌曲",
+                            "輸入歌曲名稱後按 Enter 搜尋網路歌曲",
+                            "Enter song name, then press Enter to search online",
+                            "曲名を入力して Enter でオンライン検索",
+                            "곡명을 입력하고 Enter로 온라인 검색",
+                        ).to_string()
                     } else if self.online_search_page > 1 {
-                        format!("第{}页无结果，PgUp翻上页", self.online_search_page)
+                        match self.language {
+                            UiLanguage::ZhCn => format!("第{}页无结果，PgUp翻上页", self.online_search_page),
+                            UiLanguage::ZhTw => format!("第{}頁無結果，PgUp 上一頁", self.online_search_page),
+                            UiLanguage::En => format!("No result on page {}, PgUp for previous page", self.online_search_page),
+                            UiLanguage::Ja => format!("{}ページに結果なし、PgUpで前ページ", self.online_search_page),
+                            UiLanguage::Ko => format!("{}페이지 결과 없음, PgUp 이전 페이지", self.online_search_page),
+                        }
                     } else {
-                        "网络搜索无结果，修改关键字后按 Enter 重新搜索".to_string()
+                        self.i18n(
+                            "网络搜索无结果，修改关键字后按 Enter 重新搜索",
+                            "網路搜尋無結果，修改關鍵字後按 Enter 重新搜尋",
+                            "No online result. Update keyword and press Enter again",
+                            "結果なし。キーワードを変更して Enter で再検索",
+                            "결과 없음. 키워드 수정 후 Enter로 재검색",
+                        ).to_string()
                     };
                     queue!(
                         stdout,
@@ -1122,16 +1282,24 @@ impl UserInterface {
 
             // 显示范围信息（如果有滚动）
             let range_info = if total > visible_count {
-                format!(
-                    "[当前: {}-{}]",
-                    self.scroll_offset + 1,
-                    std::cmp::min(self.scroll_offset + visible_count, total)
-                )
+                match self.language {
+                    UiLanguage::ZhCn => format!("[当前: {}-{}]", self.scroll_offset + 1, std::cmp::min(self.scroll_offset + visible_count, total)),
+                    UiLanguage::ZhTw => format!("[目前: {}-{}]", self.scroll_offset + 1, std::cmp::min(self.scroll_offset + visible_count, total)),
+                    UiLanguage::En => format!("[Current: {}-{}]", self.scroll_offset + 1, std::cmp::min(self.scroll_offset + visible_count, total)),
+                    UiLanguage::Ja => format!("[現在: {}-{}]", self.scroll_offset + 1, std::cmp::min(self.scroll_offset + visible_count, total)),
+                    UiLanguage::Ko => format!("[현재: {}-{}]", self.scroll_offset + 1, std::cmp::min(self.scroll_offset + visible_count, total)),
+                }
             } else {
                 String::new()
             };
 
-            let title_text = format!("播放列表 {} (共 {} 首)", range_info, playlist.len());
+            let title_text = match self.language {
+                UiLanguage::ZhCn => format!("播放列表 {} (共 {} 首)", range_info, playlist.len()),
+                UiLanguage::ZhTw => format!("播放列表 {} (共 {} 首)", range_info, playlist.len()),
+                UiLanguage::En => format!("Playlist {} ({} songs)", range_info, playlist.len()),
+                UiLanguage::Ja => format!("プレイリスト {} ({} 曲)", range_info, playlist.len()),
+                UiLanguage::Ko => format!("재생목록 {} (총 {}곡)", range_info, playlist.len()),
+            };
             let title_width = unicode_width::UnicodeWidthStr::width(title_text.as_str());
             let title_padding = left_width as usize - title_width;
             queue!(
@@ -1224,11 +1392,21 @@ impl UserInterface {
 
         // 绘制右侧标题（歌词/评论）
         let lyrics_title = if self.comments_mode {
-            format!("评论 共{}条（第{}页）", self.comments_total, self.comments_page)
+            match self.language {
+                UiLanguage::ZhCn => format!("评论 共{}条（第{}页）", self.comments_total, self.comments_page),
+                UiLanguage::ZhTw => format!("評論 共{}條（第{}頁）", self.comments_total, self.comments_page),
+                UiLanguage::En => format!("Comments {} (Page {})", self.comments_total, self.comments_page),
+                UiLanguage::Ja => format!("コメント {} 件（{} ページ）", self.comments_total, self.comments_page),
+                UiLanguage::Ko => format!("댓글 {}개 ({}페이지)", self.comments_total, self.comments_page),
+            }
         } else if let Some(ref file) = current_file {
-            format!("歌词 {}", file.name)
+            format!(
+                "{}{}",
+                self.i18n("歌词 ", "歌詞 ", "Lyrics ", "歌詞 ", "가사 "),
+                file.name
+            )
         } else {
-            "歌词".to_string()
+            self.i18n("歌词", "歌詞", "Lyrics", "歌詞", "가사").to_string()
         };
         
         // 截断标题以适应右侧宽度
@@ -1403,7 +1581,7 @@ impl UserInterface {
                 cursor::MoveTo(start_x, 8),
                 terminal::Clear(ClearType::UntilNewLine),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print("下载歌词文件中"),
+                style::Print(self.i18n("下载歌词文件中", "下載歌詞檔中", "Downloading lyrics", "歌詞をダウンロード中", "가사 다운로드 중")),
                 style::ResetColor,
             )?;
         } else if current_file.is_some() {
@@ -1412,7 +1590,7 @@ impl UserInterface {
                 stdout,
                 cursor::MoveTo(start_x, 8),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print("未找到歌词文件"),
+                style::Print(self.i18n("未找到歌词文件", "未找到歌詞檔", "Lyrics file not found", "歌詞ファイルが見つかりません", "가사 파일을 찾을 수 없음")),
                 style::ResetColor,
             )?;
         } else {
@@ -1461,7 +1639,7 @@ impl UserInterface {
                 stdout,
                 cursor::MoveTo(start_x, 8),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print("请选择歌曲播放"),
+                style::Print(self.i18n("请选择歌曲播放", "請選擇歌曲播放", "Select a song to play", "再生する曲を選択してください", "재생할 곡을 선택하세요")),
                 style::ResetColor,
             )?;
             return Ok(());
@@ -1475,7 +1653,7 @@ impl UserInterface {
                 stdout,
                 cursor::MoveTo(start_x, 8),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print("暂无评论"),
+                style::Print(self.i18n("暂无评论", "暫無評論", "No comments", "コメントはありません", "댓글이 없습니다")),
                 style::ResetColor,
             )?;
             return Ok(());
@@ -1606,11 +1784,7 @@ impl UserInterface {
         )?;
 
         // 播放状态（显示正在播放的歌曲）
-        let state_str = match state {
-            PlayState::Playing => "播放中".to_string(),
-            PlayState::Paused => "已暂停".to_string(),
-            PlayState::Stopped => "已停止".to_string(),
-        };
+        let state_str = self.play_state_text(state).to_string();
 
         // 音量条
         let vol_bar: String = "█".repeat(volume as usize / 5);
@@ -1619,9 +1793,12 @@ impl UserInterface {
         // 控制信息位置：倒数第4行
         let info_line = self.terminal_height.saturating_sub(4);
 
+        let state_label = self.i18n("播放状态", "播放狀態", "State", "再生状態", "재생 상태");
+        let volume_label = self.i18n("播放音量", "播放音量", "Volume", "音量", "볼륨");
+        let mode_label = self.i18n("播放模式", "播放模式", "Mode", "再生モード", "재생 모드");
+
         // 计算音量条布局：用于鼠标点击调整音量
-        // 格式：播放状态: {state} | 播放音量: [{vol_bar}{vol_empty}] {vol}% | 播放模式: {mode}
-        let vol_prefix = format!("播放状态: {} | 播放音量: [", state_str);
+        let vol_prefix = format!("{}: {} | {}: [", state_label, state_str, volume_label);
         let vol_prefix_width = unicode_width::UnicodeWidthStr::width(vol_prefix.as_str());
         self.volume_bar_layout = Some(VolumeBarLayout {
             row: info_line,
@@ -1634,12 +1811,12 @@ impl UserInterface {
             cursor::MoveTo(0, info_line),
             terminal::Clear(ClearType::UntilNewLine), // 清除到行尾
             style::SetForegroundColor(self.theme_colors.info_text),
-            style::Print(format!("播放状态: {} | ", state_str)),
+            style::Print(format!("{}: {} | ", state_label, state_str)),
             style::Print(format!(
-                "播放音量: [{}{}] {:3}% | ",
-                vol_bar, vol_empty, volume
+                "{}: [{}{}] {:3}% | ",
+                volume_label, vol_bar, vol_empty, volume
             )),
-            style::Print(format!("播放模式: {}", mode.to_string_cn())),
+            style::Print(format!("{}: {}", mode_label, self.play_mode_text(mode))),
             style::ResetColor,
         )?;
 
@@ -1690,7 +1867,7 @@ impl UserInterface {
         // 播放进度（状态栏上面，如果有足够空间）
         if self.terminal_height > 1 {
             let progress_line = self.terminal_height.saturating_sub(2);
-            let prefix = "播放进度：";
+            let prefix = self.i18n("播放进度：", "播放進度：", "Progress: ", "再生進捗: ", "재생 진행: ");
 
             if let Some((time_str, progress_percent)) = progress_info {
                 let bar_width = self.terminal_width as usize;
@@ -1747,7 +1924,7 @@ impl UserInterface {
 
             if play_state == PlayState::Stopped {
                 // 停止状态也显示进度条样式
-                let stopped_msg = "播放状态：--:--/--:--";
+                let stopped_msg = self.i18n("播放状态：--:--/--:--", "播放狀態：--:--/--:--", "State: --:--/--:--", "再生状態: --:--/--:--", "재생 상태: --:--/--:--");
                 let msg_width = unicode_width::UnicodeWidthStr::width(stopped_msg);
                 let bar_total = (self.terminal_width as usize).saturating_sub(msg_width + 3).max(10);
 
@@ -1762,7 +1939,7 @@ impl UserInterface {
             } else {
                 // 构建状态消息，如果是播放中或暂停中则添加波形动画（占满整行）
                 let display_msg = if (play_state == PlayState::Playing || play_state == PlayState::Paused)
-                    && message.starts_with("正在播放:")
+                    && self.is_now_playing_message(&message)
                 {
                     // 只有播放中才更新波形帧（暂停时波形固定不变）
                     if play_state == PlayState::Playing {
@@ -1793,41 +1970,125 @@ impl UserInterface {
             let help_text = if self.search_mode {
                 if self.online_search_mode {
                     if self.terminal_width >= 80 {
-                        "网络搜索: 输入歌名Enter搜索 | ↑↓选择 | Enter下载 | PgUp/PgDn翻页 | Esc退出"
+                        self.i18n(
+                            "网络搜索: 输入歌名Enter搜索 | ↑↓选择 | Enter下载 | PgUp/PgDn翻页 | Esc退出",
+                            "網路搜尋: 輸入歌名 Enter 搜尋 | ↑↓選擇 | Enter 下載 | PgUp/PgDn 翻頁 | Esc 退出",
+                            "Online Search: Type song and Enter | ↑↓ Select | Enter Download | PgUp/PgDn | Esc",
+                            "オンライン検索: 曲名入力してEnter | ↑↓選択 | EnterでDL | PgUp/PgDn | Esc",
+                            "온라인 검색: 곡명 입력 후 Enter | ↑↓ 선택 | Enter 다운로드 | PgUp/PgDn | Esc",
+                        )
                     } else if self.terminal_width >= 60 {
-                        "网络搜索: Enter搜索|↑↓选择|Enter下载|PgUp/PgDn翻页|Esc退出"
+                        self.i18n(
+                            "网络搜索: Enter搜索|↑↓选择|Enter下载|PgUp/PgDn翻页|Esc退出",
+                            "網路搜尋: Enter搜尋|↑↓選擇|Enter下載|PgUp/PgDn翻頁|Esc退出",
+                            "Online: Enter Search|↑↓ Select|Enter DL|PgUp/PgDn|Esc",
+                            "オンライン: Enter検索|↑↓選択|EnterDL|PgUp/PgDn|Esc",
+                            "온라인: Enter검색|↑↓선택|EnterDL|PgUp/PgDn|Esc",
+                        )
                     } else {
-                        "网络搜索: Enter搜索|↑↓选择|Enter下载|PgUp/Dn翻页|Esc退出"
+                        self.i18n(
+                            "网络搜索: Enter搜索|↑↓选择|Enter下载|PgUp/Dn翻页|Esc退出",
+                            "網路搜尋: Enter搜尋|↑↓選擇|Enter下載|PgUp/Dn翻頁|Esc退出",
+                            "Online: Enter|↑↓|DL|PgUp/Dn|Esc",
+                            "オンライン: Enter|↑↓|DL|PgUp/Dn|Esc",
+                            "온라인: Enter|↑↓|DL|PgUp/Dn|Esc",
+                        )
                     }
                 } else if self.terminal_width >= 60 {
-                    "本地搜索: 输入关键字Enter搜索 | ↑↓选择 | Enter播放 | Esc退出"
+                    self.i18n(
+                        "本地搜索: 输入关键字Enter搜索 | ↑↓选择 | Enter播放 | Esc退出",
+                        "本地搜尋: 輸入關鍵字 Enter 搜尋 | ↑↓選擇 | Enter 播放 | Esc 退出",
+                        "Local Search: keyword + Enter | ↑↓ Select | Enter Play | Esc",
+                        "ローカル検索: キーワード+Enter | ↑↓選択 | Enter再生 | Esc",
+                        "로컬 검색: 키워드+Enter | ↑↓ 선택 | Enter 재생 | Esc",
+                    )
                 } else {
-                    "本地搜索: 输入Enter搜索|↑↓选择|Enter播放|Esc退出"
+                    self.i18n(
+                        "本地搜索: 输入Enter搜索|↑↓选择|Enter播放|Esc退出",
+                        "本地搜尋: 輸入Enter搜尋|↑↓選擇|Enter播放|Esc退出",
+                        "Local: Enter Search|↑↓|Enter Play|Esc",
+                        "ローカル: Enter検索|↑↓|Enter再生|Esc",
+                        "로컬: Enter검색|↑↓|Enter재생|Esc",
+                    )
                 }
             } else if self.favorites_mode {
                 if self.terminal_width >= 60 {
-                    "收藏列表: ↑↓选择 | Enter播放 | d删除收藏 | Esc返回"
+                    self.i18n(
+                        "收藏列表: ↑↓选择 | Enter播放 | d删除收藏 | Esc返回",
+                        "收藏列表: ↑↓選擇 | Enter播放 | d刪除收藏 | Esc返回",
+                        "Favorites: ↑↓ Select | Enter Play | d Delete | Esc Back",
+                        "お気に入り: ↑↓選択 | Enter再生 | d削除 | Esc戻る",
+                        "즐겨찾기: ↑↓ 선택 | Enter 재생 | d 삭제 | Esc 뒤로",
+                    )
                 } else {
-                    "收藏列表: ↑↓选择|Enter播放|d删除|Esc返回"
+                    self.i18n(
+                        "收藏列表: ↑↓选择|Enter播放|d删除|Esc返回",
+                        "收藏列表: ↑↓選擇|Enter播放|d刪除|Esc返回",
+                        "Fav: ↑↓|Enter|d Del|Esc",
+                        "お気に入り: ↑↓|Enter|d削除|Esc",
+                        "즐겨찾기: ↑↓|Enter|d삭제|Esc",
+                    )
                 }
             } else if self.dir_history_mode {
                 if self.terminal_width >= 60 {
-                    "音乐目录: ↑↓选择 | Enter切换目录 | d删除记录 | Esc返回"
+                    self.i18n(
+                        "音乐目录: ↑↓选择 | Enter切换目录 | d删除记录 | Esc返回",
+                        "音樂目錄: ↑↓選擇 | Enter 切換目錄 | d 刪除記錄 | Esc 返回",
+                        "Folders: ↑↓ Select | Enter Switch | d Delete | Esc Back",
+                        "音楽フォルダ: ↑↓選択 | Enter切替 | d削除 | Esc戻る",
+                        "음악 폴더: ↑↓ 선택 | Enter 전환 | d 삭제 | Esc 뒤로",
+                    )
                 } else {
-                    "音乐目录: ↑↓选择|Enter切换|d删除|Esc返回"
+                    self.i18n(
+                        "音乐目录: ↑↓选择|Enter切换|d删除|Esc返回",
+                        "音樂目錄: ↑↓選擇|Enter切換|d刪除|Esc返回",
+                        "Folders: ↑↓|Enter|d Del|Esc",
+                        "音楽フォルダ: ↑↓|Enter|d削除|Esc",
+                        "음악 폴더: ↑↓|Enter|d삭제|Esc",
+                    )
                 }
             } else if self.comments_mode {
                 if self.terminal_width >= 80 {
-                    "歌曲评论: PgUp/PgDn翻页 | l返回歌词 | Enter评论列表"
+                    self.i18n(
+                        "歌曲评论: ↑↓选择 | PgUp/PgDn翻页 | Enter详情 | Esc返回",
+                        "歌曲評論: ↑↓選擇 | PgUp/PgDn翻頁 | Enter詳情 | Esc返回",
+                        "Comments: ↑↓ Select | PgUp/PgDn Page | Enter Detail | Esc Back",
+                        "コメント: ↑↓選択 | PgUp/PgDn頁 | Enter詳細 | Esc戻る",
+                        "댓글: ↑↓ 선택 | PgUp/PgDn 페이지 | Enter 상세 | Esc 뒤로",
+                    )
                 } else {
-                    "评论: PgUp/PgDn翻页|l歌词|Enter评论"
+                    self.i18n(
+                        "歌曲评论: ↑↓选择|PgUp/PgDn翻页|Enter详情|Esc返回",
+                        "歌曲評論: ↑↓選擇|PgUp/PgDn翻頁|Enter詳情|Esc返回",
+                        "Comments: ↑↓|PgUp/PgDn|Enter|Esc",
+                        "コメント: ↑↓|PgUp/PgDn|Enter|Esc",
+                        "댓글: ↑↓|PgUp/PgDn|Enter|Esc",
+                    )
                 }
             } else if self.terminal_width >= 100 {
-                "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | Esc停止 | ←→上下曲 | [,/].快退快进 | +-音量 | 1-5模式 | c评论 | o打开 | q退出"
+                self.i18n(
+                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | Esc停止 | ←→上下曲 | [,/].快退快进 | +-音量 | 1-5模式 | l语言 | o打开 | q退出",
+                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | Esc停止 | ←→上下曲 | [,/].快退快進 | +-音量 | 1-5模式 | l語言 | o開啟 | q退出",
+                    "Keys: ↑↓ Select | Enter Play | Space Pause | Esc Stop | ←→ Prev/Next | [,/].Seek | +-Vol | 1-5 Mode | l Lang | o Open | q Quit",
+                    "キー: ↑↓選択 | Enter再生 | Space一時停止 | Esc停止 | ←→前後曲 | [,/].シーク | +-音量 | 1-5モード | l言語 | o開く | q終了",
+                    "키: ↑↓ 선택 | Enter 재생 | Space 일시정지 | Esc 정지 | ←→ 이전/다음 | [,/].탐색 | +-볼륨 | 1-5 모드 | l 언어 | o 열기 | q 종료",
+                )
             } else if self.terminal_width >= 80 {
-                "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | ←→上下曲 | [,/].快退快进 | +-音量 | 1-5模式 | c评论 | o打开 | q退出"
+                self.i18n(
+                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | ←→上下曲 | [,/].快退快进 | +-音量 | 1-5模式 | l语言 | o打开 | q退出",
+                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | ←→上下曲 | [,/].快退快進 | +-音量 | 1-5模式 | l語言 | o開啟 | q退出",
+                    "Keys: ↑↓ | Enter | Space | ←→ | [,/].Seek | +-Vol | 1-5 | l Lang | o Open | q Quit",
+                    "キー: ↑↓ | Enter | Space | ←→ | [,/].シーク | +-音量 | 1-5 | l言語 | o開く | q終了",
+                    "키: ↑↓ | Enter | Space | ←→ | [,/].탐색 | +-볼륨 | 1-5 | l 언어 | o 열기 | q 종료",
+                )
             } else {
-                "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | +-音量 | c评论 | o打开 | q退出"
+                self.i18n(
+                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | +-音量 | l语言 | o打开 | q退出",
+                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | +-音量 | l語言 | o開啟 | q退出",
+                    "Keys: ↑↓ | Enter | Space | +-Vol | l Lang | o Open | q Quit",
+                    "キー: ↑↓ | Enter | Space | +-音量 | l言語 | o開く | q終了",
+                    "키: ↑↓ | Enter | Space | +-볼륨 | l 언어 | o 열기 | q 종료",
+                )
             };
 
             queue!(
@@ -2187,9 +2448,15 @@ impl UserInterface {
                 // 暂停时波形会固定不变，恢复播放时波形继续动画
             }
             KeyCode::Esc => {
-                // 停止播放
-                self.audio_player.lock().unwrap().stop();
-                self.update_status("播放状态: 已停止");
+                if self.comments_mode {
+                    // 评论视图下返回歌词视图
+                    self.comments_mode = false;
+                    self.comments_detail_mode = false;
+                } else {
+                    // 停止播放
+                    self.audio_player.lock().unwrap().stop();
+                    self.update_status(self.i18n("播放状态: 已停止", "播放狀態: 已停止", "State: Stopped", "再生状態: 停止", "재생 상태: 정지"));
+                }
             }
             KeyCode::Left => {
                 // 上一曲
@@ -2289,9 +2556,20 @@ impl UserInterface {
                 self.comments_loading = false;
             }
             KeyCode::Char('l') | KeyCode::Char('L') => {
-                // 返回歌词视图
-                self.comments_mode = false;
-                self.comments_detail_mode = false;
+                // 切换界面语言
+                self.language = self.language.next();
+                self.cached_lyrics_title = None;
+
+                // 语言切换后立即刷新“正在播放”状态前缀，避免显示旧语言
+                let current_song_name = {
+                    let player = self.audio_player.lock().unwrap();
+                    player.get_current_file().map(|f| f.name.clone())
+                };
+                if let Some(song_name) = current_song_name {
+                    self.update_now_playing_status(&song_name);
+                }
+
+                self.save_config_now();
             }
             KeyCode::PageUp => {
                 if self.comments_mode && self.comments_page > 1 {
@@ -2469,7 +2747,7 @@ impl UserInterface {
                             }
                             None => {
                                 // 下载失败，不做提示以避免覆盖波形
-                                let _err = result.error.unwrap_or_else(|| "未知错误".to_string());
+                                let _err = result.error.unwrap_or_else(|| self.i18n("未知错误", "未知錯誤", "Unknown error", "不明なエラー", "알 수 없는 오류").to_string());
                             }
                         }
                         break;
@@ -2524,12 +2802,16 @@ impl UserInterface {
                         playlist.current_index = Some(index);
                     }
                     self.selected_index = index;
-                    self.update_status(&format!("正在播放: {}", file.name));
+                    self.update_now_playing_status(&file.name);
                     // 歌曲切换成功后保存配置
                     self.save_config_now();
                 }
                 Err(e) => {
-                    self.update_status(&format!("播放失败: {}", e));
+                    self.update_status(&format!(
+                        "{}{}",
+                        self.i18n("播放失败: ", "播放失敗: ", "Play failed: ", "再生失敗: ", "재생 실패: "),
+                        e
+                    ));
                 }
             }
         }
@@ -2949,7 +3231,7 @@ impl UserInterface {
         } else if !manual {
             // 自动播放完成，停止播放
             self.audio_player.lock().unwrap().stop();
-            self.update_status("播放完成");
+            self.update_status(self.i18n("播放完成", "播放完成", "Playback finished", "再生完了", "재생 완료"));
         }
     }
 
@@ -3054,7 +3336,11 @@ impl UserInterface {
                 }
             }
             Err(e) => {
-                self.update_status(&format!("加载失败: {}", e));
+                self.update_status(&format!(
+                    "{}{}",
+                    self.i18n("加载失败: ", "載入失敗: ", "Load failed: ", "読み込み失敗: ", "로드 실패: "),
+                    e
+                ));
             }
         }
     }
@@ -3090,7 +3376,11 @@ impl UserInterface {
                 }
             }
             Err(e) => {
-                self.update_status(&format!("加载失败: {}", e));
+                self.update_status(&format!(
+                    "{}{}",
+                    self.i18n("加载失败: ", "載入失敗: ", "Load failed: ", "読み込み失敗: ", "로드 실패: "),
+                    e
+                ));
             }
         }
     }
@@ -3144,6 +3434,17 @@ impl UserInterface {
         self.theme.config_key()
     }
 
+    /// 从配置字符串设置语言
+    pub fn set_language_by_name(&mut self, language: &str) {
+        self.language = UiLanguage::from_config_key(language);
+        self.cached_lyrics_title = None;
+    }
+
+    /// 获取当前语言配置键
+    pub fn get_language_key(&self) -> &'static str {
+        self.language.config_key()
+    }
+
     /// 立即保存配置到文件
     pub fn save_config_now(&self) {
         use crate::config::Config;
@@ -3158,6 +3459,7 @@ impl UserInterface {
             favorites: self.favorites.clone(),
             dir_history: self.dir_history.clone(),
             theme: self.get_theme_key().to_string(),
+            language: self.get_language_key().to_string(),
         };
 
         new_config.save();

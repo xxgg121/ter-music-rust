@@ -32,7 +32,7 @@ fn setup_console() {}
 
 /// 显示帮助信息
 fn show_help() {
-    println!("Ter-Music - 终端音乐播放器 (Rust 版本)\n");
+    println!("Ter-Music - 终端音乐播放器 (Rust跨平台版本)\n");
     println!("程序用法:");
     println!(" ter-music [选项]\n");
     println!("参数选项:");
@@ -55,7 +55,7 @@ fn show_help() {
     println!(" v 查看收藏列表");
     println!(" h 音乐目录历史");
     println!(" c 显示歌曲评论");
-    println!(" l 返回显示歌词");
+    println!(" l 切换界面语言");
     println!(" t 切换界面主题");
     println!(" q 退出音乐程序\n");
     println!("播放模式:");
@@ -68,7 +68,7 @@ fn show_help() {
     println!(" MP3, WAV, FLAC, OGG, M4A, AAC, AIFF, APE\n");
     println!("配置文件:");
     println!(" 配置路径: 程序目录/config.json");
-    println!(" 自动保存: 音乐目录、播放模式、音量大小、收藏列表、当前歌曲、当前主题\n");
+    println!(" 自动保存: 音乐目录、播放模式、音量大小、收藏列表、当前歌曲、当前主题、当前语言\n");
 }
 
 /// 主函数
@@ -151,6 +151,7 @@ fn main() {
     // 创建用户界面
     let mut ui = UserInterface::new(playlist.clone(), audio_player.clone());
     ui.set_theme_by_name(&config.theme);
+    ui.set_language_by_name(&config.language);
 
     // 注册 Ctrl+C 信号处理器，优雅退出并保存配置
     {
@@ -193,7 +194,7 @@ fn main() {
             };
             if play_result.is_ok() {
                 playlist.lock().unwrap().current_index = Some(index);
-                ui.update_status(&format!("正在播放: {}", file.name));
+                ui.update_now_playing_status(&file.name);
             }
         }
     }
@@ -217,6 +218,7 @@ fn main() {
             favorites: ui.get_favorites(),
             dir_history: ui.get_dir_history(),
             theme: ui.get_theme_key().to_string(),
+            language: ui.get_language_key().to_string(),
         };
 
         new_config.save();

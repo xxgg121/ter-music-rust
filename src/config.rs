@@ -12,6 +12,10 @@ fn default_theme() -> String {
     "Neon".to_string()
 }
 
+fn default_language() -> String {
+    "zh-CN".to_string()
+}
+
 /// 应用配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -32,6 +36,9 @@ pub struct Config {
     /// 界面主题
     #[serde(default = "default_theme")]
     pub theme: String,
+    /// 界面语言
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 impl Default for Config {
@@ -44,6 +51,7 @@ impl Default for Config {
             favorites: Vec::new(),
             dir_history: Vec::new(),
             theme: default_theme(),
+            language: default_language(),
         }
     }
 }
@@ -127,6 +135,7 @@ mod tests {
         assert_eq!(config.play_mode, "Single");
         assert_eq!(config.volume, 50);
         assert_eq!(config.theme, "Neon");
+        assert_eq!(config.language, "zh-CN");
     }
 
     #[test]
