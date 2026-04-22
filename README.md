@@ -326,6 +326,36 @@ sudo apt install libasound2
 > **说明**：`build-linux.bat` 会自动设置 `PKG_CONFIG_PATH`、`PKG_CONFIG_ALLOW_CROSS`、`RUSTFLAGS` 等环境变量。
 > 目标 `x86_64-unknown-linux-gnu.2.34` 中的 `.2.34` 指定 glibc 最低版本，确保在较旧 Linux 系统上也能运行。
 
+### Linux 打包（DEB / RPM）
+
+如果你在 Linux 环境下构建并打包，可直接使用以下脚本：
+
+```bash
+# 1) RPM 包
+./build-rpm.sh
+
+# 生成 debuginfo RPM（可选）
+./build-rpm.sh --with-debuginfo
+
+# 2) DEB 包
+./build-deb.sh
+
+# 生成 debug symbols DEB（可选）
+./build-deb.sh --with-debuginfo
+
+# 生成符合 dpkg-source 规范的源码包（.dsc/.orig.tar/.debian.tar）
+./build-deb.sh --with-source
+
+# 同时生成 debuginfo + 源码包
+./build-deb.sh --with-debuginfo --with-source
+```
+
+默认输出目录：
+- `dist/rpm/`：RPM / SRPM
+- `dist/deb/`：DEB / 源码包
+
+> 提示：脚本会读取 `Cargo.toml` 中的 `name` 与 `version` 自动命名包文件。
+
 ### 方案四：交叉编译 macOS 版本（在 Windows 上编译 macOS 可执行文件）
 
 使用 `cargo-zigbuild` + `zig` + macOS SDK 交叉编译。macOS 上的音频使用系统 CoreAudio，需要额外的 SDK 头文件。
@@ -448,7 +478,7 @@ src/
 ├── analyzer.rs   # 音频分析器（实时 RMS 音量、EMA 平滑、波形可视化）
 ├── playlist.rs   # 播放列表管理（目录扫描、并行获取时长、文件夹选择对话框）
 ├── lyrics.rs     # 歌词解析（LRC 格式、本地查找、编码检测、后台下载）
-├── search.rs     # 网络搜索下载（酷我+网易云搜索、在线下载、评论拉取）
+├── search.rs     # 网络搜索下载（酷我+网易搜索、在线下载、评论拉取）
 ├── config.rs     # 配置文件管理（JSON 序列化、8 项配置持久化）
 └── ui.rs         # 用户界面（终端渲染、事件处理、多视图模式、主题/语言系统）
 ```

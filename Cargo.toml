@@ -1,8 +1,8 @@
 [package]
 name = "ter-music-rust"
-version = "0.1.0"
-edition = "2021"
-description = "A terminal music player for Windows"
+version = "1.1.0"
+edition = "2026"
+description = "A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and macOS systems."
 license = "MIT"
 
 [dependencies]
