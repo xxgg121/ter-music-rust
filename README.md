@@ -1,4 +1,4 @@
-# 🎵 Ter-Music - 终端音乐播放器 (Rust跨平台版本)
+# 🎵 Ter-Music-Rust - 终端音乐播放器 (Rust跨平台版本)
 
 一个简洁实用的终端音乐播放器，使用 Rust 实现，支持本地/网络歌曲搜索下载、自动下载歌词显示、评论查看、多语言与主题切换等功能，支持Windows、Linux、macOS系统。
 
@@ -144,10 +144,10 @@ cargo build --release
 cargo run --release
 
 # 方法二：直接运行
-.\target\release\ter-music.exe
+.\target\release\ter-music-rust.exe
 
 # 方法三：指定音乐目录
-.\target\release\ter-music.exe -o d:\Music
+.\target\release\ter-music-rust.exe -o d:\Music
 cargo run --release -- -o d:\Music
 
 # 方法四：双击 test.bat
@@ -306,21 +306,21 @@ build-linux.bat
 cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.34
 ```
 
-**输出文件**：`target/x86_64-unknown-linux-gnu/release/ter-music`
+**输出文件**：`target/x86_64-unknown-linux-gnu/release/ter-music-rust`
 
 **部署到 Linux**：
 ```bash
 # 1. 复制到 Linux 系统
-scp ter-music user@linux-host:~/
+scp ter-music-rust user@linux-host:~/
 
 # 2. 添加执行权限
-chmod +x ter-music
+chmod +x ter-music-rust
 
 # 3. 安装 ALSA 运行库
 sudo apt install libasound2
 
 # 4. 运行
-./ter-music -o /path/to/music
+./ter-music-rust -o /path/to/music
 ```
 
 > **说明**：`build-linux.bat` 会自动设置 `PKG_CONFIG_PATH`、`PKG_CONFIG_ALLOW_CROSS`、`RUSTFLAGS` 等环境变量。
@@ -390,22 +390,22 @@ cargo zigbuild --release --target aarch64-apple-darwin   # Apple Silicon
 ```
 
 **输出文件**：
-- `target/x86_64-apple-darwin/release/ter-music` — Intel Mac
-- `target/aarch64-apple-darwin/release/ter-music` — Apple Silicon (M1/M2/M3/M4)
+- `target/x86_64-apple-darwin/release/ter-music-rust` — Intel Mac
+- `target/aarch64-apple-darwin/release/ter-music-rust` — Apple Silicon (M1/M2/M3/M4)
 
 **部署到 macOS**：
 ```bash
 # 1. 复制到 macOS 系统
-scp ter-music user@mac-host:~/
+scp ter-music-rust user@mac-host:~/
 
 # 2. 添加执行权限
-chmod +x ter-music
+chmod +x ter-music-rust
 
 # 3. macOS允许运行未知来源应用
-xattr -cr ter-music
+xattr -cr ter-music-rust
 
 # 4. 运行（无需额外安装音频库）
-./ter-music -o /path/to/music
+./ter-music-rust -o /path/to/music
 ```
 
 > **注意**：macOS 交叉编译需要 macOS SDK 头文件，项目已内置 `macos-sysroot/` 目录（从 [macosx-sdks](https://github.com/joseluisq/macosx-sdks) 获取）。
@@ -562,6 +562,11 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 ### 首次编译慢
 
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
+
+### 下载Release
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604220846009439_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604220847368934_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604220845511971_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 

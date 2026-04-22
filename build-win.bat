@@ -31,7 +31,7 @@ echo [步骤] 开始构建项目...
 echo.
 
 REM 清理旧的构建文件
-if exist "target\release\ter-music.exe" (
+if exist "target\release\ter-music-rust.exe" (
     echo [信息] 发现旧的构建文件，正在清理...
     cargo clean
 )
@@ -66,7 +66,7 @@ echo.
 
 REM 显示可执行文件位置
 echo [信息] 可执行文件位置:
-echo   %CD%\target\release\ter-music.exe
+echo   %CD%\target\release\ter-music-rust.exe
 echo.
 
 REM 询问是否运行
@@ -75,7 +75,7 @@ if /i "%RUN%"=="y" (
     echo.
     echo [信息] 启动程序...
     echo.
-    target\release\ter-music.exe
+    target\release\ter-music-rust.exe
 )
 
 pause

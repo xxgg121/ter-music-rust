@@ -601,17 +601,17 @@ $env:RUSTFLAGS = "-L linux-sysroot\usr\lib\x86_64-linux-gnu"
 cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.34
 ```
 
-**输出文件**：`target/x86_64-unknown-linux-gnu/release/ter-music`
+**输出文件**：`target/x86_64-unknown-linux-gnu/release/ter-music-rust`
 
 > 目标 `x86_64-unknown-linux-gnu.2.34` 中的 `.2.34` 指定 glibc 最低版本，确保在较旧 Linux 系统上也能运行。
 
 **部署到 Linux：**
 
 ```bash
-scp ter-music user@linux-host:~/
-chmod +x ter-music
+scp ter-music-rust user@linux-host:~/
+chmod +x ter-music-rust
 sudo apt install libasound2
-./ter-music -o /path/to/music
+./ter-music-rust -o /path/to/music
 ```
 
 ### macOS 版本
@@ -674,16 +674,16 @@ cargo zigbuild --release --target aarch64-apple-darwin   # Apple Silicon
 ```
 
 **输出文件**：
-- `target/x86_64-apple-darwin/release/ter-music` — Intel Mac
-- `target/aarch64-apple-darwin/release/ter-music` — Apple Silicon (M1/M2/M3/M4)
+- `target/x86_64-apple-darwin/release/ter-music-rust` — Intel Mac
+- `target/aarch64-apple-darwin/release/ter-music-rust` — Apple Silicon (M1/M2/M3/M4)
 
 **部署到 macOS：**
 
 ```bash
-scp ter-music user@mac-host:~/
-chmod +x ter-music
-xattr -cr ter-music    # macos允许运行未知来源应用
-./ter-music -o /path/to/music
+scp ter-music-rust user@mac-host:~/
+chmod +x ter-music-rust
+xattr -cr ter-music-rust    # macos允许运行未知来源应用
+./ter-music-rust -o /path/to/music
 ```
 
 > **注意**：macOS 交叉编译需要 macOS SDK 头文件，项目已内置 `macos-sysroot/` 目录（从 [macosx-sdks](https://github.com/joseluisq/macosx-sdks) 获取）。

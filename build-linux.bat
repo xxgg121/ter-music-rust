@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul 2>&1
 echo ==========================================
-echo Ter-Music Linux 交叉编译脚本
+echo Ter-Music-Rust Linux 交叉编译脚本
 echo ==========================================
 echo.
 
@@ -63,16 +63,16 @@ echo 编译成功！
 echo ==========================================
 echo.
 echo 输出文件位置:
-echo   %PROJECT_DIR%target\x86_64-unknown-linux-gnu\release\ter-music
+echo   %PROJECT_DIR%target\x86_64-unknown-linux-gnu\release\ter-music-rust
 echo.
 
 ::: 显示文件信息
-dir "target\x86_64-unknown-linux-gnu\release\ter-music" 2>nul
+dir "target\x86_64-unknown-linux-gnu\release\ter-music-rust" 2>nul
 
 echo.
 echo 将此文件复制到 Linux 系统后，需要:
-echo   1. chmod +x ter-music
+echo   1. chmod +x ter-music-rust
 echo   2. 确保系统已安装 ALSA 库 (sudo apt install libasound2)
-echo   3. ./ter-music -o /path/to/music
+echo   3. ./ter-music-rust -o /path/to/music
 echo.
 pause

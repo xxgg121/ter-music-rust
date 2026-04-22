@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul 2>&1
 echo ==========================================
-echo Ter-Music macOS 交叉编译脚本
+echo Ter-Music-Rust macOS 交叉编译脚本
 echo ==========================================
 echo.
 
@@ -111,7 +111,7 @@ echo 编译成功！
 echo ==========================================
 echo.
 echo 输出文件位置:
-echo   %PROJECT_DIR%target\x86_64-apple-darwin\release\ter-music
+echo   %PROJECT_DIR%target\x86_64-apple-darwin\release\ter-music-rust
 echo.
 
 :::: 编译 aarch64 版本（Apple Silicon Mac）
@@ -136,20 +136,20 @@ echo 编译成功！
 echo ==========================================
 echo.
 echo 输出文件位置:
-echo   %PROJECT_DIR%target\aarch64-apple-darwin\release\ter-music
+echo   %PROJECT_DIR%target\aarch64-apple-darwin\release\ter-music-rust
 echo.
 
 :::: 显示文件信息
-dir "target\x86_64-apple-darwin\release\ter-music" 2>nul
-dir "target\aarch64-apple-darwin\release\ter-music" 2>nul
+dir "target\x86_64-apple-darwin\release\ter-music-rust" 2>nul
+dir "target\aarch64-apple-darwin\release\ter-music-rust" 2>nul
 
 echo.
 echo 将文件复制到 macOS 系统后，需要:
-echo   1. chmod +x ter-music
+echo   1. chmod +x ter-music-rust
 echo   2. macOS 可能需要允许运行未知来源应用:
 echo      系统设置 -^> 隐私与安全性 -^> 仍要打开
-echo      或: xattr -cr ter-music
-echo   3. ./ter-music -o /path/to/music
+echo      或: xattr -cr ter-music-rust
+echo   3. ./ter-music-rust -o /path/to/music
 echo.
 echo 说明:
 echo   - x86_64 版本适用于 Intel Mac

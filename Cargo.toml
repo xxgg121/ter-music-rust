@@ -1,5 +1,5 @@
 [package]
-name = "ter-music"
+name = "ter-music-rust"
 version = "0.1.0"
 edition = "2021"
 description = "A terminal music player for Windows"

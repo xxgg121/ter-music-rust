@@ -750,11 +750,11 @@ impl UserInterface {
         // 根据终端宽度生成标题
         let width = self.terminal_width as usize;
         let title = self.i18n(
-            "🎵 Ter-Music - 终端音乐播放器 (Rust跨平台版本) 🎵",
-            "🎵 Ter-Music - 終端音樂播放器 (Rust跨平台版本) 🎵",
-            "🎵 Ter-Music - Terminal Music Player (Rust Cross-Platform Edition) 🎵",
-            "🎵 Ter-Music - ターミナル音楽プレーヤー (Rustクロスプラットフォーム版) 🎵",
-            "🎵 Ter-Music - 터미널 음악 플레이어 (Rust 크로스 플랫폼 버전) 🎵",
+            "🎵 Ter-Music-Rust - 终端音乐播放器 (Rust跨平台版本) 🎵",
+            "🎵 Ter-Music-Rust - 終端音樂播放器 (Rust跨平台版本) 🎵",
+            "🎵 Ter-Music-Rust - Terminal Music Player (Rust Cross-Platform Edition) 🎵",
+            "🎵 Ter-Music-Rust - ターミナル音楽プレーヤー (Rustクロスプラットフォーム版) 🎵",
+            "🎵 Ter-Music-Rust - 터미널 음악 플레이어 (Rust 크로스 플랫폼 버전) 🎵",
         );
 
         // 计算标题居中位置（使用显示宽度而非字符数）

@@ -1,4 +1,4 @@
-// Ter-Music: Windows 终端音乐播放器 (Rust 版本)
+// Ter-Music-Rust: Windows 终端音乐播放器 (Rust 版本)
 
 mod audio;
 mod analyzer;
@@ -32,9 +32,9 @@ fn setup_console() {}
 
 /// 显示帮助信息
 fn show_help() {
-    println!("Ter-Music - 终端音乐播放器 (Rust跨平台版本)\n");
+    println!("Ter-Music-Rust - 终端音乐播放器 (Rust跨平台版本)\n");
     println!("程序用法:");
-    println!(" ter-music [选项]\n");
+    println!(" ter-music-rust [选项]\n");
     println!("参数选项:");
     println!(" -o <目录> 打开音乐目录");
     println!(" -h, --help 显示帮助信息\n");
