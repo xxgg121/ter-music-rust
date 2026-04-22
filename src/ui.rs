@@ -750,11 +750,11 @@ impl UserInterface {
         // 根据终端宽度生成标题
         let width = self.terminal_width as usize;
         let title = self.i18n(
-            "🎵 Ter-Music-Rust - 终端音乐播放器 (Rust跨平台版本) 🎵",
-            "🎵 Ter-Music-Rust - 終端音樂播放器 (Rust跨平台版本) 🎵",
-            "🎵 Ter-Music-Rust - Terminal Music Player (Rust Cross-Platform Edition) 🎵",
-            "🎵 Ter-Music-Rust - ターミナル音楽プレーヤー (Rustクロスプラットフォーム版) 🎵",
-            "🎵 Ter-Music-Rust - 터미널 음악 플레이어 (Rust 크로스 플랫폼 버전) 🎵",
+            "🎵 Ter-Music-Rust - 终端音乐播放器 🎵",
+            "🎵 Ter-Music-Rust - 終端音樂播放器 🎵",
+            "🎵 Ter-Music-Rust - Terminal Music Player 🎵",
+            "🎵 Ter-Music-Rust - ターミナル音楽プレーヤー 🎵",
+            "🎵 Ter-Music-Rust - 터미널 음악 플레이어 🎵",
         );
 
         // 计算标题居中位置（使用显示宽度而非字符数）
@@ -2235,7 +2235,7 @@ impl UserInterface {
                 KeyCode::Char('d') | KeyCode::Char('D') => {
                     // 删除收藏
                     if self.favorites_selected_index < self.favorites.len() {
-                        let removed_path = self.favorites.remove(self.favorites_selected_index);
+                        //let removed_path = self.favorites.remove(self.favorites_selected_index);
                         // 获取被删除的歌曲名
                         //let removed_name = playlist_files_name(&self.playlist, &removed_path);
                         //self.update_status(&format!("已从收藏移除: {}", removed_name));
@@ -3261,9 +3261,10 @@ impl UserInterface {
         if let Some(path) = open_folder_dialog() {
             let path_str = path.to_string_lossy().to_string();
             self.load_directory(&path_str);
+            return;
         }
 
-        // 在 Linux 下若图形对话框不可用（无 zenity/kdialog），回退到终端输入
+        // 在 Linux 下若图形对话框不可用（无 zenity/kdialog/yad/qarma/python-tk），回退到终端输入
         #[cfg(target_os = "linux")]
         {
             let path = self.terminal_input_path();
@@ -3620,13 +3621,4 @@ fn wrap_text_to_width(text: &str, max_width: usize) -> Vec<String> {
     }
 
     out
-}
-
-/// 根据路径从播放列表获取歌曲名
-fn playlist_files_name(playlist: &Arc<Mutex<Playlist>>, path: &str) -> String {
-    let pl = playlist.lock().unwrap();
-    pl.files.iter()
-        .find(|f| f.path.to_string_lossy() == path)
-        .map(|f| f.name.clone())
-        .unwrap_or_else(|| path.to_string())
 }

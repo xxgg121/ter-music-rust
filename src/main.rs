@@ -1,4 +1,4 @@
-// Ter-Music-Rust: Windows 终端音乐播放器 (Rust 版本)
+// Ter-Music-Rust: 终端音乐播放器
 
 mod audio;
 mod analyzer;
@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 
 use audio::AudioPlayer;
 use config::Config;
+use defs::Playlist;
 use ui::UserInterface;
 
 /// 设置控制台代码页为 UTF-8（仅 Windows）
@@ -32,7 +33,7 @@ fn setup_console() {}
 
 /// 显示帮助信息
 fn show_help() {
-    println!("Ter-Music-Rust - 终端音乐播放器 (Rust跨平台版本)\n");
+    println!("Ter-Music-Rust - 终端音乐播放器\n");
     println!("程序用法:");
     println!(" ter-music-rust [选项]\n");
     println!("参数选项:");
@@ -67,7 +68,7 @@ fn show_help() {
     println!("支持格式:");
     println!(" MP3, WAV, FLAC, OGG, M4A, AAC, AIFF, APE\n");
     println!("配置文件:");
-    println!(" 配置路径: 程序目录/config.json");
+    println!(" 配置路径: 用户配置目录/ter-music-rust/config.json");
     println!(" 自动保存: 音乐目录、播放模式、音量大小、收藏列表、当前歌曲、当前主题、当前语言\n");
 }
 
@@ -113,27 +114,31 @@ fn main() {
         }
     }
 
-    // 如果仍然没有目录，打开文件夹选择对话框
-    if music_dir.is_none() {
-        music_dir = playlist::open_folder_dialog();
+    // 先尝试加载已有目录（命令行或配置）
+    let mut loaded_playlist = music_dir
+        .as_ref()
+        .and_then(|dir| playlist::scan_music_directory(dir).ok())
+        .map(|pl| Arc::new(Mutex::new(pl)));
+
+    // 若未成功加载，弹出图形对话框让用户选择目录（可重复选择）
+    while loaded_playlist.is_none() {
+        let selected_dir = playlist::open_folder_dialog();
+        match selected_dir {
+            Some(dir) => {
+                loaded_playlist = playlist::scan_music_directory(&dir)
+                    .ok()
+                    .map(|pl| Arc::new(Mutex::new(pl)));
+            }
+            None => break,
+        }
     }
 
-    // 加载音乐文件
-    let playlist = match &music_dir {
-        Some(dir) => match playlist::scan_music_directory(dir) {
-            Ok(pl) => {
-                //println!("已加载 {} 首歌曲", pl.len());
-                Arc::new(Mutex::new(pl))
-            }
-            Err(_e) => {
-                //eprintln!("加载错误: {}", _e);
-                std::process::exit(1);
-            }
-        },
+    // 若最终仍未选择到可用目录，则进入空列表模式（可按 o 再次选择目录）
+    let playlist = match loaded_playlist {
+        Some(pl) => pl,
         None => {
-            eprintln!("未打开音乐目录");
-            eprintln!("使用 -o <目录> 打开音乐目录");
-            std::process::exit(1);
+            eprintln!("未选择可用的音乐目录，已进入空列表模式，可按 o 打开音乐目录");
+            Arc::new(Mutex::new(Playlist::new()))
         }
     };
 

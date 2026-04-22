@@ -52,7 +52,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 command -v cargo >/dev/null 2>&1 || { echo "Error: cargo not found" >&2; exit 1; }
-command -v rpmbuild >/dev/null 2>&1 || { echo "Error: rpmbuild not found" >&2; exit 1; }
+if ! command -v rpmbuild >/dev/null 2>&1; then
+  echo "Error: rpmbuild not found" >&2
+  if command -v apt-get >/dev/null 2>&1; then
+    echo "Hint (Debian/Deepin/Ubuntu): sudo apt-get update && sudo apt-get install -y rpm" >&2
+  elif command -v dnf >/dev/null 2>&1; then
+    echo "Hint (Fedora/RHEL): sudo dnf install -y rpm-build" >&2
+  elif command -v yum >/dev/null 2>&1; then
+    echo "Hint (CentOS/RHEL): sudo yum install -y rpm-build" >&2
+  elif command -v zypper >/dev/null 2>&1; then
+    echo "Hint (openSUSE): sudo zypper install -y rpm-build" >&2
+  fi
+  exit 1
+fi
 command -v python3 >/dev/null 2>&1 || { echo "Error: python3 not found" >&2; exit 1; }
 
 PKG_NAME="$(python3 - <<'PY' "$CARGO_TOML"
@@ -102,7 +114,7 @@ Version:        ${PKG_VERSION}
 Release:        ${PKG_RELEASE}%{?dist}
 Summary:        Terminal music player written in Rust
 License:        MIT
-URL:            https://example.invalid/${PKG_NAME}
+URL:            https://github.com/xxgg121/ter-music-rust
 Source0:        %{name}-%{version}.tar.gz
 BuildRequires:  cargo
 BuildRequires:  rust
@@ -111,7 +123,7 @@ BuildRequires:  binutils
 Requires:       alsa-lib
 
 %description
-A terminal music player implemented in Rust.
+A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and macOS systems.
 
 %prep
 %autosetup
@@ -127,16 +139,105 @@ cargo build --release --target ${TARGET}
 
 %install
 mkdir -p %{buildroot}%{_bindir}
+mkdir -p %{buildroot}%{_datadir}/applications
+mkdir -p %{buildroot}%{_datadir}/pixmaps
+for sz in 96 128 256 512; do
+  mkdir -p "%{buildroot}%{_datadir}/icons/hicolor/${sz}x${sz}/apps"
+done
+
 install -m 0755 target/${TARGET}/release/${PKG_NAME} %{buildroot}%{_bindir}/${PKG_NAME}
+
+cat > %{buildroot}%{_bindir}/${PKG_NAME}-launcher <<'LAUNCHER_EOF'
+#!/usr/bin/env bash
+set -e
+APP_BIN="/usr/bin/${PKG_NAME}"
+
+if command -v x-terminal-emulator >/dev/null 2>&1; then
+  exec x-terminal-emulator -e "$APP_BIN" "$@"
+fi
+if command -v deepin-terminal >/dev/null 2>&1; then
+  exec deepin-terminal -e "$APP_BIN" "$@"
+fi
+if command -v gnome-terminal >/dev/null 2>&1; then
+  exec gnome-terminal -- "$APP_BIN" "$@"
+fi
+if command -v konsole >/dev/null 2>&1; then
+  exec konsole -e "$APP_BIN" "$@"
+fi
+if command -v xfce4-terminal >/dev/null 2>&1; then
+  exec xfce4-terminal -e "$APP_BIN" "$@"
+fi
+if command -v xterm >/dev/null 2>&1; then
+  exec xterm -e "$APP_BIN" "$@"
+fi
+
+echo "No terminal emulator found. Run directly: $APP_BIN" >&2
+exit 1
+LAUNCHER_EOF
+chmod 0755 %{buildroot}%{_bindir}/${PKG_NAME}-launcher
+
+for sz in 96 128 256 512; do
+  icon_file="assets/icons/ter-music-rust-${sz}.png"
+  if [ -f "$icon_file" ]; then
+    install -m 0644 "$icon_file" "%{buildroot}%{_datadir}/icons/hicolor/${sz}x${sz}/apps/${PKG_NAME}.png"
+  fi
+done
+
+if [ -f assets/icons/ter-music-rust.png ]; then
+  install -m 0644 assets/icons/ter-music-rust.png %{buildroot}%{_datadir}/pixmaps/${PKG_NAME}.png
+elif [ -f assets/icons/ter-music-rust-512.png ]; then
+  install -m 0644 assets/icons/ter-music-rust-512.png %{buildroot}%{_datadir}/pixmaps/${PKG_NAME}.png
+fi
+
+cat > %{buildroot}%{_datadir}/applications/${PKG_NAME}.desktop <<DESKTOP_EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ter Music Rust
+Name[zh_CN]=Ter Music Rust
+GenericName=Terminal Music Player
+Comment=A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and macOS systems.
+TryExec=/usr/bin/${PKG_NAME}-launcher
+Exec=/usr/bin/${PKG_NAME}-launcher
+Icon=${PKG_NAME}
+Terminal=false
+Categories=AudioVideo;Audio;Music;Player;
+Keywords=music;player;terminal;rust;
+StartupNotify=true
+X-Deepin-Vendor=TerMusic
+DESKTOP_EOF
+
+%post
+if [ -x /usr/bin/update-desktop-database ]; then
+  /usr/bin/update-desktop-database -q %{_datadir}/applications || :
+fi
+if [ -x /usr/bin/gtk-update-icon-cache ]; then
+  /usr/bin/gtk-update-icon-cache -q %{_datadir}/icons/hicolor || :
+fi
+
+%postun
+if [ -x /usr/bin/update-desktop-database ]; then
+  /usr/bin/update-desktop-database -q %{_datadir}/applications || :
+fi
+if [ -x /usr/bin/gtk-update-icon-cache ]; then
+  /usr/bin/gtk-update-icon-cache -q %{_datadir}/icons/hicolor || :
+fi
 
 %files
 %license LICENSE*
 %doc README.md
 %{_bindir}/${PKG_NAME}
+%{_bindir}/${PKG_NAME}-launcher
+%{_datadir}/applications/${PKG_NAME}.desktop
+%{_datadir}/pixmaps/${PKG_NAME}.png
+%{_datadir}/icons/hicolor/96x96/apps/${PKG_NAME}.png
+%{_datadir}/icons/hicolor/128x128/apps/${PKG_NAME}.png
+%{_datadir}/icons/hicolor/256x256/apps/${PKG_NAME}.png
+%{_datadir}/icons/hicolor/512x512/apps/${PKG_NAME}.png
 
 %changelog
 * Wed Apr 22 2026 CodeBuddy <noreply@example.invalid> - ${PKG_VERSION}-${PKG_RELEASE}
-- Automated RPM build script output
+- Add desktop launcher and icons for GUI startup
 EOF
 
 RPM_OPTS=(

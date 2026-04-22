@@ -111,8 +111,6 @@ pub fn open_folder_dialog() -> Option<PathBuf> {
 /// 在 Linux 上打开文件夹选择对话框
 #[cfg(target_os = "linux")]
 pub fn open_folder_dialog() -> Option<PathBuf> {
-    use std::process::Command;
-
     // 优先尝试 zenity（GNOME/XFCE 等桌面环境常见）
     if let Some(path) = open_folder_zenity() {
         return Some(path);
@@ -120,6 +118,19 @@ pub fn open_folder_dialog() -> Option<PathBuf> {
 
     // 尝试 kdialog（KDE 桌面环境）
     if let Some(path) = open_folder_kdialog() {
+        return Some(path);
+    }
+
+    // 尝试 yad / qarma（部分发行版默认提供）
+    if let Some(path) = open_folder_yad() {
+        return Some(path);
+    }
+    if let Some(path) = open_folder_qarma() {
+        return Some(path);
+    }
+
+    // 最后尝试 python tkinter（在 Deepin 等桌面环境通常可用）
+    if let Some(path) = open_folder_python_tk() {
         return Some(path);
     }
 
@@ -159,6 +170,83 @@ fn open_folder_kdialog() -> Option<PathBuf> {
             "--getexistingdirectory",
             "--title=打开音乐目录",
         ])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout);
+        let path = path.trim();
+        if !path.is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn open_folder_yad() -> Option<PathBuf> {
+    use std::process::Command;
+
+    let output = Command::new("yad")
+        .args(&[
+            "--file-selection",
+            "--directory",
+            "--title=打开音乐目录",
+        ])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout);
+        let path = path.trim();
+        if !path.is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn open_folder_qarma() -> Option<PathBuf> {
+    use std::process::Command;
+
+    let output = Command::new("qarma")
+        .args(&[
+            "--file-selection",
+            "--directory",
+            "--title=打开音乐目录",
+        ])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout);
+        let path = path.trim();
+        if !path.is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn open_folder_python_tk() -> Option<PathBuf> {
+    use std::process::Command;
+
+    let script = r#"import tkinter as tk
+from tkinter import filedialog
+root = tk.Tk()
+root.withdraw()
+root.attributes('-topmost', True)
+path = filedialog.askdirectory(title='打开音乐目录')
+print(path if path else '')
+"#;
+
+    let output = Command::new("python3")
+        .args(["-c", script])
         .output()
         .ok()?;
 
