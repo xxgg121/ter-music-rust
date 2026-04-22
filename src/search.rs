@@ -1,0 +1,954 @@
+// 网络搜索下载模块
+// 支持多平台搜索：酷我音乐（主要）+ 网易云音乐（备用）
+
+use chrono::{Local, TimeZone};
+use serde::Deserialize;
+use std::path::PathBuf;
+use std::sync::mpsc;
+
+/// 网络搜索结果
+#[derive(Debug, Clone)]
+pub struct OnlineSong {
+    /// 歌曲名称
+    pub name: String,
+    /// 歌手
+    pub artist: String,
+    /// 歌曲ID（不同平台ID含义不同，需配合 source 使用）
+    pub id: i64,
+    /// 时长（毫秒）
+    pub duration_ms: Option<i64>,
+    /// 来源平台
+    pub source: MusicSource,
+}
+
+/// 音乐来源
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MusicSource {
+    /// 酷我音乐
+    Kuwo,
+    /// 网易云音乐
+    NetEase,
+}
+
+/// 网络搜索下载结果
+pub struct SearchDownloadResult {
+    /// 搜索关键字
+    #[allow(dead_code)]
+    pub query: String,
+    /// 搜索到的歌曲列表
+    pub songs: Vec<OnlineSong>,
+}
+
+/// 单条评论中的“回复”信息
+#[derive(Debug, Clone)]
+pub struct SongCommentReply {
+    /// 被回复用户昵称
+    pub nickname: String,
+    /// 回复内容
+    pub content: String,
+    /// 回复时间（优先使用接口返回的可读时间）
+    pub time_text: Option<String>,
+}
+
+/// 单条歌曲评论
+#[derive(Debug, Clone)]
+pub struct SongCommentItem {
+    /// 评论用户昵称
+    pub nickname: String,
+    /// 评论内容
+    pub content: String,
+    /// 评论时间（优先使用接口返回的可读时间）
+    pub time_text: Option<String>,
+    /// 被回复信息（若存在）
+    pub reply: Option<SongCommentReply>,
+}
+
+
+/// 歌曲评论结果
+#[derive(Debug, Clone)]
+pub struct SongCommentsResult {
+    /// 当前页码（从1开始）
+    pub page: usize,
+    /// 评论总数
+    pub total: usize,
+    /// 当前页评论列表
+    pub comments: Vec<SongCommentItem>,
+}
+
+
+/// 下载完成结果
+pub struct DownloadResult {
+    /// 下载的歌曲信息
+    #[allow(dead_code)]
+    pub song: OnlineSong,
+    /// 下载后的本地文件路径
+    pub local_path: Option<PathBuf>,
+    /// 错误信息
+    pub error: Option<String>,
+}
+
+/// 下载进度消息
+pub enum DownloadProgress {
+    /// 下载进度更新（百分比 0-100）
+    Progress(u8),
+    /// 下载完成
+    Done(DownloadResult),
+}
+
+// ============================================================
+// 酷我音乐 JSON 结构
+// ============================================================
+
+/// 酷我搜索结果
+#[derive(Debug, Deserialize)]
+struct KuwoSearchResult {
+    data: Option<KuwoSearchData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct KuwoSearchData {
+    lists: Option<Vec<KuwoSong>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct KuwoSong {
+    /// 歌曲RID
+    rid: i64,
+    /// 歌曲名
+    name: String,
+    /// 歌手
+    artist: Option<String>,
+    /// 时长（秒字符串，如 "245"）
+    duration: Option<String>,
+}
+
+/// 酷我播放链接结果
+#[derive(Debug, Deserialize)]
+struct KuwoPlayResult {
+    url: Option<String>,
+}
+
+// ============================================================
+// 网易云音乐 JSON 结构（备用）
+// ============================================================
+
+#[derive(Debug, Deserialize)]
+struct NetEaseSearchResult {
+    result: Option<NetEaseResult>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NetEaseResult {
+    songs: Option<Vec<NetEaseSong>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NetEaseSong {
+    id: i64,
+    name: String,
+    artists: Option<Vec<NetEaseArtist>>,
+    duration: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NetEaseArtist {
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct NetEaseSongDetail {
+    data: Option<Vec<NetEaseSongData>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NetEaseSongData {
+    url: Option<String>,
+    code: Option<i64>,
+}
+
+// ============================================================
+// HTTP 客户端
+// ============================================================
+
+/// 创建 HTTP 客户端（搜索用）
+fn create_search_client() -> Option<reqwest::blocking::Client> {
+    reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .build()
+        .ok()
+}
+
+/// 创建 HTTP 客户端（下载用）
+fn create_download_client() -> Option<reqwest::blocking::Client> {
+    reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .build()
+        .ok()
+}
+
+/// 将网易云毫秒时间戳转换为本地日期时间文本
+fn format_datetime_from_millis(ms: i64) -> Option<String> {
+    Local
+        .timestamp_millis_opt(ms)
+        .single()
+        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+}
+
+// ============================================================
+// 公共接口
+// ============================================================
+
+
+/// 在后台线程中搜索网络歌曲
+pub fn search_online_background(query: String, page: usize) -> mpsc::Receiver<SearchDownloadResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = search_online(&query, page);
+        let _ = tx.send(result);
+    });
+    rx
+}
+
+/// 在后台线程中下载歌曲（带进度回调）
+pub fn download_song_background(song: OnlineSong, save_dir: PathBuf) -> mpsc::Receiver<DownloadProgress> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = download_song_with_progress(&song, &save_dir, |percent| {
+            let _ = tx.send(DownloadProgress::Progress(percent));
+        });
+        let _ = tx.send(DownloadProgress::Done(result));
+    });
+    rx
+}
+
+/// 在后台线程中获取歌曲评论（基于歌曲名搜索网易云）
+pub fn fetch_song_comments_background(query: String, page: usize, page_size: usize) -> mpsc::Receiver<SongCommentsResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = fetch_song_comments(&query, page, page_size);
+        let _ = tx.send(result);
+    });
+    rx
+}
+
+// ============================================================
+// 搜索逻辑：酷我优先，网易云备用
+// ============================================================
+
+
+/// 搜索网络歌曲（同步）
+fn search_online(query: &str, page: usize) -> SearchDownloadResult {
+    let client = match create_search_client() {
+        Some(c) => c,
+        None => {
+            return SearchDownloadResult {
+                query: query.to_string(),
+                songs: Vec::new(),
+            }
+        }
+    };
+
+    // 优先使用酷我音乐搜索
+    if let Some(songs) = search_kuwo(&client, query, page) {
+        if !songs.is_empty() {
+            return SearchDownloadResult {
+                query: query.to_string(),
+                songs,
+            };
+        }
+    }
+
+    // 酷我无结果，尝试网易云音乐
+    if let Some(songs) = search_netease(&client, query, page) {
+        if !songs.is_empty() {
+            return SearchDownloadResult {
+                query: query.to_string(),
+                songs,
+            };
+        }
+    }
+
+    SearchDownloadResult {
+        query: query.to_string(),
+        songs: Vec::new(),
+    }
+}
+
+/// 酷我音乐搜索
+fn search_kuwo(client: &reqwest::blocking::Client, query: &str, page: usize) -> Option<Vec<OnlineSong>> {
+    let search_url = format!(
+        "https://www.kuwo.cn/api/www/search/searchMusicBykeyWord?key={}&pn={}&rn=20&httpsStatus=1",
+        urlencoding::encode(query),
+        page
+    );
+
+    let response = client.get(&search_url)
+        .header("Referer", "https://www.kuwo.cn/search/list")
+        .header("Cookie", "kw_token=1ABCDEF0; Hm_lvt_cdb524f42f0ce19b169a8071123a4797=1700000000; Hm_lpvt_cdb524f42f0ce19b169a8071123a4797=1700000000;")
+        .send()
+        .ok()?;
+
+    let text = response.text().ok()?;
+    let search_result: KuwoSearchResult = serde_json::from_str(&text).ok()?;
+
+    let data = search_result.data?;
+    let lists = data.lists?;
+
+    Some(lists.into_iter().map(|s| {
+        let duration_ms = s.duration
+            .and_then(|d| d.parse::<i64>().ok())
+            .map(|secs| secs * 1000);
+        OnlineSong {
+            name: s.name,
+            artist: s.artist.unwrap_or_default(),
+            id: s.rid,
+            duration_ms,
+            source: MusicSource::Kuwo,
+        }
+    }).collect())
+}
+
+/// 网易云音乐搜索（备用）
+fn search_netease(client: &reqwest::blocking::Client, query: &str, page: usize) -> Option<Vec<OnlineSong>> {
+    let offset = (page.saturating_sub(1)) * 20;
+    let search_url = format!(
+        "https://music.163.com/api/search/get?s={}&type=1&limit=20&offset={}",
+        urlencoding::encode(query),
+        offset
+    );
+
+    let response = client.get(&search_url)
+        .header("Referer", "https://music.163.com/")
+        .header("Cookie", "MUSIC_U=; appver=2.0.2;")
+        .send()
+        .ok()?;
+
+    let text = response.text().ok()?;
+    let search_result: NetEaseSearchResult = serde_json::from_str(&text).ok()?;
+
+    let result = search_result.result?;
+    let songs = result.songs?;
+
+    Some(songs.into_iter().map(|s| {
+        let artist = s.artists
+            .map(|a| a.iter().map(|ar| ar.name.as_str()).collect::<Vec<&str>>().join(", "))
+            .unwrap_or_default();
+        OnlineSong {
+            name: s.name,
+            artist,
+            id: s.id,
+            duration_ms: s.duration,
+            source: MusicSource::NetEase,
+        }
+    }).collect())
+}
+
+// ============================================================
+// 评论拉取逻辑（网易云）
+// ============================================================
+
+/// 获取歌曲评论（通过歌曲名先搜索歌曲ID）
+fn fetch_song_comments(query: &str, page: usize, page_size: usize) -> SongCommentsResult {
+    let safe_page = page.max(1);
+    let safe_page_size = page_size.max(1);
+
+    let empty = SongCommentsResult {
+        page: safe_page,
+        total: 0,
+        comments: Vec::new(),
+    };
+
+    if query.trim().is_empty() {
+        return empty;
+    }
+
+    let client = match create_search_client() {
+        Some(c) => c,
+        None => return empty,
+    };
+
+    // 先用歌曲名搜索一个网易云歌曲ID
+    let search_url = format!(
+        "https://music.163.com/api/search/get?s={}&type=1&limit=1&offset=0",
+        urlencoding::encode(query)
+    );
+
+    let song_id = client
+        .get(&search_url)
+        .header("Referer", "https://music.163.com/")
+        .header("Cookie", "MUSIC_U=; appver=2.0.2;")
+        .send()
+        .ok()
+        .and_then(|resp| resp.text().ok())
+        .and_then(|text| serde_json::from_str::<NetEaseSearchResult>(&text).ok())
+        .and_then(|res| res.result)
+        .and_then(|res| res.songs)
+        .and_then(|songs| songs.into_iter().next())
+        .map(|song| song.id);
+
+    let song_id = match song_id {
+        Some(id) => id,
+        None => return empty,
+    };
+
+    let offset = (safe_page - 1) * safe_page_size;
+    let comments_url = format!(
+        "https://music.163.com/api/v1/resource/comments/R_SO_4_{}?limit={}&offset={}",
+        song_id, safe_page_size, offset
+    );
+
+    let value = match client
+        .get(&comments_url)
+        .header("Referer", "https://music.163.com/")
+        .header("Cookie", "MUSIC_U=; appver=2.0.2;")
+        .send()
+        .ok()
+        .and_then(|resp| resp.text().ok())
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+    {
+        Some(v) => v,
+        None => return empty,
+    };
+
+    let total = value
+        .get("total")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as usize;
+
+    let comments = value
+        .get("comments")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| {
+                    let nickname = item
+                        .get("user")
+                        .and_then(|u| u.get("nickname"))
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("匿名用户")
+                        .trim()
+                        .to_string();
+
+                    let content = item
+                        .get("content")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("")
+                        .replace('\n', " ")
+                        .trim()
+                        .to_string();
+
+                    if content.is_empty() {
+                        return None;
+                    }
+
+                    let time_text = item
+                        .get("time")
+                        .and_then(|t| t.as_i64())
+                        .and_then(format_datetime_from_millis)
+                        .or_else(|| {
+                            item.get("timeStr")
+                                .and_then(|t| t.as_str())
+                                .map(|s| s.trim().to_string())
+                                .filter(|s| !s.is_empty())
+                        });
+
+                    let reply = item
+                        .get("beReplied")
+                        .and_then(|r| r.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|first| {
+                            let reply_content = first
+                                .get("content")
+                                .and_then(|c| c.as_str())
+                                .map(|s| s.replace('\n', " ").trim().to_string())
+                                .filter(|s| !s.is_empty());
+
+                            reply_content.map(|content| {
+                                let nickname = first
+                                    .get("user")
+                                    .and_then(|u| u.get("nickname"))
+                                    .and_then(|n| n.as_str())
+                                    .unwrap_or("匿名用户")
+                                    .trim()
+                                    .to_string();
+
+                                let time_text = first
+                                    .get("time")
+                                    .and_then(|t| t.as_i64())
+                                    .and_then(format_datetime_from_millis)
+                                    .or_else(|| {
+                                        first
+                                            .get("timeStr")
+                                            .and_then(|t| t.as_str())
+                                            .map(|s| s.trim().to_string())
+                                            .filter(|s| !s.is_empty())
+                                    });
+
+                                SongCommentReply { nickname, content, time_text }
+                            })
+                        });
+
+                    Some(SongCommentItem {
+                        nickname,
+                        content,
+                        time_text,
+                        reply,
+                    })
+                })
+                .collect::<Vec<SongCommentItem>>()
+        })
+        .unwrap_or_default();
+
+
+    SongCommentsResult {
+        page: safe_page,
+        total,
+        comments,
+    }
+}
+
+// ============================================================
+// 下载逻辑
+// ============================================================
+
+
+/// 下载歌曲到本地（带进度回调）
+fn download_song_with_progress<F>(song: &OnlineSong, save_dir: &PathBuf, on_progress: F) -> DownloadResult
+where
+    F: Fn(u8) + Send + Sync,
+{
+    let client = match create_download_client() {
+        Some(c) => c,
+        None => {
+            return DownloadResult {
+                song: song.clone(),
+                local_path: None,
+                error: Some("创建HTTP客户端失败".to_string()),
+            }
+        }
+    };
+
+    // 根据来源平台获取下载链接
+    let mp3_url = match song.source {
+        MusicSource::Kuwo => get_kuwo_download_url(&client, song.id),
+        MusicSource::NetEase => get_netease_download_url(&client, song.id),
+    };
+
+    let mp3_url = match mp3_url {
+        Some(u) if !u.is_empty() => u,
+        _ => {
+            return DownloadResult {
+                song: song.clone(),
+                local_path: None,
+                error: Some("无法获取下载链接，该歌曲可能需要VIP或已下架".to_string()),
+            }
+        }
+    };
+
+    on_progress(5);
+
+    // 下载音频文件（流式读取以支持进度）
+    let response = match client.get(&mp3_url)
+        .header("Referer", "https://www.kuwo.cn/")
+        .send()
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return DownloadResult {
+                song: song.clone(),
+                local_path: None,
+                error: Some(format!("下载请求失败: {}", e)),
+            }
+        }
+    };
+
+    // 检查 Content-Type
+    let content_type = response.headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if content_type.contains("text/html") || content_type.contains("text/plain") {
+        return DownloadResult {
+            song: song.clone(),
+            local_path: None,
+            error: Some("该歌曲无法下载（服务器返回了网页，可能需要VIP）".to_string()),
+        }
+    }
+
+    // 获取总大小
+    let total_size = response.headers()
+        .get("content-length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok());
+
+    on_progress(10);
+
+    // 流式读取响应体
+    let mut downloaded: u64 = 0;
+    let mut all_bytes = Vec::new();
+    let mut last_reported_percent: u8 = 10;
+
+    // 使用 chunk 读取
+    use std::io::Read;
+    let mut reader = response;
+    let mut buffer = [0u8; 8192];
+
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(n) => {
+                all_bytes.extend_from_slice(&buffer[..n]);
+                downloaded += n as u64;
+
+                if let Some(total) = total_size {
+                    if total > 0 {
+                        let percent = (downloaded as f64 / total as f64 * 85.0) as u8 + 10; // 10-95%
+                        let percent = percent.min(95);
+                        if percent > last_reported_percent {
+                            last_reported_percent = percent;
+                            on_progress(percent);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                return DownloadResult {
+                    song: song.clone(),
+                    local_path: None,
+                    error: Some(format!("读取响应数据失败: {}", e)),
+                }
+            }
+        }
+    }
+
+    on_progress(96);
+
+    // 验证下载数据是否为有效音频
+    if let Err(e) = validate_audio_data(&all_bytes) {
+        return DownloadResult {
+            song: song.clone(),
+            local_path: None,
+            error: Some(e),
+        }
+    }
+
+    // 确保保存目录存在
+    if let Err(e) = std::fs::create_dir_all(save_dir) {
+        return DownloadResult {
+            song: song.clone(),
+            local_path: None,
+            error: Some(format!("创建目录失败: {}", e)),
+        }
+    }
+
+    on_progress(98);
+
+    // 生成文件名
+    let filename = if song.artist.is_empty() {
+        format!("{}.mp3", sanitize_filename(&song.name))
+    } else {
+        format!("{} - {}.mp3", sanitize_filename(&song.artist), sanitize_filename(&song.name))
+    };
+
+    let save_path = save_dir.join(&filename);
+
+    match std::fs::write(&save_path, &all_bytes) {
+        Ok(_) => {
+            on_progress(100);
+            DownloadResult {
+                song: song.clone(),
+                local_path: Some(save_path),
+                error: None,
+            }
+        }
+        Err(e) => DownloadResult {
+            song: song.clone(),
+            local_path: None,
+            error: Some(format!("写入文件失败: {}", e)),
+        }
+    }
+}
+
+/// 下载歌曲到本地（同步，无进度回调）
+#[allow(dead_code)]
+fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
+    let client = match create_download_client() {
+        Some(c) => c,
+        None => {
+            return DownloadResult {
+                song: song.clone(),
+                local_path: None,
+                error: Some("创建HTTP客户端失败".to_string()),
+            }
+        }
+    };
+
+    // 根据来源平台获取下载链接
+    let mp3_url = match song.source {
+        MusicSource::Kuwo => get_kuwo_download_url(&client, song.id),
+        MusicSource::NetEase => get_netease_download_url(&client, song.id),
+    };
+
+    let mp3_url = match mp3_url {
+        Some(u) if !u.is_empty() => u,
+        _ => {
+            return DownloadResult {
+                song: song.clone(),
+                local_path: None,
+                error: Some("无法获取下载链接，该歌曲可能需要VIP或已下架".to_string()),
+            }
+        }
+    };
+
+    // 下载音频文件
+    let response = match client.get(&mp3_url)
+        .header("Referer", "https://www.kuwo.cn/")
+        .send()
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return DownloadResult {
+                song: song.clone(),
+                local_path: None,
+                error: Some(format!("下载请求失败: {}", e)),
+            }
+        }
+    };
+
+    // 检查 Content-Type
+    let content_type = response.headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if content_type.contains("text/html") || content_type.contains("text/plain") {
+        return DownloadResult {
+            song: song.clone(),
+            local_path: None,
+            error: Some("该歌曲无法下载（服务器返回了网页，可能需要VIP）".to_string()),
+        };
+    }
+
+    let bytes = match response.bytes() {
+        Ok(b) => b,
+        Err(e) => {
+            return DownloadResult {
+                song: song.clone(),
+                local_path: None,
+                error: Some(format!("读取响应数据失败: {}", e)),
+            }
+        }
+    };
+
+    // 验证下载数据是否为有效音频
+    if let Err(e) = validate_audio_data(&bytes) {
+        return DownloadResult {
+            song: song.clone(),
+            local_path: None,
+            error: Some(e),
+        };
+    }
+
+    // 确保保存目录存在
+    if let Err(e) = std::fs::create_dir_all(save_dir) {
+        return DownloadResult {
+            song: song.clone(),
+            local_path: None,
+            error: Some(format!("创建目录失败: {}", e)),
+        };
+    }
+
+    // 生成文件名
+    let filename = if song.artist.is_empty() {
+        format!("{}.mp3", sanitize_filename(&song.name))
+    } else {
+        format!("{} - {}.mp3", sanitize_filename(&song.artist), sanitize_filename(&song.name))
+    };
+
+    let save_path = save_dir.join(&filename);
+
+    match std::fs::write(&save_path, &bytes) {
+        Ok(_) => DownloadResult {
+            song: song.clone(),
+            local_path: Some(save_path),
+            error: None,
+        },
+        Err(e) => DownloadResult {
+            song: song.clone(),
+            local_path: None,
+            error: Some(format!("写入文件失败: {}", e)),
+        },
+    }
+}
+
+// ============================================================
+// 下载链接获取
+// ============================================================
+
+/// 获取酷我音乐下载链接
+fn get_kuwo_download_url(client: &reqwest::blocking::Client, rid: i64) -> Option<String> {
+    // 酷我音乐播放链接API
+    // type: convert_url3 支持更多格式
+    // br: 128kmp3 / 192kmp3 / 320kmp3
+    let url = format!(
+        "https://www.kuwo.cn/api/v1/www/music/playInfo?mid={}&type=music&httpsStatus=1",
+        rid
+    );
+
+    if let Ok(response) = client.get(&url)
+        .header("Referer", "https://www.kuwo.cn/play_detail")
+        .header("Cookie", "kw_token=1ABCDEF0; Hm_lvt_cdb524f42f0ce19b169a8071123a4797=1700000000; Hm_lpvt_cdb524f42f0ce19b169a8071123a4797=1700000000;")
+        .send()
+    {
+        if let Ok(text) = response.text() {
+            if let Ok(result) = serde_json::from_str::<KuwoPlayResult>(&text) {
+                if let Some(url) = result.url {
+                    if !url.is_empty() {
+                        return Some(url);
+                    }
+                }
+            }
+        }
+    }
+
+    // 备用：使用 kuwoyy 解析
+    let url2 = format!(
+        "https://kuwo.cn/api/v1/www/music/playInfo?mid={}&type=convert_url3&br=128kmp3",
+        rid
+    );
+
+    if let Ok(response) = client.get(&url2)
+        .header("Referer", "https://www.kuwo.cn/")
+        .header("Cookie", "kw_token=1ABCDEF0; Hm_lvt_cdb524f42f0ce19b169a8071123a4797=1700000000; Hm_lpvt_cdb524f42f0ce19b169a8071123a4797=1700000000;")
+        .send()
+    {
+        if let Ok(text) = response.text() {
+            if let Ok(result) = serde_json::from_str::<KuwoPlayResult>(&text) {
+                if let Some(url) = result.url {
+                    if !url.is_empty() {
+                        return Some(url);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// 获取网易云音乐下载链接（备用）
+fn get_netease_download_url(client: &reqwest::blocking::Client, song_id: i64) -> Option<String> {
+    // 方式1: 使用歌曲详情 API
+    let url_api = format!(
+        "https://music.163.com/api/song/enhance/player/url?id={}&ids=[{}]&level=standard&encodeType=aac",
+        song_id, song_id
+    );
+
+    if let Ok(response) = client.get(&url_api)
+        .header("Referer", "https://music.163.com/")
+        .header("Cookie", "MUSIC_U=; appver=2.0.2;")
+        .send()
+    {
+        if let Ok(text) = response.text() {
+            if let Ok(detail) = serde_json::from_str::<NetEaseSongDetail>(&text) {
+                if let Some(data) = detail.data {
+                    if let Some(first) = data.first() {
+                        let code = first.code.unwrap_or(0);
+                        if code == 200 {
+                            if let Some(url) = &first.url {
+                                if !url.is_empty() {
+                                    return Some(url.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 方式2: outer/url 重定向
+    let redirect_url = format!(
+        "https://music.163.com/song/media/outer/url?id={}.mp3",
+        song_id
+    );
+
+    if let Ok(response) = client.get(&redirect_url)
+        .header("Referer", "https://music.163.com/")
+        .send()
+    {
+        let final_url = response.url().to_string();
+        if final_url.contains("126.net") {
+            return Some(final_url);
+        }
+        let ct = response.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_lowercase();
+        if ct.contains("audio") {
+            return Some(redirect_url);
+        }
+    }
+
+    None
+}
+
+// ============================================================
+// 工具函数
+// ============================================================
+
+/// 验证下载的数据是否为有效音频
+fn validate_audio_data(bytes: &[u8]) -> Result<(), String> {
+    if bytes.len() < 4 {
+        return Err("下载数据过小，不是有效的音频文件".to_string());
+    }
+
+    let header = &bytes[0..4];
+
+    // 常见音频文件头标识
+    let is_audio = header[0] == 0xFF && (header[1] & 0xE0) == 0xE0  // MP3 frame sync (0xFF 0xFB/0xF3/0xF2...)
+        || header[0] == 0x49 && header[1] == 0x44 && header[2] == 0x33  // ID3 tag
+        || header[0] == 0x66 && header[1] == 0x74 && header[2] == 0x79 && header[3] == 0x70  // ftyp (M4A/AAC)
+        || header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46  // RIFF (WAV)
+        || header[0] == 0x4F && header[1] == 0x67 && header[2] == 0x67 && header[3] == 0x53  // OggS
+        || header[0] == 0x66 && header[1] == 0x4C && header[2] == 0x61 && header[3] == 0x43; // fLaC
+
+    if is_audio {
+        return Ok(());
+    }
+
+    // 检查是否是 HTML 内容
+    let check_len = std::cmp::min(200, bytes.len());
+    if let Ok(text) = std::str::from_utf8(&bytes[0..check_len]) {
+        let lower = text.to_lowercase();
+        if lower.contains("<!doctype") || lower.contains("<html") || lower.contains("<head")
+            || lower.contains("抱歉") || lower.contains("not found") || lower.contains("error")
+        {
+            return Err("该歌曲无法下载（服务器返回了网页而非音频，可能需要VIP或已下架）".to_string());
+        }
+    }
+
+    // 无法识别的文件头，但可能仍是音频（某些格式）
+    // 如果文件大小足够大（>10KB），则视为可能是有效音频
+    if bytes.len() > 10240 {
+        Ok(())
+    } else {
+        Err("下载数据不是有效的音频文件".to_string())
+    }
+}
+
+/// 清理文件名中的非法字符
+fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            _ => c,
+        })
+        .collect()
+}

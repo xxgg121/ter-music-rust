@@ -1,0 +1,40 @@
+[package]
+name = "ter-music"
+version = "0.1.0"
+edition = "2021"
+description = "A terminal music player for Windows"
+license = "MIT"
+
+[dependencies]
+# 音频播放库
+rodio = "0.19"
+
+# 终端 UI 库
+crossterm = "0.28"
+
+# 序列化/反序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# 其他依赖
+rand = "0.8"
+walkdir = "2.5"
+rayon = "1.10"
+unicode-width = "0.2"
+encoding_rs = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls"] }
+urlencoding = "2.1"
+chrono = "0.4"
+
+# Ctrl+C 信号处理
+ctrlc = "3.4"
+
+# Windows 特定依赖
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["wincon", "winbase", "processenv"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

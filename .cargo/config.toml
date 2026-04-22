@@ -1,0 +1,17 @@
+# Cargo 配置文件
+
+# 如果下载依赖较慢，可以取消下面注释使用国内镜像
+# [source.crates-io]
+# replace-with = 'ustc'
+# 
+# [source.ustc]
+# registry = "https://mirrors.ustc.edu.cn/crates.io-index"
+
+# 或者使用清华镜像
+[source.crates-io]
+replace-with = 'tuna'
+
+[source.tuna]
+registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
+
+

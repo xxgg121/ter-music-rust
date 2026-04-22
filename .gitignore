@@ -1,0 +1,22 @@
+# Rust 编译文件
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo 锁文件（库项目不需要）
+Cargo.lock
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 备份文件
+*.bak
+*.backup
