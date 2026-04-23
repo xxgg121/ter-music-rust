@@ -102,7 +102,7 @@ Supports 4 themes (cycle with `t`):
 - Waveform freezes when paused
 
 ### ⚙️ Persistent Configuration
-Configuration is stored in `config.json` in the program directory and is auto-saved/restored:
+Configuration is stored in `USERPROFILE/ter-music-rust/config.json` in the program directory and is auto-saved/restored:
 
 | Config Item | Description |
 |--------|------|

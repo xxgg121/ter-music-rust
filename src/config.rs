@@ -75,6 +75,58 @@ impl Config {
             || self.language != default_language()
     }
 
+    /// 自动修复常见历史配置错误：相邻字符串项缺少逗号
+    fn auto_fix_missing_comma_between_strings(content: &str) -> Option<String> {
+        let lines: Vec<&str> = content.lines().collect();
+        if lines.len() < 2 {
+            return None;
+        }
+
+        let mut fixed_lines = Vec::with_capacity(lines.len());
+        let mut changed = false;
+
+        for idx in 0..lines.len() {
+            let mut line = lines[idx].to_string();
+
+            if idx + 1 < lines.len() {
+                let current_trimmed = line.trim_end();
+                let next_trimmed = lines[idx + 1].trim_start();
+
+                let current_ends_with_string = current_trimmed.ends_with('"');
+                let current_has_comma = current_trimmed.ends_with(',');
+                let next_starts_with_string = next_trimmed.starts_with('"');
+
+                if current_ends_with_string && !current_has_comma && next_starts_with_string {
+                    line.push(',');
+                    changed = true;
+                }
+            }
+
+            fixed_lines.push(line);
+        }
+
+        if changed {
+            Some(fixed_lines.join("\n"))
+        } else {
+            None
+        }
+    }
+
+    /// 解析配置，必要时自动修复后再解析
+    fn parse_with_repair(content: &str) -> Result<(Self, Option<String>), serde_json::Error> {
+        match serde_json::from_str::<Config>(content) {
+            Ok(cfg) => Ok((cfg, None)),
+            Err(err) => {
+                if let Some(repaired) = Self::auto_fix_missing_comma_between_strings(content) {
+                    if let Ok(cfg) = serde_json::from_str::<Config>(&repaired) {
+                        return Ok((cfg, Some(repaired)));
+                    }
+                }
+                Err(err)
+            }
+        }
+    }
+
     /// 获取旧版配置文件路径（程序所在目录）
     fn get_legacy_config_path() -> PathBuf {
         let exe_path = env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
@@ -148,8 +200,15 @@ impl Config {
             }
 
             match fs::read_to_string(&config_path) {
-                Ok(content) => match serde_json::from_str::<Config>(&content) {
-                    Ok(config) => {
+                Ok(content) => match Self::parse_with_repair(&content) {
+                    Ok((config, repaired_text)) => {
+                        if let Some(repaired) = repaired_text {
+                            eprintln!("检测到旧配置格式问题，已自动修复({})", config_path.display());
+                            if let Err(e) = fs::write(&config_path, repaired) {
+                                eprintln!("自动回写修复后的配置失败({}): {}", config_path.display(), e);
+                            }
+                        }
+
                         // 优先返回包含用户数据的配置，避免被“新路径默认空配置”遮住
                         if config.has_user_data() {
                             return config;

@@ -129,8 +129,13 @@ pub fn open_folder_dialog() -> Option<PathBuf> {
         return Some(path);
     }
 
-    // 最后尝试 python tkinter（在 Deepin 等桌面环境通常可用）
+    // 尝试 python tkinter（在 Deepin 等桌面环境通常可用）
     if let Some(path) = open_folder_python_tk() {
+        return Some(path);
+    }
+
+    // 再尝试 python + Qt 文件对话框（部分系统仅安装了 Qt 依赖）
+    if let Some(path) = open_folder_python_qt() {
         return Some(path);
     }
 
@@ -242,6 +247,37 @@ root = tk.Tk()
 root.withdraw()
 root.attributes('-topmost', True)
 path = filedialog.askdirectory(title='打开音乐目录')
+print(path if path else '')
+"#;
+
+    let output = Command::new("python3")
+        .args(["-c", script])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout);
+        let path = path.trim();
+        if !path.is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn open_folder_python_qt() -> Option<PathBuf> {
+    use std::process::Command;
+
+    let script = r#"import sys
+try:
+    from PyQt5.QtWidgets import QApplication, QFileDialog
+except Exception:
+    sys.exit(1)
+
+app = QApplication.instance() or QApplication(sys.argv)
+path = QFileDialog.getExistingDirectory(None, '打开音乐目录')
 print(path if path else '')
 "#;
 

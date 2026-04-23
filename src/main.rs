@@ -66,7 +66,7 @@ fn show_help() {
     println!(" 4 - 列表循环（循环播放整个列表）");
     println!(" 5 - 随机播放（随机播放歌曲）\n");
     println!("支持格式:");
-    println!(" MP3, WAV, FLAC, OGG, M4A, AAC, AIFF, APE\n");
+    println!("MP3、WAV、FLAC、OGG、OGA、Opus、M4A、AAC、AIFF、APE\n");
     println!("配置文件:");
     println!(" 配置路径: 用户配置目录/ter-music-rust/config.json");
     println!(" 自动保存: 音乐目录、播放模式、音量大小、收藏列表、当前歌曲、当前主题、当前语言\n");
