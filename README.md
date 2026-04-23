@@ -1,6 +1,6 @@
 # 🎵 Ter-Music-Rust - 终端音乐播放器 (Rust跨平台版本)
 
-一个简洁实用的终端音乐播放器，使用 Rust 实现，支持本地/网络歌曲搜索下载、自动下载歌词显示、评论查看、多语言与主题切换等功能，支持Windows、Linux、macOS系统。
+一个简洁实用的终端音乐播放器，使用 Rust 实现，支持本地/网络歌曲搜索下载、自动下载歌词显示、评论查看、多语言与主题切换等功能，支持Windows、Linux、MacOS系统。
 
 ![preview](preview.png)
 

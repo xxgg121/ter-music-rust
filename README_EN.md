@@ -1,6 +1,6 @@
 # 🎵 Ter-Music-Rust - Terminal Music Player (Rust Cross-Platform Edition)
 
-A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and macOS systems.
+A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems.
 
 
 
