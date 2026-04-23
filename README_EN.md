@@ -1,4 +1,10 @@
-# 🎵 Ter-Music-Rust - Terminal Music Player (Rust Cross-Platform Edition)
+<div align="center">
+
+[简体中文](README.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md)
+
+</div>
+
+# 🎵 Ter-Music-Rust - Terminal Music Player
 
 A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems.
 
@@ -162,8 +168,6 @@ cargo run --release
 # Method 3: specify music directory
 .\target\release\ter-music-rust.exe -o d:\Music
 cargo run --release -- -o d:\Music
-
-# Method 4: double-click test.bat
 ```
 
 **Directory loading priority**: command line `-o` > config file > folder picker dialog
@@ -370,9 +374,9 @@ Default output directories:
 
 > Scripts read `name` and `version` from `Cargo.toml` to auto-name package files.
 
-### Option 4: Cross-compile macOS on Windows
+### Option 4: Cross-compile MacOS on Windows
 
-Use `cargo-zigbuild` + `zig` + macOS SDK. Audio on macOS uses CoreAudio and requires SDK headers.
+Use `cargo-zigbuild` + `zig` + MacOS SDK. Audio on MacOS uses CoreAudio and requires SDK headers.
 
 **Prerequisites:**
 
@@ -390,11 +394,11 @@ pacman -S mingw-w64-x86_64-clang
 # B: official LLVM
 winget install LLVM.LLVM
 
-# 4. Add macOS targets
+# 4. Add MacOS targets
 rustup target add x86_64-apple-darwin aarch64-apple-darwin
 ```
 
-**Prepare macOS SDK:**
+**Prepare MacOS SDK:**
 
 Extract `MacOSX13.3.sdk.tar.xz` into `macos-sysroot`.
 The project already includes `macos-sysroot/` (downloaded from [macosx-sdks](https://github.com/joseluisq/macosx-sdks)).
@@ -409,7 +413,7 @@ mkdir macos-sysroot
 tar -xf MacOSX13.3.sdk.tar.xz -C macos-sysroot --strip-components=1
 del MacOSX13.3.sdk.tar.xz
 
-# B: Copy from a macOS system
+# B: Copy from a MacOS system
 scp -r mac:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk ./macos-sysroot
 ```
 
@@ -424,7 +428,7 @@ build-mac.bat
 
 # Or manually:
 $env:LIBCLANG_PATH = "C:\msys64\mingw64\bin"      # Directory containing libclang.dll
-$env:COREAUDIO_SDK_PATH = "./macos-sysroot"         # macOS SDK path (forward slashes)
+$env:COREAUDIO_SDK_PATH = "./macos-sysroot"         # MacOS SDK path (forward slashes)
 $env:SDKROOT = "./macos-sysroot"                    # Needed by zig linker to locate system libs
 $FW = "./macos-sysroot/System/Library/Frameworks"
 $env:BINDGEN_EXTRA_CLANG_ARGS = "--target=x86_64-apple-darwin -isysroot ./macos-sysroot -F $FW -iframework $FW -I ./macos-sysroot/usr/include"
@@ -437,10 +441,10 @@ cargo zigbuild --release --target aarch64-apple-darwin  # Apple Silicon
 - `target/x86_64-apple-darwin/release/ter-music-rust` — Intel Mac
 - `target/aarch64-apple-darwin/release/ter-music-rust` — Apple Silicon (M1/M2/M3/M4)
 
-**Deploy to macOS:**
+**Deploy to MacOS:**
 
 ```bash
-# 1. Copy to macOS host
+# 1. Copy to MacOS host
 scp ter-music-rust user@mac-host:~/
 
 # 2. Make executable
@@ -453,7 +457,7 @@ xattr -cr ter-music-rust
 ./ter-music-rust -o /path/to/music
 ```
 
-> Note: macOS cross-compilation requires macOS SDK headers; this project already includes `macos-sysroot/`.
+> Note: MacOS cross-compilation requires MacOS SDK headers; this project already includes `macos-sysroot/`.
 > It also requires `libclang.dll` (install via MSYS2 or LLVM).
 
 ### Switching Toolchains

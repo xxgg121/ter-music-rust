@@ -1,4 +1,10 @@
-# 🎵 Ter-Music-Rust - 终端音乐播放器 (Rust跨平台版本)
+<div align="center">
+
+[简体中文](README.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md)
+
+</div>
+
+# 🎵 Ter-Music-Rust - 终端音乐播放器
 
 一个简洁实用的终端音乐播放器，使用 Rust 实现，支持本地/网络歌曲搜索下载、自动下载歌词显示、评论查看、多语言与主题切换等功能，支持Windows、Linux、MacOS系统。
 
@@ -159,8 +165,6 @@ cargo run --release
 # 方法三：指定音乐目录
 .\target\release\ter-music-rust.exe -o d:\Music
 cargo run --release -- -o d:\Music
-
-# 方法四：双击 test.bat
 ```
 
 **目录加载优先级**：命令行 `-o` > 配置文件 > 文件夹选择对话框
@@ -366,9 +370,9 @@ sudo apt install libasound2
 
 > 提示：脚本会读取 `Cargo.toml` 中的 `name` 与 `version` 自动命名包文件。
 
-### 方案四：交叉编译 macOS 版本（在 Windows 上编译 macOS 可执行文件）
+### 方案四：交叉编译 MacOS 版本（在 Windows 上编译 MacOS 可执行文件）
 
-使用 `cargo-zigbuild` + `zig` + macOS SDK 交叉编译。macOS 上的音频使用系统 CoreAudio，需要额外的 SDK 头文件。
+使用 `cargo-zigbuild` + `zig` + MacOS SDK 交叉编译。MacOS 上的音频使用系统 CoreAudio，需要额外的 SDK 头文件。
 
 **前置准备：**
 
@@ -386,11 +390,11 @@ pacman -S mingw-w64-x86_64-clang
 # 方式 B：LLVM 官方安装
 winget install LLVM.LLVM
 
-# 4. 添加 macOS 目标
+# 4. 添加 MacOS 目标
 rustup target add x86_64-apple-darwin aarch64-apple-darwin
 ```
 
-**准备 macOS SDK：**
+**准备 MacOS SDK：**
 
 把MacOSX13.3.sdk.tar.xz解压到macos-sysroot目录
 项目已内置 `macos-sysroot/` 目录（从 [macosx-sdks](https://github.com/joseluisq/macosx-sdks) 下载）。
@@ -399,13 +403,13 @@ rustup target add x86_64-apple-darwin aarch64-apple-darwin
 
 ```powershell
 # 方式 A：从 GitHub 下载预打包 SDK（推荐，约 56 MB）
-加速: https://ghfast.top/https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz
+# 加速: https://ghfast.top/https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz
 curl -L -o MacOSX13.3.sdk.tar.xz https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz
 mkdir macos-sysroot
 tar -xf MacOSX13.3.sdk.tar.xz -C macos-sysroot --strip-components=1
 del MacOSX13.3.sdk.tar.xz
 
-# 方式 B：从 macOS 系统复制
+# 方式 B：从 MacOS 系统复制
 scp -r mac:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk ./macos-sysroot
 ```
 
@@ -420,7 +424,7 @@ build-mac.bat
 
 # 或手动执行：
 $env:LIBCLANG_PATH = "C:\msys64\mingw64\bin"    # libclang.dll 所在目录
-$env:COREAUDIO_SDK_PATH = "./macos-sysroot"       # macOS SDK 路径（正斜杠）
+$env:COREAUDIO_SDK_PATH = "./macos-sysroot"       # MacOS SDK 路径（正斜杠）
 $env:SDKROOT = "./macos-sysroot"                   # zig 链接器需要，找系统库
 $FW = "./macos-sysroot/System/Library/Frameworks"
 $env:BINDGEN_EXTRA_CLANG_ARGS = "--target=x86_64-apple-darwin -isysroot ./macos-sysroot -F $FW -iframework $FW -I ./macos-sysroot/usr/include"
@@ -433,22 +437,22 @@ cargo zigbuild --release --target aarch64-apple-darwin   # Apple Silicon
 - `target/x86_64-apple-darwin/release/ter-music-rust` — Intel Mac
 - `target/aarch64-apple-darwin/release/ter-music-rust` — Apple Silicon (M1/M2/M3/M4)
 
-**部署到 macOS**：
+**部署到 MacOS**：
 ```bash
-# 1. 复制到 macOS 系统
+# 1. 复制到 MacOS 系统
 scp ter-music-rust user@mac-host:~/
 
 # 2. 添加执行权限
 chmod +x ter-music-rust
 
-# 3. macOS允许运行未知来源应用
+# 3. MacOS允许运行未知来源应用
 xattr -cr ter-music-rust
 
 # 4. 运行（无需额外安装音频库）
 ./ter-music-rust -o /path/to/music
 ```
 
-> **注意**：macOS 交叉编译需要 macOS SDK 头文件，项目已内置 `macos-sysroot/` 目录（从 [macosx-sdks](https://github.com/joseluisq/macosx-sdks) 获取）。
+> **注意**：MacOS 交叉编译需要 MacOS SDK 头文件，项目已内置 `macos-sysroot/` 目录（从 [macosx-sdks](https://github.com/joseluisq/macosx-sdks) 获取）。
 > 编译时还需 `libclang.dll`（通过 MSYS2 或 LLVM 安装）。
 
 ### 工具链切换
