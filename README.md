@@ -47,9 +47,16 @@
 
 ### 🔍 搜索功能
 - **本地搜索**：按 `s` 进入，根据关键字匹配音乐目录歌曲
-- **网络搜索**：按 `n` 进入，根据关键字匹配搜索网络歌曲
+- **网络搜索**：按 `n` 进入，根据关键字匹配搜索网络歌曲（酷我 + 酷狗 + 网易三平台）
 - **翻页浏览**：`PgUp`/`PgDn` 翻页查看更多结果
 - **在线下载**：搜索结果选中后按 `Enter` 下载到当前音乐目录，显示下载进度
+
+### 🤖 歌曲信息
+- **智能查询**：按 `i` 使用 DeepSeek查询当前歌曲详细信息
+- **流式输出**：查询结果逐字流式显示，无需等待全部生成
+- **丰富信息**：涵盖歌手详情、词曲创作、所属专辑曲目、创作背景、歌曲大意、音乐风格等 13 项分类
+- **多语言支持**：回复语言跟随界面语言设置（简中/繁中/英/日/韩）
+- **API Key 配置**：按 `k` 输入 DeepSeek API Key，也可通过环境变量 `DEEPSEEK_API_KEY` 设置
 
 ### ⭐ 收藏功能
 - **添加/移除收藏**：按 `f` 切换当前歌曲收藏状态
@@ -116,6 +123,7 @@
 | `volume` | 音量大小 (0-100) |
 | `favorites` | 收藏列表 |
 | `dir_history` | 目录历史记录 |
+| `deepseek_api_key` | DeepSeek API Key（歌曲信息查询用） |
 | `theme` | 界面主题名称 |
 | `language` | 界面语言（`zh-CN` / `zh-TW` / `en` / `ja` / `ko`） |
 
@@ -195,6 +203,8 @@ cargo run --release -- -o d:\Music
 | `v` | 查看收藏列表 |
 | `h` | 查看目录历史 |
 | `c` | 查看歌曲评论 |
+| `i` | 歌曲信息查询（DeepSeek） |
+| `k` | 输入 DeepSeek API Key |
 | `l` | 切换界面语言（简中/繁中/英/日/韩） |
 | `t` | 切换界面主题 |
 | `q` | 退出音乐程序 |
@@ -492,7 +502,7 @@ src/
 ├── analyzer.rs   # 音频分析器（实时 RMS 音量、EMA 平滑、波形可视化）
 ├── playlist.rs   # 播放列表管理（目录扫描、并行获取时长、文件夹选择对话框）
 ├── lyrics.rs     # 歌词解析（LRC 格式、本地查找、编码检测、后台下载）
-├── search.rs     # 网络搜索下载（酷我+网易搜索、在线下载、评论拉取）
+├── search.rs     # 网络搜索下载（酷我+酷狗+网易搜索、在线下载、评论拉取、歌曲信息流式查询）
 ├── config.rs     # 配置文件管理（JSON 序列化、8 项配置持久化）
 └── ui.rs         # 用户界面（终端渲染、事件处理、多视图模式、主题/语言系统）
 ```
@@ -512,6 +522,7 @@ src/
 | [unicode-width](https://github.com/unicode-rs/unicode-width) | 0.2 | 中文显示宽度计算 |
 | [chrono](https://github.com/chronotope/chrono) | 0.4 | 评论时间格式化 |
 | [ctrlc](https://github.com/Detegr/rust-ctrlc) | 3.4 | Ctrl+C 信号处理 |
+| [md5](https://github.com/johannhof/md5) | 0.7 | 酷狗音乐 API MD5 签名 |
 | [winapi](https://github.com/retep998/winapi-rs) | 0.3 | Windows 控制台 UTF-8 |
 
 ### 编译优化
@@ -603,18 +614,61 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - 某些歌曲可能需要 VIP 或已下架
 - 歌词格式必须为标准 LRC 格式
 
+### 歌曲信息查询失败
+
+- 确保已设置 `DEEPSEEK_API_KEY`（按 `k` 输入或设置环境变量）
+- DeepSeek API Key 可在 [platform.deepseek.com](https://platform.deepseek.com/) 获取
+- 检查网络连接是否可访问 DeepSeek API
+
 ### 首次编译慢
 
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604230410492250_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/2026042304110413_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604230411123002_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260424040153978_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604240401592657_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604240402067488_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新日志
+
+## 版本 1.2.0 (2026-04-24)
+
+### 🎉 新功能
+
+#### 歌曲信息查询
+- ✨ **DeepSeek查询**：按 `i` 键使用 DeepSeek 流式查询当前歌曲详细信息
+- ✨ **内容流式输出**：查询结果逐字显示，无需等待全部生成
+- ✨ **13项分类信息**：演唱歌手、歌手详情、词曲创作、发行时间、所属专辑（含曲目列表）、创作背景、歌曲大意、音乐风格、商业成绩、获奖记录、影响评价、翻唱引用、有趣事实
+- ✨ **多语言回复**：回复语言跟随界面语言（简中/繁中/英/日/韩）
+- ✨ **API Key 管理**：按 `k` 输入 DeepSeek API Key，支持环境变量 `DEEPSEEK_API_KEY`
+
+#### 酷狗音乐搜索
+- ✨ **酷狗音乐源**：新增酷狗音乐作为第三个搜索/下载平台
+- ✨ **三平台搜索**：搜索优先级为 酷我 → 酷狗 → 网易
+- ✨ **减少 VIP 限制**：酷狗音乐源提供更多免费下载资源
+- ✨ **MD5 签名认证**：酷狗下载链接使用 MD5 签名，提高下载成功率
+
+### 🔧 功能改进
+
+#### 歌曲信息提示词优化
+- 🔍 **无开场白**：回复不再输出问候语和自我介绍
+- 🔍 **无序号编号**：输出内容不再使用编号列表格式
+- 🔍 **歌手详情**：新增歌手详细信息分类（国籍、出生地、出生日期等）
+- 🔍 **专辑曲目**：所属专辑包含完整曲目列表
+
+### 💻 技术细节
+
+#### 依赖更新
+- ➕ 添加 `md5` 依赖（酷狗音乐 API 签名）
+
+#### 数据结构
+- ♻️ `OnlineSong` 新增 `hash` 字段（酷狗音乐使用 hash 标识歌曲）
+- ♻️ 新增 `MusicSource::Kugou` 枚举变体
+- ♻️ 新增酷狗 JSON 解析结构体
+
+---
 
 ## 版本 1.1.0 (2026-04-17)
 

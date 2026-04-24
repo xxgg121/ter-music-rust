@@ -5,7 +5,7 @@ show_help() {
   cat <<'EOF'
 Usage: ./build-dmg.sh [options]
 
-Build macOS app bundle for ter-music-rust.
+Build MacOS app bundle for ter-music-rust.
 
 Options:
   --target <triple>      Rust target triple (x86_64-apple-darwin | aarch64-apple-darwin)
@@ -30,7 +30,7 @@ OUTPUT_DIR="$PROJECT_DIR/dist/macos"
 WORK_DIR="$PROJECT_DIR/target/macos-package"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "Error: build-dmg.sh must run on macOS (Darwin)." >&2
+  echo "Error: build-dmg.sh must run on MacOS (Darwin)." >&2
   echo "Hint: On Linux, use ./build-deb.sh or ./build-rpm.sh." >&2
   exit 1
 fi
@@ -249,7 +249,7 @@ if [[ "$WITH_DMG" -eq 1 ]]; then
   hdiutil create -volname "$APP_DISPLAY_NAME" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_OUT" >/dev/null
 fi
 
-echo "macOS package build completed: $OUTPUT_DIR"
+echo "MacOS package build completed: $OUTPUT_DIR"
 echo "App bundle: $APP_OUT"
 if [[ "$WITH_ZIP" -eq 1 ]]; then
   echo "ZIP: $ZIP_OUT"

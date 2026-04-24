@@ -164,7 +164,7 @@ ui.rs（事件处理 + 界面渲染）
     ├── analyzer.rs ←→ audio.rs（RMS 音量、波形可视化）
     ├── playlist.rs ←→ 文件系统（目录扫描、歌曲列表）
     ├── lyrics.rs ←→ 文件系统 / 网络搜索（本地 LRC / 后台下载）
-    ├── search.rs ←→ 网络（酷我/网易搜索、评论拉取、在线下载）
+    ├── search.rs ←→ 网络（酷我+网易搜索、评论拉取、在线下载）
     ├── config.rs ←→ config.json（配置持久化）
     └── defs.rs（公共数据结构）
 ```

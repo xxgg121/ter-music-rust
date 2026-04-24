@@ -49,9 +49,16 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 
 ### 🔍 Search
 - **Local search**: press `s` to search songs in current music directory
-- **Online search**: press `n` to search online songs by keyword
+- **Online search**: press `n` to search online songs by keyword (Kuwo + Kugou + NetEase, 3 platforms)
 - **Paging**: `PgUp` / `PgDn` for more results
 - **Online download**: press `Enter` on selected online result to download into current music directory (with progress display)
+
+### 🤖 song Info
+- **Smart query**: press `i` to query detailed song information using DeepSeek
+- **Streaming output**: results are displayed character by character, no need to wait for full generation
+- **Rich information**: covers 13 categories including artist details, songwriting, album track listing, creative background, song meaning, musical style, and more
+- **Multi-language support**: response language follows the UI language setting (SC/TC/EN/JP/KR)
+- **API Key configuration**: press `k` to input DeepSeek API Key, or set via `DEEPSEEK_API_KEY` environment variable
 
 ### ⭐ Favorites
 - **Add/remove favorites**: press `f` to toggle favorite state of current track
@@ -118,6 +125,7 @@ Configuration is stored in `USERPROFILE/ter-music-rust/config.json` in the progr
 | `volume` | Volume (0-100) |
 | `favorites` | Favorites list |
 | `dir_history` | Directory history |
+| `deepseek_api_key` | DeepSeek API Key (for song info query) |
 | `theme` | Theme name |
 | `language` | UI language (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
 
@@ -198,6 +206,8 @@ cargo run --release -- -o d:\Music
 | `v` | View favorites |
 | `h` | View directory history |
 | `c` | View song comments |
+| `i` | song info query (DeepSeek) |
+| `k` | Input DeepSeek API Key |
 | `l` | Switch UI language (SC/TC/EN/JP/KR) |
 | `t` | Switch theme |
 | `q` | Quit |
@@ -497,7 +507,7 @@ src/
 ├── analyzer.rs   # Audio analyzer (real-time RMS volume, EMA smoothing, waveform rendering)
 ├── playlist.rs   # Playlist management (directory scan, parallel duration loading, folder picker)
 ├── lyrics.rs     # Lyric parsing (LRC, local search, encoding detection, background download)
-├── search.rs     # Online search/download (Kuwo + NetEase search, download, comments fetch)
+├── search.rs     # Online search/download (Kuwo + Kugou + NetEase search, download, comments fetch, song info streaming query)
 ├── config.rs     # Config management (JSON serialization, 8 persistent items)
 └── ui.rs         # UI (terminal rendering, event handling, multi-view mode, theme/language system)
 ```
@@ -517,6 +527,7 @@ src/
 | [unicode-width](https://github.com/unicode-rs/unicode-width) | 0.2 | CJK display width calculation |
 | [chrono](https://github.com/chronotope/chrono) | 0.4 | Comment time formatting |
 | [ctrlc](https://github.com/Detegr/rust-ctrlc) | 3.4 | Ctrl+C signal handling |
+| [md5](https://github.com/johannhof/md5) | 0.7 | Kugou Music API MD5 signature |
 | [winapi](https://github.com/retep998/winapi-rs) | 0.3 | Windows console UTF-8 support |
 
 ### Release Build Optimization
@@ -607,18 +618,61 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - Some songs may require VIP access or may be removed
 - Lyric file must be valid standard LRC format
 
+### song info query fails
+
+- Make sure `DEEPSEEK_API_KEY` is set (press `k` or set environment variable)
+- DeepSeek API Key can be obtained at [platform.deepseek.com](https://platform.deepseek.com/)
+- Check network connectivity to DeepSeek API
+
 ### Slow first build
 
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604230410492250_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/2026042304110413_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604230411123002_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260424040153978_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604240401592657_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604240402067488_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 
 ## 📝 Changelog
+
+## Version 1.2.0 (2026-04-24)
+
+### 🎉 New Features
+
+#### song Info Query
+- ✨ **DeepSeek query**: press `i` to stream-query detailed song info via DeepSeek
+- ✨ **Streaming output**: results display character by character, no need to wait for full generation
+- ✨ **13 info categories**: performers, artist details, songwriting & production, release date, album (with track listing), creative background, song meaning, musical style, commercial performance, awards, impact & reviews, covers & usage, fun facts
+- ✨ **Multi-language response**: response language follows UI language (SC/TC/EN/JP/KR)
+- ✨ **API Key management**: press `k` to input DeepSeek API Key, or set via `DEEPSEEK_API_KEY` environment variable
+
+#### Kugou Music Source
+- ✨ **Kugou Music**: added Kugou as a third search/download platform
+- ✨ **3-platform search**: priority order is Kuwo → Kugou → NetEase
+- ✨ **Reduced VIP restrictions**: Kugou provides more free download resources
+- ✨ **MD5 signature auth**: Kugou download links use MD5 signature for higher success rate
+
+### 🔧 Improvements
+
+#### Song Info Prompt Optimization
+- 🔍 **No preamble**: responses no longer include greetings or self-introductions
+- 🔍 **No numbered lists**: output content no longer uses numbered list format
+- 🔍 **Artist details**: new category with detailed artist information (nationality, birthplace, date of birth, etc.)
+- 🔍 **Album track listing**: album section now includes complete track listing
+
+### 💻 Technical Details
+
+#### Dependency Updates
+- ➕ Added `md5` dependency (Kugou Music API signature)
+
+#### Data Structures
+- ♻️ Added `hash` field to `OnlineSong` (Kugou uses hash to identify songs)
+- ♻️ Added `MusicSource::Kugou` enum variant
+- ♻️ Added Kugou JSON parsing structs
+
+---
 
 ## Version 1.1.0 (2026-04-17)
 

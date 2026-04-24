@@ -16,6 +16,10 @@ fn default_language() -> String {
     "zh-CN".to_string()
 }
 
+fn default_deepseek_api_key() -> String {
+    String::new()
+}
+
 /// 应用配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -39,6 +43,9 @@ pub struct Config {
     /// 界面语言
     #[serde(default = "default_language")]
     pub language: String,
+    /// DeepSeek API Key（可选，未设置时可从环境变量读取）
+    #[serde(default = "default_deepseek_api_key")]
+    pub deepseek_api_key: String,
 }
 
 impl Default for Config {
@@ -52,6 +59,7 @@ impl Default for Config {
             dir_history: Vec::new(),
             theme: default_theme(),
             language: default_language(),
+            deepseek_api_key: default_deepseek_api_key(),
         }
     }
 }
@@ -73,6 +81,7 @@ impl Config {
             || self.volume != 50
             || self.theme != default_theme()
             || self.language != default_language()
+            || !self.deepseek_api_key.trim().is_empty()
     }
 
     /// 自动修复常见历史配置错误：相邻字符串项缺少逗号

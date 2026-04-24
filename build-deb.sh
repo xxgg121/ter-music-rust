@@ -215,7 +215,7 @@ Architecture: ${DEB_ARCH}
 Maintainer: ${PKG_MAINTAINER}
 Homepage: ${PKG_HOMEPAGE}
 Depends: libc6 (>= 2.31), libasound2
-Description: A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and macOS systems.
+Description: A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems.
 EOF
 
 cat > "$BIN_PKG_DIR/DEBIAN/postinst" <<EOF
@@ -319,7 +319,7 @@ Homepage: https://example.invalid/${PKG_NAME}
 Package: ${PKG_NAME}
 Architecture: any
 Depends: \${shlibs:Depends}, \${misc:Depends}, libasound2
-Description: A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and macOS systems.
+Description: A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems.
 EOF
 
   cat > "$DEBIAN_DIR/rules" <<'EOF'

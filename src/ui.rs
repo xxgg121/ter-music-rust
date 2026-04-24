@@ -311,6 +311,26 @@ pub struct UserInterface {
     comments_loading: bool,
     /// 是否显示评论详情（按 Enter 切换）
     comments_detail_mode: bool,
+    /// 是否显示 AI 歌曲信息视图（false=歌词视图）
+    song_info_mode: bool,
+    /// AI 歌曲信息对应的歌曲文件路径（用于判断是否需要重新查询）
+    song_info_file_path: Option<std::path::PathBuf>,
+    /// AI 歌曲信息内容
+    song_info_content: String,
+    /// AI 歌曲信息后台查询接收器（流式）
+    song_info_rx: Option<std::sync::mpsc::Receiver<crate::search::SongInfoChunk>>,
+    /// AI 歌曲信息滚动偏移
+    song_info_scroll_offset: usize,
+    /// 是否正在查询 AI 歌曲信息
+    song_info_loading: bool,
+    /// DeepSeek API Key（来自配置/用户输入）
+    deepseek_api_key: String,
+    /// 是否处于 DeepSeek API Key 输入模式
+    api_key_input_mode: bool,
+    /// DeepSeek API Key 输入缓存
+    api_key_input_value: String,
+    /// 当前输入完成后是否继续执行歌曲信息查询（由 i 触发）
+    api_key_input_for_song_info: bool,
     /// 是否处于搜索模式
     search_mode: bool,
     /// 搜索输入关键字
@@ -338,7 +358,7 @@ pub struct UserInterface {
     /// 音乐目录的滚动偏移
     dir_history_scroll_offset: usize,
     /// 上一帧的模式状态（用于检测模式切换，避免右侧标题闪烁）
-    prev_mode_state: (bool, bool, bool, bool, bool),
+    prev_mode_state: (bool, bool, bool, bool, bool, bool, bool),
     /// 是否处于网络搜索模式
     online_search_mode: bool,
     /// 网络搜索结果
@@ -406,6 +426,16 @@ impl UserInterface {
             comments_rx: None,
             comments_loading: false,
             comments_detail_mode: false,
+            song_info_mode: false,
+            song_info_file_path: None,
+            song_info_content: String::new(),
+            song_info_rx: None,
+            song_info_scroll_offset: 0,
+            song_info_loading: false,
+            deepseek_api_key: String::new(),
+            api_key_input_mode: false,
+            api_key_input_value: String::new(),
+            api_key_input_for_song_info: false,
             search_mode: false,
             search_query: String::new(),
             search_results: Vec::new(),
@@ -419,7 +449,7 @@ impl UserInterface {
             dir_history: Vec::new(),
             dir_history_selected_index: 0,
             dir_history_scroll_offset: 0,
-            prev_mode_state: (false, false, false, false, false),
+            prev_mode_state: (false, false, false, false, false, false, false),
             online_search_mode: false,
             online_search_results: Vec::new(),
             online_selected_index: 0,
@@ -457,6 +487,60 @@ impl UserInterface {
             UiLanguage::En => en,
             UiLanguage::Ja => ja,
             UiLanguage::Ko => ko,
+        }
+    }
+
+    fn resolved_deepseek_api_key(&self) -> Option<String> {
+        if let Ok(env_key) = std::env::var("DEEPSEEK_API_KEY") {
+            let trimmed = env_key.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+
+        let trimmed = self.deepseek_api_key.trim();
+        if !trimmed.is_empty() {
+            Some(trimmed.to_string())
+        } else {
+            None
+        }
+    }
+
+    fn open_api_key_input_mode(&mut self, for_song_info: bool) {
+        self.api_key_input_mode = true;
+        self.api_key_input_for_song_info = for_song_info;
+        self.api_key_input_value = self.resolved_deepseek_api_key().unwrap_or_default();
+        self.cached_lyrics_title = None;
+    }
+
+    fn start_song_info_mode_for_current_song(&mut self) {
+        self.comments_mode = false;
+        self.comments_detail_mode = false;
+        self.song_info_mode = true;
+        self.song_info_scroll_offset = 0;
+
+        let current_file = {
+            let audio_player = self.audio_player.lock().unwrap();
+            audio_player.get_current_file()
+        };
+
+        self.song_info_file_path = current_file.as_ref().map(|f| f.path.clone());
+        self.song_info_rx = None;
+        self.song_info_loading = false;
+        self.song_info_content.clear();
+
+        if let Some(file) = current_file {
+            self.start_fetch_song_info_for_current_song(&file.name);
+        } else {
+            self.song_info_content = self
+                .i18n(
+                    "请选择歌曲播放后再查询。",
+                    "請先播放歌曲再查詢。",
+                    "Please play a song before querying.",
+                    "先に曲を再生してから取得してください。",
+                    "먼저 곡을 재생한 뒤 조회하세요."
+                )
+                .to_string();
         }
     }
 
@@ -539,7 +623,7 @@ impl UserInterface {
 
     /// 根据鼠标位置获取歌词拖动目标时间
     fn lyric_time_at_position(&self, col: usize, row: u16) -> Option<Duration> {
-        if self.comments_mode {
+        if self.comments_mode || self.song_info_mode {
             return None;
         }
         let layout = self.lyrics_area_layout.as_ref()?;
@@ -580,7 +664,7 @@ impl UserInterface {
 
     /// 歌词区域滚轮跳转（direction: -1 上一行，1 下一行）
     fn seek_by_lyric_wheel(&mut self, direction: i8) {
-        if self.comments_mode {
+        if self.comments_mode || self.song_info_mode {
             return;
         }
 
@@ -685,6 +769,196 @@ impl UserInterface {
         }
     }
 
+    /// 根据当前语言构造 DeepSeek 歌曲信息提示词
+    fn build_song_info_prompt(&self, song_name: &str) -> String {
+        let clean_name = song_name.trim();
+        match self.language {
+            UiLanguage::ZhCn => format!(
+                "请根据歌曲名称整理该歌曲的详细信息。禁止输出任何开场白、问候语或自我介绍，直接输出歌曲信息。\n\n歌曲名称：{}\n\n按以下结构详细输出，每项尽量展开，无法确认的标注「暂无公开资料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手详情：（包括国籍、出生地、出生日期、星座、血型、身高、体重、职业、毕业院校、代表作品、主要成就等）\n词曲创作：（作词、作曲、编曲、制作人等完整创作团队）\n发行时间：（具体日期，若有不同版本请分别列出）\n所属专辑：（专辑名称、第几首曲目、专辑曲目列表）\n创作背景：（详细描述创作灵感来源、幕后故事、创作过程中的趣闻等）\n歌曲大意：（深入解读歌词含义、表达的情感与主题思想）\n音乐风格：（流派、BPM、调性、节奏特点、特殊编曲或乐器使用等）\n商业成绩：（榜单排名、销量、播放量、认证等）\n获奖记录：（音乐奖项、提名等）\n影响评价：（乐评人评价、文化影响、历史地位等）\n翻唱引用：（知名翻唱版本、影视/广告/游戏等中的使用）\n有趣事实：（与歌曲相关的冷知识、轶事、趣闻等）\n\n要求：\n- 信息尽量准确详实，避免杜撰，不确定的标注「据传」或「待考证」。\n- 如有多个歌手或版本，以原唱或最知名版本为主，必要时补充其他版本。\n- 每项内容尽量详细展开，不要过于简略。\n- 绝对禁止输出开场白、问候语、自我介绍，禁止使用序号编号。\n- 必须使用简体中文回答。",
+                clean_name
+            ),
+            UiLanguage::ZhTw => format!(
+                "請根據歌曲名稱整理該歌曲的詳細資訊。禁止輸出任何開場白、問候語或自我介紹，直接輸出歌曲資訊。\n\n歌曲名稱：{}\n\n依照以下結構詳細輸出，每項盡量展開，無法確認的標註「暫無公開資料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手詳情：（包括國籍、出生地、出生日期、星座、血型、身高、體重、職業、畢業院校、代表作、主要成就等）\n詞曲創作：（作詞、作曲、編曲、製作人等完整創作團隊）\n發行時間：（具體日期，若有不同版本請分別列出）\n所屬專輯：（專輯名稱、第幾首曲目、專輯曲目列表）\n創作背景：（詳細描述創作靈感來源、幕後故事、創作過程中的趣聞等）\n歌曲大意：（深入解讀歌詞含義、表達的情感與主題思想）\n音樂風格：（流派、BPM、調性、節奏特點、特殊編曲或樂器使用等）\n商業成績：（榜單排名、銷量、播放量、認證等）\n得獎紀錄：（音樂獎項、提名等）\n影響評價：（樂評人評價、文化影響、歷史地位等）\n翻唱引用：（知名翻唱版本、影視/廣告/遊戲等中的使用）\n有趣事實：（與歌曲相關的冷知識、軼事、趣聞等）\n\n要求：\n- 資訊盡量準確詳實，避免杜撰，不確定的標註「據傳」或「待考證」。\n- 若有多位歌手或多個版本，以原唱或最知名版本為主，必要時補充其他版本。\n- 每項內容盡量詳細展開，不要過於簡略。\n- 絕對禁止輸出開場白、問候語、自我介紹，禁止使用序號編號。\n- 必須使用繁體中文回答。",
+                clean_name
+            ),
+            UiLanguage::En => format!(
+                "Compile detailed information about the song based on its title. Do NOT output any preamble, greeting, or self-introduction. Output the song information directly.\n\nSong Title: {}\n\nOutput in the following structure with detailed descriptions. If any item cannot be verified, write \"No public information available\":\n\nPerformers: (including lead vocals, backing vocals, featured artists, etc.)\nArtist Details: (including nationality, birthplace, date of birth, zodiac sign, blood type, height, weight, occupation, alma mater, notable works, major achievements, etc.)\nSongwriting & Production: (lyricist, composer, arranger, producer, full creative team)\nRelease Date: (specific date; list different versions separately if applicable)\nAlbum: (album name, track number, album track listing)\nCreative Background: (detailed description of inspiration, behind-the-scenes stories, interesting anecdotes during creation)\nSong Meaning: (in-depth interpretation of lyrics, emotions and themes expressed)\nMusical Style: (genre, BPM, key, rhythm characteristics, special arrangements or instruments)\nCommercial Performance: (chart positions, sales, streaming numbers, certifications)\nAwards & Nominations: (music awards, nominations)\nImpact & Reviews: (critic reviews, cultural impact, historical significance)\nCovers & Usage: (notable cover versions, usage in films/ads/games/etc.)\nFun Facts: (trivia, anecdotes related to the song)\n\nRequirements:\n- Keep information as accurate and detailed as possible; avoid fabrication. Mark uncertain info as \"Reportedly\" or \"Unverified\".\n- If multiple singers or versions exist, prioritize the original or most well-known version, and supplement with others.\n- Elaborate on each item in detail rather than being too brief.\n- Absolutely NO preamble, greeting, or self-introduction. Do NOT use numbered lists.\n- You MUST respond in English.",
+                clean_name
+            ),
+            UiLanguage::Ja => format!(
+                "楽曲名に基づいて楽曲の詳細情報を整理してください。冒頭の挨拶や自己紹介は一切出力せず、直接楽曲情報を出力してください。\n\n楽曲名：{}\n\n以下の構成で各項目を詳しく記述してください。取得できない項目は「公開情報なし」と記載してください。\n\n歌手：（メインボーカル、コーラス、フィーチャリングアーティストなど）\n歌手詳細：（国籍、出身地、生年月日、星座、血液型、身長、体重、職業、卒業校、代表作、主な受賞歴など）\n作詞・作曲・制作：（作詞、作曲、編曲、プロデューサーなど完全な制作チーム）\nリリース日：（具体的な日付、異なるバージョンがあればそれぞれ記載）\n収録アルバム：（アルバム名、トラック番号、アルバム収録曲一覧）\n制作背景：（インスピレーションの源泉、舞台裏のエピソード、制作中の逸話などを詳しく）\n楽曲の意味：（歌詞の解釈、表現されている感情とテーマを深く考察）\n音楽スタイル：（ジャンル、BPM、キー、リズムの特徴、特殊なアレンジや楽器使用など）\n商業成績：（チャート順位、売上、再生回数、認定など）\n受賞・ノミネート：（音楽賞、ノミネーションなど）\n影響と評価：（評論家の評価、文化的影響、歴史的意義など）\nカバーと使用例：（有名なカバーバージョン、映画/CM/ゲームなどでの使用）\n面白い事実：（楽曲にまつわるトリビア、逸話など）\n\n要求：\n- 情報はできるだけ正確かつ詳細にし、捏造を避けてください。不確かな情報は「伝聞」や「未確認」と記載してください。\n- 複数の歌手やバージョンがある場合は、原曲または最も有名な版を優先し、必要に応じて補足してください。\n- 各項目を簡略にせず、できるだけ詳しく記述してください。\n- 冒頭の挨拶や自己紹介は絶対に出力せず、番号付きリストの使用も禁止します。\n- 必ず日本語で回答してください。",
+                clean_name
+            ),
+            UiLanguage::Ko => format!(
+                "곡명을 바탕으로 해당 곡의 상세 정보를 정리해 주세요. 서론, 인사말, 자기소개를 절대 출력하지 말고 곡 정보를 직접 출력해 주세요.\n\n곡명: {}\n\n아래 구조로 각 항목을 자세히 서술해 주세요. 확인할 수 없는 항목은 \"공개 자료 없음\"으로 표시해 주세요.\n\n가수：（메인 보컬, 백보컬, 피처링 아티스트 등）\n가수 상세：（국적, 출생지, 생년월일, 별자리, 혈액형, 키, 몸무게, 직업, 졸업 학교, 대표작, 주요 수상 경력 등）\n작사·작곡·제작：（작사, 작곡, 편곡, 프로듀서 등 전체 크리에이티브 팀）\n발매일：（구체적인 날짜, 다른 버전이 있으면 각각 표기）\n수록 앨범：（앨범명, 트랙 번호, 앨범 트랙 목록）\n창작 배경：（영감의 원천, 비하인드 스토리, 제작 중 에피소드 등 상세히）\n곡의 의미：（가사 해석, 표현된 감정과 주제를 깊이 있게 분석）\n음악 스타일：（장르, BPM, 조성, 리듬 특징, 특수 편곡이나 악기 사용 등）\n상업 성적：（차트 순위, 판매량, 스트리밍 수, 인증 등）\n수상 및 후보：（음악상, 후보 지명 등）\n영향과 평가：（평론가 평가, 문화적 영향, 역사적 의의 등）\n커버 및 사용：（유명한 커버 버전, 영화/광고/게임 등에서의 사용）\n흥미로운 사실：（곡과 관련된 트리비아, 일화 등）\n\n요구사항：\n- 정보는 최대한 정확하고 상세하게 작성하며, 지어내지 마세요. 불확실한 정보는 \"전해짐\" 또는 \"미확인\"으로 표시하세요.\n- 여러 가수나 버전이 있으면 원곡 또는 가장 널리 알려진 버전을 우선하고, 필요하면 보충하세요.\n- 각 항목을 너무 간단히 하지 말고 최대한 자세히 서술해 주세요.\n- 서론, 인사말, 자기소개는 절대 출력하지 말고, 번호 매기기 목록 사용도 금지합니다.\n- 반드시 한국어로 답변해 주세요.",
+                clean_name
+            ),
+        }
+    }
+
+    /// 启动后台查询 AI 歌曲信息
+    fn start_fetch_song_info_for_current_song(&mut self, song_name: &str) {
+        let Some(api_key) = self.resolved_deepseek_api_key() else {
+            self.song_info_loading = false;
+            self.song_info_rx = None;
+            self.song_info_content = self
+                .i18n(
+                    "未设置 DEEPSEEK_API_KEY，请按 i 或 k 输入并保存。",
+                    "未設定 DEEPSEEK_API_KEY，請按 i 或 k 輸入並儲存。",
+                    "DEEPSEEK_API_KEY is not set. Press i or k to input and save it.",
+                    "DEEPSEEK_API_KEY が未設定です。i または k で入力して保存してください。",
+                    "DEEPSEEK_API_KEY가 설정되지 않았습니다. i 또는 k로 입력 후 저장하세요."
+                )
+                .to_string();
+            return;
+        };
+
+        std::env::set_var("DEEPSEEK_API_KEY", &api_key);
+
+        self.song_info_loading = true;
+        self.song_info_content.clear();
+        let prompt = self.build_song_info_prompt(song_name);
+        self.song_info_rx = Some(crate::search::fetch_song_info_streaming(prompt));
+    }
+
+    /// 非阻塞检查 AI 歌曲信息查询结果
+    fn check_song_info_result(&mut self) {
+        if let Some(ref rx) = self.song_info_rx {
+            // 流式接收：每次检查时读取所有可用 chunk
+            loop {
+                match rx.try_recv() {
+                    Ok(chunk) => {
+                        if let Some(err) = chunk.error {
+                            self.song_info_loading = false;
+                            self.song_info_rx = None;
+                            self.song_info_content = format!(
+                                "{}{}\n\n{}",
+                                self.i18n(
+                                    "查询失败：",
+                                    "查詢失敗：",
+                                    "Query failed: ",
+                                    "取得失敗: ",
+                                    "조회 실패: "
+                                ),
+                                err,
+                                self.i18n(
+                                    "提示：可按 i 或 k 输入 DEEPSEEK_API_KEY 并保存配置。",
+                                    "提示：可按 i 或 k 輸入 DEEPSEEK_API_KEY 並儲存設定。",
+                                    "Tip: Press i or k to input DEEPSEEK_API_KEY and save config.",
+                                    "ヒント: i または k で DEEPSEEK_API_KEY を入力して保存できます。",
+                                    "팁: i 또는 k를 눌러 DEEPSEEK_API_KEY를 입력하고 저장할 수 있습니다."
+                                )
+                            );
+                            break;
+                        }
+                        if !chunk.delta.is_empty() {
+                            let delta = chunk.delta.replace("**", "").replace("*", "");
+                            let delta = delta.replace("##", "").replace("#", "");
+                            self.song_info_content.push_str(&delta);
+                        }
+                        if chunk.done {
+                            self.song_info_loading = false;
+                            self.song_info_rx = None;
+                            break;
+                        }
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        self.song_info_loading = false;
+                        self.song_info_rx = None;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// 绘制 AI 歌曲信息（右侧）
+    fn draw_song_info<W: Write>(
+        &mut self,
+        stdout: &mut W,
+        start_x: u16,
+        width: u16,
+        visible_count: usize,
+    ) -> io::Result<()> {
+        // AI 信息视图不使用歌词拖动布局
+        self.lyrics_area_layout = None;
+
+        let current_file = {
+            let audio_player = self.audio_player.lock().unwrap();
+            audio_player.get_current_file()
+        };
+
+        self.check_song_info_result();
+
+        if self.song_info_file_path != current_file.as_ref().map(|f| f.path.clone()) {
+            self.song_info_file_path = current_file.as_ref().map(|f| f.path.clone());
+            self.song_info_content.clear();
+            self.song_info_loading = false;
+            self.song_info_rx = None;
+            self.song_info_scroll_offset = 0;
+            if let Some(file) = current_file.as_ref() {
+                self.start_fetch_song_info_for_current_song(&file.name);
+            }
+        }
+
+        for i in 0..visible_count {
+            queue!(
+                stdout,
+                cursor::MoveTo(start_x, (i + 6) as u16),
+                terminal::Clear(ClearType::UntilNewLine),
+            )?;
+        }
+
+        if current_file.is_none() {
+            queue!(
+                stdout,
+                cursor::MoveTo(start_x, 8),
+                style::SetForegroundColor(style::Color::DarkGrey),
+                style::Print(self.i18n("请选择歌曲播放", "請選擇歌曲播放", "Select a song to play", "再生する曲を選択してください", "재생할 곡을 선택하세요")),
+                style::ResetColor,
+            )?;
+            return Ok(());
+        }
+
+        // 流式输出：加载中但已有内容时，显示已有内容（而非等待全部完成）
+        if self.song_info_content.trim().is_empty() && self.song_info_loading {
+            queue!(
+                stdout,
+                cursor::MoveTo(start_x, 8),
+                style::SetForegroundColor(style::Color::DarkGrey),
+                style::Print(self.i18n("正在查询歌曲信息...", "正在查詢歌曲資訊...", "Querying song information...", "楽曲情報を取得中...", "곡 정보를 조회하는 중...")),
+                style::ResetColor,
+            )?;
+            return Ok(());
+        }
+
+        let content = if self.song_info_content.trim().is_empty() {
+            self.i18n("暂无查询结果，按 I 重新查询。", "暫無查詢結果，按 I 重新查詢。", "No result yet, press I to query again.", "結果はありません。I キーで再取得してください。", "결과가 없습니다. I 키로 다시 조회하세요.").to_string()
+        } else {
+            self.song_info_content.clone()
+        };
+
+        let wrapped_lines = wrap_text_to_width(&content, width.saturating_sub(1) as usize);
+        let total_lines = wrapped_lines.len();
+        let max_offset = total_lines.saturating_sub(visible_count);
+        if self.song_info_scroll_offset > max_offset {
+            self.song_info_scroll_offset = max_offset;
+        }
+        for (row, line) in wrapped_lines.into_iter().skip(self.song_info_scroll_offset).take(visible_count).enumerate() {
+            queue!(
+                stdout,
+                cursor::MoveTo(start_x, (row + 6) as u16),
+                terminal::Clear(ClearType::UntilNewLine),
+                style::SetForegroundColor(self.theme_colors.song_normal),
+                style::Print(truncate_to_width(&line, width.saturating_sub(1) as usize)),
+                style::ResetColor,
+            )?;
+        }
+
+        Ok(())
+    }
+
     /// 绘制界面
     fn draw(&mut self) -> io::Result<()> {
         let mut stdout = io::stdout();
@@ -719,8 +993,25 @@ impl UserInterface {
         // 绘制状态栏
         self.draw_status(&mut stdout)?;
 
-        // 搜索模式下，将光标定位到搜索输入位置
-        if self.search_mode {
+        // 输入模式下，将光标定位到输入位置
+        if self.api_key_input_mode {
+            let prompt_text = self.i18n(
+                "输入 DEEPSEEK_API_KEY: ",
+                "輸入 DEEPSEEK_API_KEY: ",
+                "Input DEEPSEEK_API_KEY: ",
+                "DEEPSEEK_API_KEY を入力: ",
+                "DEEPSEEK_API_KEY 입력: "
+            );
+            let prompt_len = unicode_width::UnicodeWidthStr::width(prompt_text);
+            let value_len = unicode_width::UnicodeWidthStr::width(self.api_key_input_value.as_str());
+            let left_width = (self.terminal_width as f32 * 0.50) as u16;
+            let target_col = left_width + 1 + (prompt_len + value_len) as u16;
+            queue!(
+                stdout,
+                cursor::MoveTo(target_col, 4),
+                cursor::Show,
+            )?;
+        } else if self.search_mode {
             let prompt_text = if self.online_search_mode {
                 self.i18n("网络搜索: ", "網路搜尋: ", "Online Search: ", "オンライン検索: ", "온라인 검색: ")
             } else {
@@ -738,7 +1029,7 @@ impl UserInterface {
                 cursor::Show,
             )?;
         }
-        // 非搜索模式下光标保持隐藏（draw 开始时已隐藏）
+        // 非输入模式/搜索模式下光标保持隐藏（draw 开始时已隐藏）
 
         stdout.flush()?;
 
@@ -1390,23 +1681,43 @@ impl UserInterface {
             )?;
         }
 
-        // 绘制右侧标题（歌词/评论）
-        let lyrics_title = if self.comments_mode {
+        // 绘制右侧标题（歌词/评论/API Key输入）
+        let lyrics_title = if self.api_key_input_mode {
+            format!(
+                "{}{}",
+                self.i18n(
+                    "输入 DEEPSEEK_API_KEY: ",
+                    "輸入 DEEPSEEK_API_KEY: ",
+                    "Input DEEPSEEK_API_KEY: ",
+                    "DEEPSEEK_API_KEY を入力: ",
+                    "DEEPSEEK_API_KEY 입력: "
+                ),
+                self.api_key_input_value
+            )
+        } else if self.comments_mode {
             match self.language {
-                UiLanguage::ZhCn => format!("评论 共{}条（第{}页）", self.comments_total, self.comments_page),
-                UiLanguage::ZhTw => format!("評論 共{}條（第{}頁）", self.comments_total, self.comments_page),
-                UiLanguage::En => format!("Comments {} (Page {})", self.comments_total, self.comments_page),
-                UiLanguage::Ja => format!("コメント {} 件（{} ページ）", self.comments_total, self.comments_page),
-                UiLanguage::Ko => format!("댓글 {}개 ({}페이지)", self.comments_total, self.comments_page),
+                UiLanguage::ZhCn => format!("歌曲评论 共{}条（第{}页）", self.comments_total, self.comments_page),
+                UiLanguage::ZhTw => format!("歌曲評論 共{}條（第{}頁）", self.comments_total, self.comments_page),
+                UiLanguage::En => format!("Song Comments {} (Page {})", self.comments_total, self.comments_page),
+                UiLanguage::Ja => format!("楽曲コメント {} 件（{} ページ）", self.comments_total, self.comments_page),
+                UiLanguage::Ko => format!("노래 리뷰 {}개 ({}페이지)", self.comments_total, self.comments_page),
+            }
+        } else if self.song_info_mode {
+            let label = self.i18n("歌曲信息", "歌曲資訊", "Song Info", "楽曲情報", "곡 정보").to_string();
+            if let Some(ref file) = current_file {
+                let clean_name = file.name.trim_end_matches(".mp3").trim_end_matches(".flac").trim_end_matches(".wav").trim_end_matches(".ogg").trim_end_matches(".m4a").trim_end_matches(".aac").trim_end_matches(".wma");
+                format!("{} {}", label, clean_name)
+            } else {
+                label
             }
         } else if let Some(ref file) = current_file {
             format!(
                 "{}{}",
-                self.i18n("歌词 ", "歌詞 ", "Lyrics ", "歌詞 ", "가사 "),
+                self.i18n("歌曲歌词 ", "歌曲歌詞 ", "Song Lyrics ", "楽曲歌詞 ", "곡 가사 "),
                 file.name
             )
         } else {
-            self.i18n("歌词", "歌詞", "Lyrics", "歌詞", "가사").to_string()
+            self.i18n("歌曲歌词", "歌曲歌詞", "Song Lyrics", "楽曲歌詞", "곡 가사").to_string()
         };
         
         // 截断标题以适应右侧宽度
@@ -1421,6 +1732,8 @@ impl UserInterface {
             self.dir_history_mode,
             self.online_search_mode,
             self.comments_mode,
+            self.song_info_mode,
+            self.api_key_input_mode,
         );
         let mode_changed = self.prev_mode_state != current_mode_state;
         self.prev_mode_state = current_mode_state;
@@ -1454,6 +1767,8 @@ impl UserInterface {
         drop(playlist); // 释放 playlist 锁
         if self.comments_mode {
             self.draw_comments(stdout, left_width + 1, right_width, visible_count)?;
+        } else if self.song_info_mode {
+            self.draw_song_info(stdout, left_width + 1, right_width, visible_count)?;
         } else {
             self.draw_lyrics(stdout, left_width + 1, right_width, visible_count)?;
         }
@@ -1581,7 +1896,7 @@ impl UserInterface {
                 cursor::MoveTo(start_x, 8),
                 terminal::Clear(ClearType::UntilNewLine),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.i18n("下载歌词文件中", "下載歌詞檔中", "Downloading lyrics", "歌詞をダウンロード中", "가사 다운로드 중")),
+                style::Print(self.i18n("正在下载歌词文件...", "正在下載歌詞檔中...", "Downloading lyrics...", "歌詞をダウンロード中...", "가사 다운로드 중...")),
                 style::ResetColor,
             )?;
         } else if current_file.is_some() {
@@ -1676,7 +1991,7 @@ impl UserInterface {
                     &origin_comment_line,
                     width.saturating_sub(1) as usize,
                 ));
-                // 时间统一显示在“评论内容”下面，不显示在“回复评论”下面
+                // 时间统一显示在"评论内容"下面，不显示在"回复评论"下面
                 if let Some(time_text) = reply.time_text.as_ref().or(selected.time_text.as_ref()) {
                     lines.push(time_text.clone());
                 }
@@ -1732,7 +2047,7 @@ impl UserInterface {
             let comment = &self.current_comments[comment_idx];
             let is_selected = comment_idx == self.comments_selected_index;
 
-            // 列表仅展示歌曲评论本体：若当前项是“回复评论”，则显示其被回复的原评论
+            // 列表仅展示歌曲评论本体：若当前项是"回复评论"，则显示其被回复的原评论
             let (list_nickname, list_content) = if let Some(reply) = &comment.reply {
                 (reply.nickname.as_str(), reply.content.as_str())
             } else {
@@ -2047,6 +2362,24 @@ impl UserInterface {
                         "음악 폴더: ↑↓|Enter|d삭제|Esc",
                     )
                 }
+            } else if self.song_info_mode {
+                if self.terminal_width >= 80 {
+                    self.i18n(
+                        "歌曲信息: ↑/↓ 上下移动 | Up/Down 上下滚动 | Esc返回",
+                        "歌曲資訊: ↑/↓ 上下移動 | Up/Down 上下滾動 | Esc返回",
+                        "Song Info: ↑/↓ Scroll | Up/Down Scroll | Esc Back",
+                        "楽曲情報: ↑/↓ スクロール | Up/Down スクロール | Esc戻る",
+                        "곡 정보: ↑/↓ 스크롤 | Up/Down 스크롤 | Esc 뒤로",
+                    )
+                } else {
+                    self.i18n(
+                        "歌曲信息: ↑↓移动|Scroll滚动|Esc返回",
+                        "歌曲資訊: ↑↓移動|Scroll滾動|Esc返回",
+                        "Song Info: ↑↓|Scroll|Esc",
+                        "楽曲情報: ↑↓|Scroll|Esc",
+                        "곡 정보: ↑↓|Scroll|Esc",
+                    )
+                }
             } else if self.comments_mode {
                 if self.terminal_width >= 80 {
                     self.i18n(
@@ -2075,19 +2408,19 @@ impl UserInterface {
                 )
             } else if self.terminal_width >= 80 {
                 self.i18n(
-                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | ←→上下曲 | [,/].快退快进 | +-音量 | 1-5模式 | l语言 | o打开 | q退出",
-                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | ←→上下曲 | [,/].快退快進 | +-音量 | 1-5模式 | l語言 | o開啟 | q退出",
-                    "Keys: ↑↓ | Enter | Space | ←→ | [,/].Seek | +-Vol | 1-5 | l Lang | o Open | q Quit",
-                    "キー: ↑↓ | Enter | Space | ←→ | [,/].シーク | +-音量 | 1-5 | l言語 | o開く | q終了",
-                    "키: ↑↓ | Enter | Space | ←→ | [,/].탐색 | +-볼륨 | 1-5 | l 언어 | o 열기 | q 종료",
+                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | ←→上下曲 | [,/].快退快进 | +-音量 | l语言 | o打开 | q退出",
+                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | ←→上下曲 | [,/].快退快進 | +-音量 | l語言 | o開啟 | q退出",
+                    "Keys: ↑↓ | Enter | Space | ←→ | [,/].Seek | +-Vol | l Lang | o Open | q Quit",
+                    "キー: ↑↓ | Enter | Space | ←→ | [,/].シーク | +-音量 | l言語 | o開く | q終了",
+                    "키: ↑↓ | Enter | Space | ←→ | [,/].탐색 | +-볼륨 | l 언어 | o 열기 | q 종료",
                 )
             } else {
                 self.i18n(
-                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | +-音量 | l语言 | o打开 | q退出",
-                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | +-音量 | l語言 | o開啟 | q退出",
-                    "Keys: ↑↓ | Enter | Space | +-Vol | l Lang | o Open | q Quit",
-                    "キー: ↑↓ | Enter | Space | +-音量 | l言語 | o開く | q終了",
-                    "키: ↑↓ | Enter | Space | +-볼륨 | l 언어 | o 열기 | q 종료",
+                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | l语言 |q退出",
+                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | l語言 |q退出",
+                    "Keys: ↑↓ | Enter | Space | l Lang | q Quit",
+                    "キー: ↑↓ | Enter | Space | l言語 | q終了",
+                    "키: ↑↓ | Enter | Space |  l 언어  | q 종료",
                 )
             };
 
@@ -2142,6 +2475,63 @@ impl UserInterface {
 
     /// 处理键盘事件
     fn handle_key_event(&mut self, code: KeyCode) -> io::Result<()> {
+        // DeepSeek API Key 输入模式
+        if self.api_key_input_mode {
+            match code {
+                KeyCode::Esc => {
+                    self.api_key_input_mode = false;
+                    self.api_key_input_for_song_info = false;
+                    self.api_key_input_value.clear();
+                    self.cached_lyrics_title = None;
+                }
+                KeyCode::Enter => {
+                    let key = self.api_key_input_value.trim().to_string();
+                    self.deepseek_api_key = key.clone();
+
+                    if key.is_empty() {
+                        std::env::remove_var("DEEPSEEK_API_KEY");
+                        self.update_status(self.i18n(
+                            "已清空 DEEPSEEK_API_KEY 配置",
+                            "已清空 DEEPSEEK_API_KEY 設定",
+                            "DEEPSEEK_API_KEY has been cleared",
+                            "DEEPSEEK_API_KEY をクリアしました",
+                            "DEEPSEEK_API_KEY를 비웠습니다"
+                        ));
+                    } else {
+                        std::env::set_var("DEEPSEEK_API_KEY", &key);
+                        self.update_status(self.i18n(
+                            "DEEPSEEK_API_KEY 已保存",
+                            "DEEPSEEK_API_KEY 已儲存",
+                            "DEEPSEEK_API_KEY saved",
+                            "DEEPSEEK_API_KEY を保存しました",
+                            "DEEPSEEK_API_KEY 저장 완료"
+                        ));
+                    }
+
+                    self.save_config_now();
+                    let continue_song_info = self.api_key_input_for_song_info;
+                    self.api_key_input_mode = false;
+                    self.api_key_input_for_song_info = false;
+                    self.api_key_input_value.clear();
+                    self.cached_lyrics_title = None;
+
+                    if continue_song_info && !key.is_empty() {
+                        self.start_song_info_mode_for_current_song();
+                    }
+                }
+                KeyCode::Backspace => {
+                    self.api_key_input_value.pop();
+                    self.cached_lyrics_title = None;
+                }
+                KeyCode::Char(c) => {
+                    self.api_key_input_value.push(c);
+                    self.cached_lyrics_title = None;
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
+
         // 音乐目录模式下的键盘处理
         if self.dir_history_mode {
             match code {
@@ -2376,7 +2766,11 @@ impl UserInterface {
         // 正常模式下的键盘处理
         match code {
             KeyCode::Up => {
-                if self.comments_mode {
+                if self.song_info_mode {
+                    if self.song_info_scroll_offset > 0 {
+                        self.song_info_scroll_offset -= 1;
+                    }
+                } else if self.comments_mode {
                     self.comments_selected_index = self.comments_selected_index.saturating_sub(1);
                     let visible_count = self.terminal_height.saturating_sub(12) as usize;
                     Self::adjust_scroll_offset(
@@ -2395,7 +2789,16 @@ impl UserInterface {
                 }
             }
             KeyCode::Down => {
-                if self.comments_mode {
+                if self.song_info_mode {
+                    let visible_count = self.terminal_height.saturating_sub(12) as usize;
+                    let left_width = (self.terminal_width as f32 * 0.50) as u16;
+                    let right_width = self.terminal_width.saturating_sub(left_width + 1);
+                    let wrapped_lines = wrap_text_to_width(&self.song_info_content, right_width.saturating_sub(1) as usize);
+                    let max_offset = wrapped_lines.len().saturating_sub(visible_count);
+                    if self.song_info_scroll_offset < max_offset {
+                        self.song_info_scroll_offset += 1;
+                    }
+                } else if self.comments_mode {
                     if !self.current_comments.is_empty() {
                         let max_idx = self.current_comments.len().saturating_sub(1);
                         self.comments_selected_index = (self.comments_selected_index + 1).min(max_idx);
@@ -2449,6 +2852,9 @@ impl UserInterface {
                     // 评论视图下返回歌词视图
                     self.comments_mode = false;
                     self.comments_detail_mode = false;
+                } else if self.song_info_mode {
+                    // AI 信息视图下返回歌词视图
+                    self.song_info_mode = false;
                 } else {
                     // 停止播放
                     self.audio_player.lock().unwrap().stop();
@@ -2542,6 +2948,7 @@ impl UserInterface {
             KeyCode::Char('c') | KeyCode::Char('C') => {
                 // 切换到评论视图，并从第1页开始加载
                 self.comments_mode = true;
+                self.song_info_mode = false;
                 self.comments_page = 1;
                 self.current_comments.clear();
                 self.comments_total = 0;
@@ -2552,12 +2959,24 @@ impl UserInterface {
                 self.comments_rx = None;
                 self.comments_loading = false;
             }
+            KeyCode::Char('i') | KeyCode::Char('I') => {
+                // i：若未配置 DeepSeek Key，先进入输入模式；已配置则直接查询
+                if self.resolved_deepseek_api_key().is_none() {
+                    self.open_api_key_input_mode(true);
+                } else {
+                    self.start_song_info_mode_for_current_song();
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Char('K') => {
+                // k：进入 DeepSeek API Key 输入模式
+                self.open_api_key_input_mode(false);
+            }
             KeyCode::Char('l') | KeyCode::Char('L') => {
                 // 切换界面语言
                 self.language = self.language.next();
                 self.cached_lyrics_title = None;
 
-                // 语言切换后立即刷新“正在播放”状态前缀，避免显示旧语言
+                // 语言切换后立即刷新"正在播放"状态前缀，避免显示旧语言
                 let current_song_name = {
                     let player = self.audio_player.lock().unwrap();
                     player.get_current_file().map(|f| f.name.clone())
@@ -2786,6 +3205,12 @@ impl UserInterface {
             self.comments_detail_mode = false;
             self.comments_rx = None;
             self.comments_loading = false;
+
+            // 切歌时重置 AI 歌曲信息状态
+            self.song_info_file_path = None;
+            self.song_info_content.clear();
+            self.song_info_rx = None;
+            self.song_info_loading = false;
 
             let play_result = {
                 let mut audio_player = self.audio_player.lock().unwrap();
@@ -3025,7 +3450,13 @@ impl UserInterface {
                     return Ok(());
                 }
 
-                if self.comments_mode {
+                if self.song_info_mode {
+                    // AI 歌曲信息模式：右侧区域滚轮向上滚动
+                    let left_width = (self.terminal_width as f32 * 0.50) as usize;
+                    if col > left_width && self.song_info_scroll_offset > 0 {
+                        self.song_info_scroll_offset -= 1;
+                    }
+                } else if self.comments_mode {
                     let left_width = (self.terminal_width as f32 * 0.50) as usize;
                     if col > left_width && !self.current_comments.is_empty() {
                         self.comments_selected_index = self.comments_selected_index.saturating_sub(1);
@@ -3101,7 +3532,20 @@ impl UserInterface {
                     return Ok(());
                 }
 
-                if self.comments_mode {
+                if self.song_info_mode {
+                    // AI 歌曲信息模式：右侧区域滚轮向下滚动
+                    let left_width = (self.terminal_width as f32 * 0.50) as usize;
+                    if col > left_width {
+                        let visible_count = self.terminal_height.saturating_sub(12) as usize;
+                        let content = self.song_info_content.clone();
+                        let right_width = self.terminal_width.saturating_sub(left_width as u16 + 1);
+                        let wrapped_lines = wrap_text_to_width(&content, right_width.saturating_sub(1) as usize);
+                        let max_offset = wrapped_lines.len().saturating_sub(visible_count);
+                        if self.song_info_scroll_offset < max_offset {
+                            self.song_info_scroll_offset += 1;
+                        }
+                    }
+                } else if self.comments_mode {
                     let left_width = (self.terminal_width as f32 * 0.50) as usize;
                     if col > left_width && !self.current_comments.is_empty() {
                         let max_idx = self.current_comments.len().saturating_sub(1);
@@ -3438,6 +3882,16 @@ impl UserInterface {
         self.cached_lyrics_title = None;
     }
 
+    /// 设置 DeepSeek API Key（从配置加载）
+    pub fn set_deepseek_api_key(&mut self, key: String) {
+        self.deepseek_api_key = key.trim().to_string();
+    }
+
+    /// 获取 DeepSeek API Key（保存到配置）
+    pub fn get_deepseek_api_key(&self) -> String {
+        self.deepseek_api_key.clone()
+    }
+
     /// 获取当前语言配置键
     pub fn get_language_key(&self) -> &'static str {
         self.language.config_key()
@@ -3458,6 +3912,7 @@ impl UserInterface {
             dir_history: self.dir_history.clone(),
             theme: self.get_theme_key().to_string(),
             language: self.get_language_key().to_string(),
+            deepseek_api_key: self.deepseek_api_key.clone(),
         };
 
         new_config.save();
@@ -3507,7 +3962,8 @@ impl UserInterface {
 
             // 检查是否需要更新进度条和歌词（播放中持续更新波形）
             let now = std::time::Instant::now();
-            if current_state == PlayState::Playing
+            if (current_state == PlayState::Playing
+                || self.song_info_loading)
                 && now.duration_since(last_progress_update) >= progress_update_interval
             {
                 self.draw()?;

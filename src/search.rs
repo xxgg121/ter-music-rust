@@ -1,8 +1,9 @@
 // 网络搜索下载模块
-// 支持多平台搜索：酷我音乐（主要）+ 网易云音乐（备用）
+// 支持多平台搜索：酷我音乐 + 网易云音乐 + 酷狗音乐
 
 use chrono::{Local, TimeZone};
 use serde::Deserialize;
+use serde_json::json;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
@@ -15,6 +16,8 @@ pub struct OnlineSong {
     pub artist: String,
     /// 歌曲ID（不同平台ID含义不同，需配合 source 使用）
     pub id: i64,
+    /// 酷狗音乐 hash（仅酷狗来源使用）
+    pub hash: String,
     /// 时长（毫秒）
     pub duration_ms: Option<i64>,
     /// 来源平台
@@ -28,6 +31,8 @@ pub enum MusicSource {
     Kuwo,
     /// 网易云音乐
     NetEase,
+    /// 酷狗音乐
+    Kugou,
 }
 
 /// 网络搜索下载结果
@@ -75,6 +80,38 @@ pub struct SongCommentsResult {
     pub comments: Vec<SongCommentItem>,
 }
 
+/// AI 歌曲信息查询结果（流式）
+#[derive(Debug, Clone)]
+pub struct SongInfoChunk {
+    /// 本次新增的内容片段
+    pub delta: String,
+    /// 流式是否结束
+    pub done: bool,
+    /// 错误信息（若失败）
+    pub error: Option<String>,
+}
+
+/// DeepSeek 流式响应（SSE chunk）
+#[derive(Debug, Deserialize)]
+struct DeepSeekStreamChunk {
+    choices: Option<Vec<DeepSeekStreamChoice>>,
+    error: Option<DeepSeekErrorInfo>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeepSeekStreamChoice {
+    delta: Option<DeepSeekStreamDelta>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeepSeekStreamDelta {
+    content: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeepSeekErrorInfo {
+    message: Option<String>,
+}
 
 /// 下载完成结果
 pub struct DownloadResult {
@@ -167,6 +204,36 @@ struct NetEaseSongData {
 }
 
 // ============================================================
+// 酷狗音乐 JSON 结构
+// ============================================================
+
+/// 酷狗搜索结果
+#[derive(Debug, Deserialize)]
+struct KugouSearchResult {
+    data: Option<KugouSearchData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct KugouSearchData {
+    info: Option<Vec<KugouSong>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct KugouSong {
+    /// 歌曲hash
+    hash: Option<String>,
+    /// 歌曲名
+    songname: Option<String>,
+    /// 歌手名
+    singername: Option<String>,
+    /// 时长（秒字符串）
+    duration: Option<String>,
+    /// 付费类型：0=免费，3=付费
+    #[allow(dead_code)]
+    pay_type: Option<i64>,
+}
+
+// ============================================================
 // HTTP 客户端
 // ============================================================
 
@@ -233,9 +300,153 @@ pub fn fetch_song_comments_background(query: String, page: usize, page_size: usi
     rx
 }
 
+/// 在后台线程中查询歌曲详细信息（DeepSeek）- 流式输出
+pub fn fetch_song_info_streaming(prompt: String) -> mpsc::Receiver<SongInfoChunk> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let api_key = match std::env::var("DEEPSEEK_API_KEY") {
+            Ok(v) if !v.trim().is_empty() => v,
+            _ => {
+                let _ = tx.send(SongInfoChunk {
+                    delta: String::new(),
+                    done: true,
+                    error: Some("未设置 DEEPSEEK_API_KEY 环境变量".to_string()),
+                });
+                return;
+            }
+        };
+
+        let client = match reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .user_agent("TerMusicRust/1.1.0")
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = tx.send(SongInfoChunk {
+                    delta: String::new(),
+                    done: true,
+                    error: Some(format!("创建 HTTP 客户端失败: {}", e)),
+                });
+                return;
+            }
+        };
+
+        let response = match client
+            .post("https://api.deepseek.com/chat/completions")
+            .bearer_auth(&api_key)
+            .json(&json!({
+                "model": "deepseek-chat",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.2,
+                "stream": true
+            }))
+            .send()
+        {
+            Ok(r) => r,
+            Err(e) => {
+                let _ = tx.send(SongInfoChunk {
+                    delta: String::new(),
+                    done: true,
+                    error: Some(format!("请求 DeepSeek 失败: {}", e)),
+                });
+                return;
+            }
+        };
+
+        let status = response.status();
+        if !status.is_success() {
+            let raw_text = response.text().unwrap_or_default();
+            let msg = serde_json::from_str::<DeepSeekStreamChunk>(&raw_text)
+                .ok()
+                .and_then(|v| v.error)
+                .and_then(|e| e.message)
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
+            let _ = tx.send(SongInfoChunk {
+                delta: String::new(),
+                done: true,
+                error: Some(format!("DeepSeek 接口错误: {}", msg)),
+            });
+            return;
+        }
+
+        // 读取 SSE 流
+        use std::io::{BufRead, BufReader};
+        let reader = BufReader::new(response);
+        for line in reader.lines() {
+            match line {
+                Ok(line) => {
+                    let line = line.trim().to_string();
+                    if line.is_empty() {
+                        continue;
+                    }
+                    if line == "data: [DONE]" {
+                        let _ = tx.send(SongInfoChunk {
+                            delta: String::new(),
+                            done: true,
+                            error: None,
+                        });
+                        return;
+                    }
+                    if let Some(data) = line.strip_prefix("data: ") {
+                        if let Ok(chunk) = serde_json::from_str::<DeepSeekStreamChunk>(data) {
+                            if let Some(error) = chunk.error {
+                                let _ = tx.send(SongInfoChunk {
+                                    delta: String::new(),
+                                    done: true,
+                                    error: Some(error.message.unwrap_or_default()),
+                                });
+                                return;
+                            }
+                            if let Some(choices) = chunk.choices {
+                                if let Some(choice) = choices.into_iter().next() {
+                                    if let Some(delta) = choice.delta {
+                                        if let Some(content) = delta.content {
+                                            if !content.is_empty() {
+                                                let _ = tx.send(SongInfoChunk {
+                                                    delta: content,
+                                                    done: false,
+                                                    error: None,
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(_) => {
+                    let _ = tx.send(SongInfoChunk {
+                        delta: String::new(),
+                        done: true,
+                        error: Some("读取流式响应失败".to_string()),
+                    });
+                    return;
+                }
+            }
+        }
+
+        // 流意外结束（未收到 [DONE]）
+        let _ = tx.send(SongInfoChunk {
+            delta: String::new(),
+            done: true,
+            error: None,
+        });
+    });
+    rx
+}
+
 // ============================================================
 // 搜索逻辑：酷我优先，网易云备用
 // ============================================================
+
 
 
 /// 搜索网络歌曲（同步）
@@ -260,7 +471,17 @@ fn search_online(query: &str, page: usize) -> SearchDownloadResult {
         }
     }
 
-    // 酷我无结果，尝试网易云音乐
+    // 酷我无结果，尝试酷狗音乐
+    if let Some(songs) = search_kugou(&client, query, page) {
+        if !songs.is_empty() {
+            return SearchDownloadResult {
+                query: query.to_string(),
+                songs,
+            };
+        }
+    }
+
+    // 酷狗无结果，尝试网易云音乐
     if let Some(songs) = search_netease(&client, query, page) {
         if !songs.is_empty() {
             return SearchDownloadResult {
@@ -304,6 +525,7 @@ fn search_kuwo(client: &reqwest::blocking::Client, query: &str, page: usize) -> 
             name: s.name,
             artist: s.artist.unwrap_or_default(),
             id: s.rid,
+            hash: String::new(),
             duration_ms,
             source: MusicSource::Kuwo,
         }
@@ -339,9 +561,49 @@ fn search_netease(client: &reqwest::blocking::Client, query: &str, page: usize) 
             name: s.name,
             artist,
             id: s.id,
+            hash: String::new(),
             duration_ms: s.duration,
             source: MusicSource::NetEase,
         }
+    }).collect())
+}
+
+/// 酷狗音乐搜索
+fn search_kugou(client: &reqwest::blocking::Client, query: &str, page: usize) -> Option<Vec<OnlineSong>> {
+    let search_url = format!(
+        "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword={}&page={}&pagesize=20",
+        urlencoding::encode(query),
+        page
+    );
+
+    let response = client.get(&search_url)
+        .send()
+        .ok()?;
+
+    let text = response.text().ok()?;
+    let search_result: KugouSearchResult = serde_json::from_str(&text).ok()?;
+
+    let data = search_result.data?;
+    let info = data.info?;
+
+    Some(info.into_iter().filter_map(|s| {
+        let hash = s.hash.unwrap_or_default();
+        if hash.is_empty() {
+            return None;
+        }
+        let name = s.songname.unwrap_or_default();
+        let artist = s.singername.unwrap_or_default();
+        let duration_ms = s.duration
+            .and_then(|d| d.parse::<i64>().ok())
+            .map(|secs| secs * 1000);
+        Some(OnlineSong {
+            name,
+            artist,
+            id: 0, // 酷狗不用数字ID，用 hash
+            hash,
+            duration_ms,
+            source: MusicSource::Kugou,
+        })
     }).collect())
 }
 
@@ -533,6 +795,7 @@ where
     // 根据来源平台获取下载链接
     let mp3_url = match song.source {
         MusicSource::Kuwo => get_kuwo_download_url(&client, song.id),
+        MusicSource::Kugou => get_kugou_download_url(&client, &song.hash),
         MusicSource::NetEase => get_netease_download_url(&client, song.id),
     };
 
@@ -550,8 +813,12 @@ where
     on_progress(5);
 
     // 下载音频文件（流式读取以支持进度）
+    let referer = match song.source {
+        MusicSource::Kuwo | MusicSource::Kugou => "https://www.kuwo.cn/",
+        MusicSource::NetEase => "https://music.163.com/",
+    };
     let response = match client.get(&mp3_url)
-        .header("Referer", "https://www.kuwo.cn/")
+        .header("Referer", referer)
         .send()
     {
         Ok(r) => r,
@@ -690,6 +957,7 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
     // 根据来源平台获取下载链接
     let mp3_url = match song.source {
         MusicSource::Kuwo => get_kuwo_download_url(&client, song.id),
+        MusicSource::Kugou => get_kugou_download_url(&client, &song.hash),
         MusicSource::NetEase => get_netease_download_url(&client, song.id),
     };
 
@@ -832,6 +1100,64 @@ fn get_kuwo_download_url(client: &reqwest::blocking::Client, rid: i64) -> Option
                 if let Some(url) = result.url {
                     if !url.is_empty() {
                         return Some(url);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// 获取酷狗音乐下载链接
+fn get_kugou_download_url(client: &reqwest::blocking::Client, hash: &str) -> Option<String> {
+    // 方式1: 通过 getSongInfo 获取播放链接
+    let url = format!(
+        "https://m.kugou.com/app/i/getSongInfo.php?cmd=playInfo&hash={}",
+        hash
+    );
+
+    if let Ok(response) = client.get(&url)
+        .header("Referer", "https://m.kugou.com/")
+        .header("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
+        .send()
+    {
+        if let Ok(text) = response.text() {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                // 尝试从 url 字段获取
+                if let Some(url) = value.get("url").and_then(|v| v.as_str()) {
+                    if !url.is_empty() {
+                        return Some(url.to_string());
+                    }
+                }
+                // 尝试从 backup_url 字段获取
+                if let Some(url) = value.get("backup_url").and_then(|v| v.as_str()) {
+                    if !url.is_empty() {
+                        return Some(url.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    // 方式2: 通过 trackercdn 获取下载链接
+    // key = MD5(hash + "kgcloud")
+    let key_input = format!("{}kgcloud", hash);
+    let key = format!("{:x}", md5::compute(key_input.as_bytes()));
+    let url2 = format!(
+        "http://trackercdn.kugou.com/i/?cmd=4&hash={}&key={}&pid=1&forceDown=0&vip=1",
+        hash, key
+    );
+
+    if let Ok(response) = client.get(&url2)
+        .header("Referer", "https://m.kugou.com/")
+        .send()
+    {
+        if let Ok(text) = response.text() {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                if let Some(url) = value.get("url").and_then(|v| v.as_str()) {
+                    if !url.is_empty() {
+                        return Some(url.to_string());
                     }
                 }
             }

@@ -1,8 +1,8 @@
 [package]
 name = "ter-music-rust"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
-description = "A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and macOS systems."
+description = "A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems."
 license = "MIT"
 
 [dependencies]
@@ -25,6 +25,7 @@ encoding_rs = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls"] }
 urlencoding = "2.1"
 chrono = "0.4"
+md5 = "0.7"
 
 # Ctrl+C 信号处理
 ctrlc = "3.4"

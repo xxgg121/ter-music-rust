@@ -47,9 +47,16 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 
 ### 🔍 검색
 - **로컬 검색**: `s` 키로 현재 음악 디렉터리에서 검색
-- **온라인 검색**: `n` 키로 키워드 기반 온라인 검색
+- **온라인 검색**: `n` 키로 키워드 기반 온라인 검색（쿠워+쿠거+왕이윈 3개 플랫폼）
 - **페이지 이동**: `PgUp` / `PgDn`으로 더 많은 결과 확인
 - **온라인 다운로드**: 온라인 검색 결과 선택 후 `Enter`로 현재 음악 디렉터리에 다운로드(진행률 표시)
+
+### 🤖 곡 정보
+- **스마트 조회**: `i` 키로 DeepSeek AI를 사용하여 현재 곡의 상세 정보 조회
+- **스트리밍 출력**: 조회 결과가 글자 단위로 스트리밍 표시되어 전체 생성 대기 불필요
+- **풍부한 정보**: 가수 상세, 작사작곡, 수록 앨범(트랙 목록 포함), 창작 배경, 곡의 의미, 음악 스타일 등 13개 항목 제공
+- **다국어 지원**: 응답 언어가 UI 언어 설정을 따름(간체/번체/영/일/한)
+- **API Key 설정**: `k` 키로 DeepSeek API Key 입력, 환경 변수 `DEEPSEEK_API_KEY`로도 설정 가능
 
 ### ⭐ 즐겨찾기
 - **추가/해제**: `f` 키로 현재 곡 즐겨찾기 상태 전환
@@ -116,6 +123,7 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 | `volume` | 볼륨 (0-100) |
 | `favorites` | 즐겨찾기 목록 |
 | `dir_history` | 디렉터리 기록 |
+| `deepseek_api_key` | DeepSeek API Key(곡 정보 조회용) |
 | `theme` | 테마 이름 |
 | `language` | UI 언어 (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
 
@@ -196,6 +204,8 @@ cargo run --release -- -o d:\Music
 | `v` | 즐겨찾기 목록 |
 | `h` | 디렉터리 기록 |
 | `c` | 곡 댓글 보기 |
+| `i` | 곡 정보 조회(DeepSeek) |
+| `k` | DeepSeek API Key 입력 |
 | `l` | UI 언어 전환(간체/번체/영/일/한) |
 | `t` | 테마 전환 |
 | `q` | 종료 |
@@ -495,7 +505,7 @@ src/
 ├── analyzer.rs   # 오디오 분석기(실시간 RMS, EMA 스무딩, 파형 시각화)
 ├── playlist.rs   # 재생목록 관리(디렉터리 스캔, 길이 병렬 수집, 폴더 선택)
 ├── lyrics.rs     # 가사 파싱(LRC, 로컬 탐색, 인코딩 감지, 백그라운드 다운로드)
-├── search.rs     # 온라인 검색/다운로드(쿠워+왕이윈 검색, 다운로드, 댓글 수집)
+├── search.rs     # 온라인 검색/다운로드(쿠워+쿠거+왕이윈 검색, 다운로드, 댓글 수집, 곡 정보 스트리밍 조회)
 ├── config.rs     # 설정 관리(JSON 직렬화, 8개 항목 영구화)
 └── ui.rs         # UI(터미널 렌더링, 이벤트 처리, 멀티 뷰, 테마/언어 시스템)
 ```
@@ -515,6 +525,7 @@ src/
 | [unicode-width](https://github.com/unicode-rs/unicode-width) | 0.2 | CJK 표시 폭 계산 |
 | [chrono](https://github.com/chronotope/chrono) | 0.4 | 댓글 시간 포맷 |
 | [ctrlc](https://github.com/Detegr/rust-ctrlc) | 3.4 | Ctrl+C 시그널 처리 |
+| [md5](https://github.com/johannhof/md5) | 0.7 | 쿠거 뮤직 API MD5 서명 |
 | [winapi](https://github.com/retep998/winapi-rs) | 0.3 | Windows 콘솔 UTF-8 지원 |
 
 ### 릴리스 빌드 최적화
@@ -605,18 +616,61 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - 일부 곡은 VIP 필요 또는 서비스 종료 가능
 - 가사 파일은 표준 LRC 형식이어야 함
 
+### 곡 정보 조회 실패
+
+- `DEEPSEEK_API_KEY`가 설정되어 있는지 확인(`k` 키로 입력 또는 환경 변수 설정)
+- DeepSeek API Key는 [platform.deepseek.com](https://platform.deepseek.com/)에서 취득 가능
+- DeepSeek API 네트워크 연결 상태 확인
+
 ### 첫 빌드가 느림
 
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604230410492250_ter-music-rust-win.zip "附件(Attached)")  
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/2026042304110413_ter-music-rust-mac.zip "附件(Attached)")  
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604230411123002_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260424040153978_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604240401592657_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604240402067488_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 
 ## 📝 변경 로그
+
+## 버전 1.2.0 (2026-04-24)
+
+### 🎉 신규 기능
+
+#### 곡 정보 조회
+- ✨ **DeepSeek 조회**: `i` 키로 DeepSeek 를 사용하여 현재 곡의 상세 정보를 스트리밍 조회
+- ✨ **스트리밍 출력**: 조회 결과가 글자 단위로 표시되어 전체 생성 대기 불필요
+- ✨ **13개 항목 정보**: 가수, 가수 상세, 작사작곡, 발매일, 수록 앨범(트랙 목록 포함), 창작 배경, 곡의 의미, 음악 스타일, 상업 성적, 수상 기록, 영향 평가, 커버 및 사용, 흥미로운 사실
+- ✨ **다국어 응답**: 응답 언어가 UI 언어를 따름(간체/번체/영/일/한)
+- ✨ **API Key 관리**: `k` 키로 DeepSeek API Key 입력, 환경 변수 `DEEPSEEK_API_KEY`로도 설정 가능
+
+#### 쿠거 뮤직 소스
+- ✨ **쿠거 뮤직**: 세 번째 검색/다운로드 플랫폼으로 쿠거 뮤직 추가
+- ✨ **3개 플랫폼 검색**: 검색 우선순위는 쿠워 → 쿠거 → 왕이윈
+- ✨ **VIP 제한 감소**: 쿠거는 더 많은 무료 다운로드 리소스를 제공
+- ✨ **MD5 서명 인증**: 쿠거 다운로드 링크에 MD5 서명을 사용하여 다운로드 성공률 향상
+
+### 🔧 기능 개선
+
+#### 곡 정보 프롬프트 최적화
+- 🔍 **서론 없음**: 응답에 인사말이나 자기소개를 포함하지 않음
+- 🔍 **번호 없음**: 출력 내용에 번호 매기기 목록을 사용하지 않음
+- 🔍 **가수 상세**: 국적, 출생지, 생년월일 등의 상세 정보 카테고리 추가
+- 🔍 **앨범 트랙 목록**: 수록 앨범에 전체 트랙 목록 포함
+
+### 💻 기술 세부 사항
+
+#### 의존성 업데이트
+- ➕ `md5` 의존성 추가(쿠거 뮤직 API 서명용)
+
+#### 데이터 구조
+- ♻️ `OnlineSong`에 `hash` 필드 추가(쿠거는 hash로 곡 식별)
+- ♻️ `MusicSource::Kugou` 열거형 변형 추가
+- ♻️ 쿠거 JSON 파싱 구조체 추가
+
+---
 
 ## 버전 1.1.0 (2026-04-17)
 

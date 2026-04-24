@@ -47,9 +47,16 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 
 ### 🔍 検索
 - **ローカル検索**: `s` で現在の音楽ディレクトリ内を検索
-- **オンライン検索**: `n` でキーワードによるネット検索
+- **オンライン検索**: `n` でキーワードによるネット検索（酷我＋酷狗＋網易の3プラットフォーム対応）
 - **ページ切り替え**: `PgUp` / `PgDn` で結果を切り替え
 - **オンラインダウンロード**: オンライン検索結果を選択して `Enter` で現在ディレクトリへ保存（進捗表示あり）
+
+### 🤖 楽曲情報
+- **スマート検索**: `i` キーで DeepSeek を使用して現在の楽曲の詳細情報を検索
+- **ストリーミング出力**: 検索結果が1文字ずつストリーミング表示され、全生成の待機不要
+- **豊富な情報**: 歌手詳細、作詞作曲、収録アルバム（トラックリスト付き）、制作背景、楽曲の意味、音楽スタイルなど13項目をカバー
+- **多言語対応**: 応答言語が UI 言語設定に追従（簡中/繁中/英/日/韓）
+- **API Key 設定**: `k` キーで DeepSeek API Key を入力、環境変数 `DEEPSEEK_API_KEY` でも設定可能
 
 ### ⭐ お気に入り
 - **追加/削除**: `f` で現在曲のお気に入り状態を切り替え
@@ -116,6 +123,7 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 | `volume` | 音量 (0-100) |
 | `favorites` | お気に入り一覧 |
 | `dir_history` | ディレクトリ履歴 |
+| `deepseek_api_key` | DeepSeek API Key（楽曲情報検索用） |
 | `theme` | テーマ名 |
 | `language` | UI 言語（`zh-CN` / `zh-TW` / `en` / `ja` / `ko`） |
 
@@ -196,6 +204,8 @@ cargo run --release -- -o d:\Music
 | `v` | お気に入り一覧 |
 | `h` | ディレクトリ履歴 |
 | `c` | 曲コメント |
+| `i` | 楽曲情報検索（DeepSeek） |
+| `k` | DeepSeek API Key 入力 |
 | `l` | UI 言語切り替え（簡中/繁中/英/日/韓） |
 | `t` | テーマ切り替え |
 | `q` | 終了 |
@@ -495,7 +505,7 @@ src/
 ├── analyzer.rs   # 音声解析（リアルタイム RMS、EMA 平滑化、波形表示）
 ├── playlist.rs   # プレイリスト管理（ディレクトリ走査、再生時間並列取得、フォルダ選択）
 ├── lyrics.rs     # 歌詞解析（LRC、ローカル検索、エンコード判定、バックグラウンド取得）
-├── search.rs     # ネット検索/取得（酷我+网易検索、ダウンロード、コメント取得）
+├── search.rs     # ネット検索/取得（酷我+酷狗+網易検索、ダウンロード、コメント取得、楽曲情報ストリーミング検索）
 ├── config.rs     # 設定管理（JSON シリアライズ、8 項目の永続化）
 └── ui.rs         # UI（ターミナル描画、イベント処理、マルチビュー、テーマ/言語）
 ```
@@ -515,6 +525,7 @@ src/
 | [unicode-width](https://github.com/unicode-rs/unicode-width) | 0.2 | CJK 表示幅計算 |
 | [chrono](https://github.com/chronotope/chrono) | 0.4 | コメント時刻フォーマット |
 | [ctrlc](https://github.com/Detegr/rust-ctrlc) | 3.4 | Ctrl+C シグナル処理 |
+| [md5](https://github.com/johannhof/md5) | 0.7 | 酷狗音楽 API MD5 署名 |
 | [winapi](https://github.com/retep998/winapi-rs) | 0.3 | Windows コンソール UTF-8 対応 |
 
 ### リリースビルド最適化
@@ -605,18 +616,61 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - 一部楽曲は VIP 限定または配信終了の可能性あり
 - 歌詞ファイルは標準 LRC 形式である必要があります
 
+### 楽曲情報検索失敗
+
+- `DEEPSEEK_API_KEY` が設定されているか確認（`k` キーで入力または環境変数を設定）
+- DeepSeek API Key は [platform.deepseek.com](https://platform.deepseek.com/) で取得可能
+- DeepSeek API へのネットワーク接続を確認
+
 ### 初回ビルドが遅い
 
 初回は依存関係のダウンロードとコンパイルが発生するため時間がかかります。2 回目以降は大幅に高速化されます。
 
 ### Release のダウンロード
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604230410492250_ter-music-rust-win.zip "附件(Attached)")  
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/2026042304110413_ter-music-rust-mac.zip "附件(Attached)")  
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604230411123002_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260424040153978_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604240401592657_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604240402067488_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 
 ## 📝 変更履歴
+
+## バージョン 1.2.0 (2026-04-24)
+
+### 🎉 新機能
+
+#### 楽曲情報検索
+- ✨ **DeepSeek 検索**: `i` キーで DeepSeek を使用して現在の楽曲情報をストリーミング検索
+- ✨ **ストリーミング出力**: 検索結果が1文字ずつ表示され、全生成の待機不要
+- ✨ **13 項目の情報**: 歌手、歌手詳細、作詞作曲、リリース日、収録アルバム（トラックリスト付き）、制作背景、楽曲の意味、音楽スタイル、商業成績、受賞記録、影響評価、カバーと使用例、面白い事実
+- ✨ **多言語応答**: 応答言語が UI 言語に追従（簡中/繁中/英/日/韓）
+- ✨ **API Key 管理**: `k` キーで DeepSeek API Key を入力、環境変数 `DEEPSEEK_API_KEY` でも設定可能
+
+#### 酷狗音楽ソース
+- ✨ **酷狗音楽**: 3つ目の検索/ダウンロードプラットフォームとして酷狗音楽を追加
+- ✨ **3プラットフォーム検索**: 検索優先度は 酷我 → 酷狗 → 網易
+- ✨ **VIP 制限の軽減**: 酷狗はより多くの無料ダウンロードリソースを提供
+- ✨ **MD5 署名認証**: 酷狗ダウンロードリンクは MD5 署名を使用し、ダウンロード成功率が向上
+
+### 🔧 機能改善
+
+#### 楽曲情報プロンプト最適化
+- 🔍 **冒頭なし**: 応答に挨拶や自己紹介を含めない
+- 🔍 **番号なし**: 出力内容に番号付きリストを使用しない
+- 🔍 **歌手詳細**: 国籍、出身地、生年月日などの詳細情報カテゴリを追加
+- 🔍 **アルバムトラックリスト**: 収録アルバムに完全なトラックリストを含む
+
+### 💻 技術詳細
+
+#### 依存関係更新
+- ➕ `md5` 依存関係を追加（酷狗音楽 API 署名用）
+
+#### データ構造
+- ♻️ `OnlineSong` に `hash` フィールドを追加（酷狗は hash で楽曲を識別）
+- ♻️ `MusicSource::Kugou` 列挙子を追加
+- ♻️ 酷狗 JSON 解析構造体を追加
+
+---
 
 ## バージョン 1.1.0 (2026-04-17)
 
@@ -706,7 +760,7 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 
 ---
 
-## 📄 AI 支援
+## 📄 支援
 
 GLM、Codex
 

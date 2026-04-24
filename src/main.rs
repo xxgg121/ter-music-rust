@@ -52,6 +52,7 @@ fn show_help() {
     println!(" o 打开音乐目录");
     println!(" s 搜索本地歌曲");
     println!(" n 搜索网络歌曲");
+    println!(" i 查看歌曲信息");
     println!(" f 添加到收藏夹");
     println!(" v 查看收藏列表");
     println!(" h 音乐目录历史");
@@ -77,6 +78,12 @@ fn show_help() {
 fn main() {
     setup_console();
     let config = Config::load();
+
+    if std::env::var("DEEPSEEK_API_KEY").map(|v| v.trim().is_empty()).unwrap_or(true)
+        && !config.deepseek_api_key.trim().is_empty()
+    {
+        std::env::set_var("DEEPSEEK_API_KEY", config.deepseek_api_key.trim());
+    }
 
     // 解析命令行参数
     let args: Vec<String> = env::args().collect();
@@ -157,6 +164,7 @@ fn main() {
     let mut ui = UserInterface::new(playlist.clone(), audio_player.clone());
     ui.set_theme_by_name(&config.theme);
     ui.set_language_by_name(&config.language);
+    ui.set_deepseek_api_key(config.deepseek_api_key.clone());
 
     // 注册 Ctrl+C 信号处理器，优雅退出并保存配置
     {
@@ -224,6 +232,7 @@ fn main() {
             dir_history: ui.get_dir_history(),
             theme: ui.get_theme_key().to_string(),
             language: ui.get_language_key().to_string(),
+            deepseek_api_key: ui.get_deepseek_api_key(),
         };
 
         new_config.save();

@@ -123,7 +123,7 @@ BuildRequires:  binutils
 Requires:       alsa-lib
 
 %description
-A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and macOS systems.
+A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems.
 
 %prep
 %autosetup
@@ -196,7 +196,7 @@ Type=Application
 Name=Ter Music Rust
 Name[zh_CN]=Ter Music Rust
 GenericName=Terminal Music Player
-Comment=A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and macOS systems.
+Comment=A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems.
 TryExec=/usr/bin/${PKG_NAME}-launcher
 Exec=/usr/bin/${PKG_NAME}-launcher
 Icon=${PKG_NAME}

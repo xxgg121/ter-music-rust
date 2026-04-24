@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul 2>&1
 echo ==========================================
-echo Ter-Music-Rust macOS 交叉编译脚本
+echo Ter-Music-Rust MacOS 交叉编译脚本
 echo ==========================================
 echo.
 
@@ -33,12 +33,12 @@ if errorlevel 1 (
 )
 echo.
 
-:::: 确认 macOS SDK 存在
-echo [2/3] 检查 macOS SDK ...
+:::: 确认 MacOS SDK 存在
+echo [2/3] 检查 MacOS SDK ...
 if not exist "%MACOS_SYSROOT%\System\Library\Frameworks\CoreAudio.framework" (
-    echo 错误: 未找到 macOS SDK
+    echo 错误: 未找到 MacOS SDK
     echo.
-    echo 交叉编译 macOS 版本需要 macOS SDK 头文件，请按以下步骤准备:
+    echo 交叉编译 MacOS 版本需要 MacOS SDK 头文件，请按以下步骤准备:
     echo.
     echo   方式 A: 从 GitHub 下载预打包 SDK（推荐）:
     echo     下载: https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz
@@ -48,7 +48,7 @@ if not exist "%MACOS_SYSROOT%\System\Library\Frameworks\CoreAudio.framework" (
     echo     tar -xf MacOSX13.3.sdk.tar.xz -C macos-sysroot --strip-components=1
     echo     del MacOSX13.3.sdk.tar.xz
     echo.
-    echo   方式 B: 从 macOS 系统复制:
+    echo   方式 B: 从 MacOS 系统复制:
     echo     scp -r mac:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk ./macos-sysroot
     echo.
     echo   SDK 来源: https://github.com/joseluisq/macosx-sdks
@@ -56,13 +56,13 @@ if not exist "%MACOS_SYSROOT%\System\Library\Frameworks\CoreAudio.framework" (
     pause
     exit /b 1
 )
-echo   macOS SDK 已就绪
+echo   MacOS SDK 已就绪
 echo.
 
 :::: 配置环境变量
 echo [3/3] 配置交叉编译环境并编译...
 
-:::: 添加 macOS 目标
+:::: 添加 MacOS 目标
 rustup target add x86_64-apple-darwin aarch64-apple-darwin 2>nul
 
 :::: 设置 libclang 路径（bindgen 需要）
@@ -76,10 +76,10 @@ if exist "C:\msys64\mingw64\bin\libclang.dll" (
     echo   或通过 MSYS2: pacman -S mingw-w64-x86_64-clang
 )
 
-:::: 设置 macOS SDK 路径
+:::: 设置 MacOS SDK 路径
 :::: 注意: 使用正斜杠路径，bindgen 会将反斜杠当作转义字符
 set COREAUDIO_SDK_PATH=%MACOS_SYSROOT_FWD%
-:::: SDKROOT: zig 链接器需要此变量找到 macOS 系统库（libobjc.tbd 等）
+:::: SDKROOT: zig 链接器需要此变量找到 MacOS 系统库（libobjc.tbd 等）
 set SDKROOT=%MACOS_SYSROOT%
 
 :::: 编译 x86_64 版本（Intel Mac）
@@ -98,7 +98,7 @@ if errorlevel 1 (
     echo.
     echo 常见问题:
     echo   1. libclang.dll 未找到 - 安装 LLVM 或 MSYS2 clang
-    echo   2. macOS SDK 头文件缺失 - 检查 macos-sysroot 目录
+    echo   2. MacOS SDK 头文件缺失 - 检查 macos-sysroot 目录
     echo   3. CoreAudio.framework 未找到 - 确保复制了完整 Frameworks
     echo.
     pause
@@ -144,9 +144,9 @@ dir "target\x86_64-apple-darwin\release\ter-music-rust" 2>nul
 dir "target\aarch64-apple-darwin\release\ter-music-rust" 2>nul
 
 echo.
-echo 将文件复制到 macOS 系统后，需要:
+echo 将文件复制到 MacOS 系统后，需要:
 echo   1. chmod +x ter-music-rust
-echo   2. macOS 可能需要允许运行未知来源应用:
+echo   2. MacOS 可能需要允许运行未知来源应用:
 echo      系统设置 -^> 隐私与安全性 -^> 仍要打开
 echo      或: xattr -cr ter-music-rust
 echo   3. ./ter-music-rust -o /path/to/music
@@ -154,6 +154,6 @@ echo.
 echo 说明:
 echo   - x86_64 版本适用于 Intel Mac
 echo   - aarch64 版本适用于 Apple Silicon (M1/M2/M3/M4) Mac
-echo   - macOS 无需额外安装音频库（使用系统 CoreAudio）
+echo   - MacOS 无需额外安装音频库（使用系统 CoreAudio）
 echo.
 pause
