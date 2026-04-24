@@ -75,7 +75,7 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 
 ### 📂 Directory Management
 - **Choose music directory**: press `o` to open folder picker dialog (playback starts automatically after first successful open)
-- **Open directory history**: press `h` to view and quickly switch directories
+- **Open directory history**: press `d` to view and quickly switch directories
 - **Current directory marker**: `▶` indicates currently active directory
 - **Delete history item**: press `d` in history view
 
