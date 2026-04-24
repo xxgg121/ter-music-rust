@@ -318,7 +318,7 @@ pub fn fetch_song_info_streaming(prompt: String) -> mpsc::Receiver<SongInfoChunk
 
         let client = match reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(60))
-            .user_agent("TerMusicRust/1.1.0")
+            .user_agent("TerMusicRust/1.2.0")
             .build()
         {
             Ok(c) => c,
@@ -336,7 +336,7 @@ pub fn fetch_song_info_streaming(prompt: String) -> mpsc::Receiver<SongInfoChunk
             .post("https://api.deepseek.com/chat/completions")
             .bearer_auth(&api_key)
             .json(&json!({
-                "model": "deepseek-chat",
+                "model": "deepseek-v4-flash",
                 "messages": [
                     {
                         "role": "user",
