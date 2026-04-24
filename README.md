@@ -625,9 +625,9 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260424040153978_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604240401592657_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604240402067488_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604240651119322_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604240651221229_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604240651289339_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 
