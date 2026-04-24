@@ -202,14 +202,15 @@ cargo run --release -- -o d:\Music
 | `o` | Open music directory |
 | `s` | Search local songs |
 | `n` | Search online songs |
+| `i` | song info query |
 | `f` | Favorite/Unfavorite |
 | `v` | View favorites |
-| `h` | View directory history |
+| `d` | View directory history |
+| `h` | Display help information |
 | `c` | View song comments |
-| `i` | song info query (DeepSeek) |
-| `k` | Input DeepSeek API Key |
-| `l` | Switch UI language (SC/TC/EN/JP/KR) |
+| `l` | Switch UI language |
 | `t` | Switch theme |
+| `k` | Input API Key |
 | `q` | Quit |
 
 ### Search View
@@ -629,9 +630,9 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604240651119322_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604240651221229_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604240651289339_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604241011468483_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604241011544507_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604241012038343_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 

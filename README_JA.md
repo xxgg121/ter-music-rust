@@ -200,14 +200,15 @@ cargo run --release -- -o d:\Music
 | `o` | 音楽ディレクトリを開く |
 | `s` | ローカル曲検索 |
 | `n` | オンライン曲検索 |
+| `i` | 楽曲情報検索 |
 | `f` | お気に入り/解除 |
 | `v` | お気に入り一覧 |
-| `h` | ディレクトリ履歴 |
+| `d` | ディレクトリ履歴 |
+| `h` | ヘルプ情報を表示 |
 | `c` | 曲コメント |
-| `i` | 楽曲情報検索（DeepSeek） |
-| `k` | DeepSeek API Key 入力 |
-| `l` | UI 言語切り替え（簡中/繁中/英/日/韓） |
+| `l` | UI 言語切り替え |
 | `t` | テーマ切り替え |
+| `k` | API Key 入力 |
 | `q` | 終了 |
 
 ### 検索画面
@@ -627,9 +628,9 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 初回は依存関係のダウンロードとコンパイルが発生するため時間がかかります。2 回目以降は大幅に高速化されます。
 
 ### Release のダウンロード
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604240651119322_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604240651221229_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604240651289339_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604241011468483_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604241011544507_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604241012038343_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 

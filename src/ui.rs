@@ -313,6 +313,10 @@ pub struct UserInterface {
     comments_detail_mode: bool,
     /// 是否显示 AI 歌曲信息视图（false=歌词视图）
     song_info_mode: bool,
+    /// 是否显示帮助信息视图（false=歌词视图）
+    help_mode: bool,
+    /// 帮助视图滚动偏移
+    help_scroll_offset: usize,
     /// AI 歌曲信息对应的歌曲文件路径（用于判断是否需要重新查询）
     song_info_file_path: Option<std::path::PathBuf>,
     /// AI 歌曲信息内容
@@ -358,7 +362,7 @@ pub struct UserInterface {
     /// 音乐目录的滚动偏移
     dir_history_scroll_offset: usize,
     /// 上一帧的模式状态（用于检测模式切换，避免右侧标题闪烁）
-    prev_mode_state: (bool, bool, bool, bool, bool, bool, bool),
+    prev_mode_state: (bool, bool, bool, bool, bool, bool, bool, bool),
     /// 是否处于网络搜索模式
     online_search_mode: bool,
     /// 网络搜索结果
@@ -432,6 +436,8 @@ impl UserInterface {
             song_info_rx: None,
             song_info_scroll_offset: 0,
             song_info_loading: false,
+            help_mode: false,
+            help_scroll_offset: 0,
             deepseek_api_key: String::new(),
             api_key_input_mode: false,
             api_key_input_value: String::new(),
@@ -449,7 +455,7 @@ impl UserInterface {
             dir_history: Vec::new(),
             dir_history_selected_index: 0,
             dir_history_scroll_offset: 0,
-            prev_mode_state: (false, false, false, false, false, false, false),
+            prev_mode_state: (false, false, false, false, false, false, false, false),
             online_search_mode: false,
             online_search_results: Vec::new(),
             online_selected_index: 0,
@@ -516,6 +522,7 @@ impl UserInterface {
     fn start_song_info_mode_for_current_song(&mut self) {
         self.comments_mode = false;
         self.comments_detail_mode = false;
+        self.help_mode = false;
         self.song_info_mode = true;
         self.song_info_scroll_offset = 0;
 
@@ -623,7 +630,7 @@ impl UserInterface {
 
     /// 根据鼠标位置获取歌词拖动目标时间
     fn lyric_time_at_position(&self, col: usize, row: u16) -> Option<Duration> {
-        if self.comments_mode || self.song_info_mode {
+        if self.comments_mode || self.song_info_mode || self.help_mode {
             return None;
         }
         let layout = self.lyrics_area_layout.as_ref()?;
@@ -664,7 +671,7 @@ impl UserInterface {
 
     /// 歌词区域滚轮跳转（direction: -1 上一行，1 下一行）
     fn seek_by_lyric_wheel(&mut self, direction: i8) {
-        if self.comments_mode || self.song_info_mode {
+        if self.comments_mode || self.song_info_mode || self.help_mode {
             return;
         }
 
@@ -942,7 +949,10 @@ impl UserInterface {
         let wrapped_lines = wrap_text_to_width(&content, width.saturating_sub(1) as usize);
         let total_lines = wrapped_lines.len();
         let max_offset = total_lines.saturating_sub(visible_count);
-        if self.song_info_scroll_offset > max_offset {
+        // 流式输出时自动滚动到底部，确保新内容可见
+        if self.song_info_loading {
+            self.song_info_scroll_offset = max_offset;
+        } else if self.song_info_scroll_offset > max_offset {
             self.song_info_scroll_offset = max_offset;
         }
         for (row, line) in wrapped_lines.into_iter().skip(self.song_info_scroll_offset).take(visible_count).enumerate() {
@@ -1710,6 +1720,8 @@ impl UserInterface {
             } else {
                 label
             }
+        } else if self.help_mode {
+            self.i18n("帮助信息", "幫助資訊", "Help", "ヘルプ", "도움말").to_string()
         } else if let Some(ref file) = current_file {
             format!(
                 "{}{}",
@@ -1734,6 +1746,7 @@ impl UserInterface {
             self.comments_mode,
             self.song_info_mode,
             self.api_key_input_mode,
+            self.help_mode,
         );
         let mode_changed = self.prev_mode_state != current_mode_state;
         self.prev_mode_state = current_mode_state;
@@ -1769,11 +1782,314 @@ impl UserInterface {
             self.draw_comments(stdout, left_width + 1, right_width, visible_count)?;
         } else if self.song_info_mode {
             self.draw_song_info(stdout, left_width + 1, right_width, visible_count)?;
+        } else if self.help_mode {
+            self.draw_help(stdout, left_width + 1, right_width, visible_count)?;
         } else {
             self.draw_lyrics(stdout, left_width + 1, right_width, visible_count)?;
         }
 
         Ok(())
+    }
+
+    /// 绘制帮助信息（右侧）
+    fn draw_help<W: Write>(
+        &mut self,
+        stdout: &mut W,
+        start_x: u16,
+        width: u16,
+        visible_count: usize,
+    ) -> io::Result<()> {
+        // 帮助视图不使用歌词拖动布局
+        self.lyrics_area_layout = None;
+
+        let help_lines = self.get_help_lines();
+        let total_lines = help_lines.len();
+        let max_offset = total_lines.saturating_sub(visible_count);
+        if self.help_scroll_offset > max_offset {
+            self.help_scroll_offset = max_offset;
+        }
+
+        for i in 0..visible_count {
+            let line_idx = i + self.help_scroll_offset;
+            queue!(
+                stdout,
+                cursor::MoveTo(start_x, (i + 6) as u16),
+                terminal::Clear(ClearType::UntilNewLine),
+            )?;
+
+            if line_idx < help_lines.len() {
+                let line = &help_lines[line_idx];
+                if line.starts_with('§') {
+                    // 标题行（§ 前缀标记），去掉前缀字符
+                    let display_text = &line['§'.len_utf8()..];
+                    queue!(
+                        stdout,
+                        style::SetForegroundColor(self.theme_colors.section_title),
+                        style::Print(truncate_to_width(display_text, width as usize)),
+                        style::ResetColor,
+                    )?;
+                } else if line.starts_with('→') {
+                    // 快捷键行
+                    queue!(
+                        stdout,
+                        style::SetForegroundColor(self.theme_colors.lyric_highlight),
+                        style::Print(truncate_to_width(line, width as usize)),
+                        style::ResetColor,
+                    )?;
+                } else {
+                    // 普通文本行
+                    queue!(
+                        stdout,
+                        style::SetForegroundColor(self.theme_colors.song_normal),
+                        style::Print(truncate_to_width(line, width as usize)),
+                        style::ResetColor,
+                    )?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 获取帮助信息文本行
+    fn get_help_lines(&self) -> Vec<String> {
+        match self.language {
+            UiLanguage::ZhCn => vec![
+                "§快捷按键".to_string(),
+                "→ ↑/↓         上下选择歌曲".to_string(),
+                "→ Enter       播放选中歌曲".to_string(),
+                "→ Space       播放/暂停歌曲".to_string(),
+                "→ Esc         停止播放/返回歌词".to_string(),
+                "→ ←/→         上一曲/下一曲".to_string(),
+                "→ [/]         快退/快进5秒".to_string(),
+                "→ ,/.         快退/快进10秒".to_string(),
+                "→ +/-         音量大小加减".to_string(),
+                "".to_string(),
+                "§功能按键".to_string(),
+                "→ 1-5         切换播放模式".to_string(),
+                "→ o           打开音乐目录".to_string(),
+                "→ s           搜索本地歌曲".to_string(),
+                "→ n           搜索网络歌曲".to_string(),
+                "→ i           查看歌曲信息".to_string(),
+                "→ f           添加到收藏夹".to_string(),
+                "→ v           查看收藏列表".to_string(),
+                "→ d           音乐目录历史".to_string(),
+                "→ c           显示歌曲评论".to_string(),
+                "→ l           切换界面语言".to_string(),
+                "→ t           切换界面主题".to_string(),
+                "→ k           设置API Key".to_string(),
+                "→ q           退出音乐程序".to_string(),
+                "".to_string(),
+                "§播放模式".to_string(),
+                "→ 1  单曲播放（歌曲播放完停止）".to_string(),
+                "→ 2  单曲循环（循环播放当前歌曲）".to_string(),
+                "→ 3  顺序播放（顺序播放完后回到第一首）".to_string(),
+                "→ 4  列表循环（循环播放整个列表）".to_string(),
+                "→ 5  随机播放（随机选择播放歌曲）".to_string(),
+                "".to_string(),
+                "§支持格式".to_string(),
+                "  MP3、WAV、FLAC、OGG、OGA、".to_string(),
+                "  Opus、M4A、AAC、AIFF、APE".to_string(),
+                "".to_string(),
+                "§命令行参数".to_string(),
+                "→ -o <目录>   打开音乐目录".to_string(),
+                "→ -h, --help  显示帮助信息".to_string(),
+                "".to_string(),
+                "§鼠标操作".to_string(),
+                "  点击歌曲列表选择歌曲".to_string(),
+                "  点击进度条跳转播放位置".to_string(),
+                "  点击音量条调节音量".to_string(),
+                "  拖动歌词区域跳转歌词".to_string(),
+            ],
+            UiLanguage::ZhTw => vec![
+                "§快捷按鍵".to_string(),
+                "→ ↑/↓         上下選擇歌曲".to_string(),
+                "→ Enter       播放選中歌曲".to_string(),
+                "→ Space       播放/暫停歌曲".to_string(),
+                "→ Esc         停止播放/返回歌詞".to_string(),
+                "→ ←/→         上一曲/下一曲".to_string(),
+                "→ [/]         快退/快進5秒".to_string(),
+                "→ ,/.         快退/快進10秒".to_string(),
+                "→ +/-         音量大小加減".to_string(),
+                "".to_string(),
+                "§功能按鍵".to_string(),
+                "→ 1-5         切換播放模式".to_string(),
+                "→ o           打開音樂目錄".to_string(),
+                "→ s           搜尋本地歌曲".to_string(),
+                "→ n           搜尋網路歌曲".to_string(),
+                "→ i           查看歌曲資訊".to_string(),
+                "→ f           新增到收藏夾".to_string(),
+                "→ v           查看收藏列表".to_string(),
+                "→ d           音樂目錄歷史".to_string(),
+                "→ c           顯示歌曲評論".to_string(),
+                "→ l           切換界面語言".to_string(),
+                "→ t           切換界面主題".to_string(),
+                "→ k           設定API Key".to_string(),
+                "→ q           退出音樂程式".to_string(),
+                "".to_string(),
+                "§播放模式".to_string(),
+                "→ 1  單曲播放（歌曲播放完停止）".to_string(),
+                "→ 2  單曲循環（循環播放當前歌曲）".to_string(),
+                "→ 3  順序播放（順序播放完後回到第一首）".to_string(),
+                "→ 4  列表循環（循環播放整個列表）".to_string(),
+                "→ 5  隨機播放（隨機選擇播放歌曲）".to_string(),
+                "".to_string(),
+                "§支持格式".to_string(),
+                "  MP3、WAV、FLAC、OGG、OGA、".to_string(),
+                "  Opus、M4A、AAC、AIFF、APE".to_string(),
+                "".to_string(),
+                "§命令列參數".to_string(),
+                "→ -o <目錄>   打開音樂目錄".to_string(),
+                "→ -h, --help  顯示幫助資訊".to_string(),
+                "".to_string(),
+                "§滑鼠操作".to_string(),
+                "  點擊歌曲列表選擇歌曲".to_string(),
+                "  點擊進度條跳轉播放位置".to_string(),
+                "  點擊音量條調節音量".to_string(),
+                "  拖動歌詞區域跳轉歌詞".to_string(),
+            ],
+            UiLanguage::En => vec![
+                "§Keyboard Shortcuts".to_string(),
+                "→ ↑/↓         Previous Next Select song".to_string(),
+                "→ Enter       Play selected song".to_string(),
+                "→ Space       Play/Pause".to_string(),
+                "→ Esc         Stop/Back to lyrics".to_string(),
+                "→ ←/→         Previous/Next track".to_string(),
+                "→ [/]         Rewind/Forward 5s".to_string(),
+                "→ ,/.         Rewind/Forward 10s".to_string(),
+                "→ +/-         Volume up/down".to_string(),
+                "".to_string(),
+                "§Feature Keys".to_string(),
+                "→ 1-5         Switch play mode".to_string(),
+                "→ o           Open music folder".to_string(),
+                "→ s           Search local songs".to_string(),
+                "→ n           Search online songs".to_string(),
+                "→ i           Song info".to_string(),
+                "→ f           Add to favorites".to_string(),
+                "→ v           View favorites".to_string(),
+                "→ d           Music folder history".to_string(),
+                "→ c           Song comments".to_string(),
+                "→ l           Switch language".to_string(),
+                "→ t           Switch theme".to_string(),
+                "→ k           Set API Key".to_string(),
+                "→ q           Quit".to_string(),
+                "".to_string(),
+                "§Play Modes".to_string(),
+                "→ 1  Single play (stop after one)".to_string(),
+                "→ 2  Single repeat (loop current)".to_string(),
+                "→ 3  Sequential (restart from 1st)".to_string(),
+                "→ 4  List repeat (loop entire list)".to_string(),
+                "→ 5  Shuffle (select random play)".to_string(),
+                "".to_string(),
+                "§Supported Formats".to_string(),
+                "  MP3, WAV, FLAC, OGG, OGA,".to_string(),
+                "  Opus, M4A, AAC, AIFF, APE".to_string(),
+                "".to_string(),
+                "§Command Line".to_string(),
+                "→ -o <dir>    Open music folder".to_string(),
+                "→ -h, --help  Show help".to_string(),
+                "".to_string(),
+                "§Mouse Operations".to_string(),
+                "  Click song list to select".to_string(),
+                "  Click progress bar to seek".to_string(),
+                "  Click volume bar to adjust".to_string(),
+                "  Drag lyrics area to jump".to_string(),
+            ],
+            UiLanguage::Ja => vec![
+                "§ショートカットキー".to_string(),
+                "→ ↑/↓         前の次の曲を選択".to_string(),
+                "→ Enter       選択した曲を再生".to_string(),
+                "→ Space       再生/一時停止".to_string(),
+                "→ Esc         停止/歌詞に戻る".to_string(),
+                "→ ←/→         前の曲/次の曲".to_string(),
+                "→ [/]         5秒巻き戻し/早送り".to_string(),
+                "→ ,/.         10秒巻き戻し/早送り".to_string(),
+                "→ +/-         音量アップ/ダウン".to_string(),
+                "".to_string(),
+                "§機能キー".to_string(),
+                "→ 1-5         再生モード切替".to_string(),
+                "→ o           音楽フォルダを開く".to_string(),
+                "→ s           ローカル曲を検索".to_string(),
+                "→ n           ネット曲を検索".to_string(),
+                "→ i           楽曲情報".to_string(),
+                "→ f           お気に入りに追加".to_string(),
+                "→ v           お気に入り一覧".to_string(),
+                "→ d           音楽フォルダ履歴".to_string(),
+                "→ c           曲のコメント".to_string(),
+                "→ l           言語切替".to_string(),
+                "→ t           テーマ切替".to_string(),
+                "→ k           API Key 設定".to_string(),
+                "→ q           終了".to_string(),
+                "".to_string(),
+                "§再生モード".to_string(),
+                "→ 1  単曲再生（1曲で停止）".to_string(),
+                "→ 2  単曲リピート（現在の曲をループ）".to_string(),
+                "→ 3  順次再生（最後まで再生後1曲目に戻る）".to_string(),
+                "→ 4  リストリピート（全リストをループ）".to_string(),
+                "→ 5  シャッフル（ランダム再生）".to_string(),
+                "".to_string(),
+                "§対応形式".to_string(),
+                "  MP3、WAV、FLAC、OGG、OGA、".to_string(),
+                "  Opus、M4A、AAC、AIFF、APE".to_string(),
+                "".to_string(),
+                "§コマンドライン".to_string(),
+                "→ -o <dir>    音楽フォルダを開く".to_string(),
+                "→ -h, --help  ヘルプを表示".to_string(),
+                "".to_string(),
+                "§マウス操作".to_string(),
+                "  曲リストをクリックして選択".to_string(),
+                "  プログレスバーをクリックしてシーク".to_string(),
+                "  音量バーをクリックして調整".to_string(),
+                "  歌詞エリアをドラッグしてジャンプ".to_string(),
+            ],
+            UiLanguage::Ko => vec![
+                "§단축키".to_string(),
+                "→ ↑/↓         노래 선택하기".to_string(),
+                "→ Enter       선택한 곡 재생".to_string(),
+                "→ Space       재생/일시정지".to_string(),
+                "→ Esc         정지/가사로 돌아가기".to_string(),
+                "→ ←/→         이전곡/다음곡".to_string(),
+                "→ [/]         5초 뒤로/앞으로".to_string(),
+                "→ ,/.         10초 뒤로/앞으로".to_string(),
+                "→ +/-         볼륨 올리기/내리기".to_string(),
+                "".to_string(),
+                "§기능 키".to_string(),
+                "→ 1-5         재생 모드 전환".to_string(),
+                "→ o           음악 폴더 열기".to_string(),
+                "→ s           로컬 곡 검색".to_string(),
+                "→ n           온라인 곡 검색".to_string(),
+                "→ i           곡 정보".to_string(),
+                "→ f           즐겨찾기 추가".to_string(),
+                "→ v           즐겨찾기 목록".to_string(),
+                "→ d           음악 폴더 기록".to_string(),
+                "→ c           곡 댓글".to_string(),
+                "→ l           언어 전환".to_string(),
+                "→ t           테마 전환".to_string(),
+                "→ k           API Key 설정".to_string(),
+                "→ q           종료".to_string(),
+                "".to_string(),
+                "§재생 모드".to_string(),
+                "→ 1  단곡 재생 (1곡 후 정지)".to_string(),
+                "→ 2  단곡 반복 (현재 곡 반복)".to_string(),
+                "→ 3  순차 재생 (끝나면 첫 곡으로)".to_string(),
+                "→ 4  목록 반복 (전체 목록 반복)".to_string(),
+                "→ 5  셔플 (무작위로 곡 재생하기)".to_string(),
+                "".to_string(),
+                "§지원 형식".to_string(),
+                "  MP3, WAV, FLAC, OGG, OGA,".to_string(),
+                "  Opus, M4A, AAC, AIFF, APE".to_string(),
+                "".to_string(),
+                "§명령줄 옵션".to_string(),
+                "→ -o <dir>    음악 폴더 열기".to_string(),
+                "→ -h, --help  도움말 표시".to_string(),
+                "".to_string(),
+                "§마우스 조작".to_string(),
+                "  곡 목록 클릭하여 선택".to_string(),
+                "  진행 막대 클릭하여 이동".to_string(),
+                "  볼륨 막대 클릭하여 조절".to_string(),
+                "  가사 영역 드래그하여 이동".to_string(),
+            ],
+        }
     }
 
     /// 绘制歌词（右侧）
@@ -2362,6 +2678,24 @@ impl UserInterface {
                         "음악 폴더: ↑↓|Enter|d삭제|Esc",
                     )
                 }
+            } else if self.help_mode {
+                if self.terminal_width >= 80 {
+                    self.i18n(
+                        "帮助信息: ↑/↓ 上下滚动 | Esc返回",
+                        "幫助資訊: ↑/↓ 上下滾動 | Esc返回",
+                        "Help: ↑/↓ Scroll | Esc Back",
+                        "ヘルプ: ↑/↓ スクロール | Esc戻る",
+                        "도움말: ↑/↓ 스크롤 | Esc 뒤로",
+                    )
+                } else {
+                    self.i18n(
+                        "帮助: ↑↓滚动|Esc返回",
+                        "幫助: ↑↓滾動|Esc返回",
+                        "Help: ↑↓|Esc",
+                        "ヘルプ: ↑↓|Esc",
+                        "도움말: ↑↓|Esc",
+                    )
+                }
             } else if self.song_info_mode {
                 if self.terminal_width >= 80 {
                     self.i18n(
@@ -2400,27 +2734,27 @@ impl UserInterface {
                 }
             } else if self.terminal_width >= 100 {
                 self.i18n(
-                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | Esc停止 | ←→上下曲 | [,/].快退快进 | +-音量 | 1-5模式 | l语言 | o打开 | q退出",
-                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | Esc停止 | ←→上下曲 | [,/].快退快進 | +-音量 | 1-5模式 | l語言 | o開啟 | q退出",
-                    "Keys: ↑↓ Select | Enter Play | Space Pause | Esc Stop | ←→ Prev/Next | [,/].Seek | +-Vol | 1-5 Mode | l Lang | o Open | q Quit",
-                    "キー: ↑↓選択 | Enter再生 | Space一時停止 | Esc停止 | ←→前後曲 | [,/].シーク | +-音量 | 1-5モード | l言語 | o開く | q終了",
-                    "키: ↑↓ 선택 | Enter 재생 | Space 일시정지 | Esc 정지 | ←→ 이전/다음 | [,/].탐색 | +-볼륨 | 1-5 모드 | l 언어 | o 열기 | q 종료",
+                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | Esc停止 | ←→上下曲 | [,/].快退快进 | +-音量 | 1-5模式 | h帮助 | o打开 | q退出",
+                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | Esc停止 | ←→上下曲 | [,/].快退快進 | +-音量 | 1-5模式 | h幫助 | o開啟 | q退出",
+                    "Keys: ↑↓ Select | Enter Play | Space Pause | Esc Stop | ←→ Prev/Next | [,/].Seek | +-Vol | 1-5 Mode | h Help| o Open | q Quit",
+                    "キー: ↑↓選択 | Enter再生 | Space一時停止 | Esc停止 | ←→前後曲 | [,/].シーク | +-音量 | 1-5モード | hヘルプ | o開く | q終了",
+                    "키: ↑↓ 선택 | Enter 재생 | Space 일시정지 | Esc 정지 | ←→ 이전/다음 | [,/].탐색 | +-볼륨 | 1-5 모드 | h도움말 | o 열기 | q 종료",
                 )
             } else if self.terminal_width >= 80 {
                 self.i18n(
-                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | ←→上下曲 | [,/].快退快进 | +-音量 | l语言 | o打开 | q退出",
-                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | ←→上下曲 | [,/].快退快進 | +-音量 | l語言 | o開啟 | q退出",
-                    "Keys: ↑↓ | Enter | Space | ←→ | [,/].Seek | +-Vol | l Lang | o Open | q Quit",
-                    "キー: ↑↓ | Enter | Space | ←→ | [,/].シーク | +-音量 | l言語 | o開く | q終了",
-                    "키: ↑↓ | Enter | Space | ←→ | [,/].탐색 | +-볼륨 | l 언어 | o 열기 | q 종료",
+                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | ←→上下曲 | [,/].快退快进 | +-音量 | h帮助 | o打开 | q退出",
+                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | ←→上下曲 | [,/].快退快進 | +-音量 | h幫助 | o開啟 | q退出",
+                    "Keys: ↑↓ | Enter | Space | ←→ | [,/].Seek | +-Vol | h Help| o Open | q Quit",
+                    "キー: ↑↓ | Enter | Space | ←→ | [,/].シーク | +-音量 | hヘルプ | o開く | q終了",
+                    "키: ↑↓ | Enter | Space | ←→ | [,/].탐색 | +-볼륨 | h도움말 | o 열기 | q 종료",
                 )
             } else {
                 self.i18n(
-                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | l语言 |q退出",
-                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | l語言 |q退出",
-                    "Keys: ↑↓ | Enter | Space | l Lang | q Quit",
-                    "キー: ↑↓ | Enter | Space | l言語 | q終了",
-                    "키: ↑↓ | Enter | Space |  l 언어  | q 종료",
+                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | h帮助 |q退出",
+                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | h幫助 |q退出",
+                    "Keys: ↑↓ | Enter | Space | h Help| q Quit",
+                    "キー: ↑↓ | Enter | Space | hヘルプ | q終了",
+                    "키: ↑↓ | Enter | Space |  h도움말  | q 종료",
                 )
             };
 
@@ -2766,7 +3100,11 @@ impl UserInterface {
         // 正常模式下的键盘处理
         match code {
             KeyCode::Up => {
-                if self.song_info_mode {
+                if self.help_mode {
+                    if self.help_scroll_offset > 0 {
+                        self.help_scroll_offset -= 1;
+                    }
+                } else if self.song_info_mode {
                     if self.song_info_scroll_offset > 0 {
                         self.song_info_scroll_offset -= 1;
                     }
@@ -2789,7 +3127,14 @@ impl UserInterface {
                 }
             }
             KeyCode::Down => {
-                if self.song_info_mode {
+                if self.help_mode {
+                    let help_lines = self.get_help_lines();
+                    let visible_count = self.terminal_height.saturating_sub(12) as usize;
+                    let max_offset = help_lines.len().saturating_sub(visible_count);
+                    if self.help_scroll_offset < max_offset {
+                        self.help_scroll_offset += 1;
+                    }
+                } else if self.song_info_mode {
                     let visible_count = self.terminal_height.saturating_sub(12) as usize;
                     let left_width = (self.terminal_width as f32 * 0.50) as u16;
                     let right_width = self.terminal_width.saturating_sub(left_width + 1);
@@ -2824,6 +3169,8 @@ impl UserInterface {
                     if !self.current_comments.is_empty() {
                         self.comments_detail_mode = !self.comments_detail_mode;
                     }
+                } else if self.help_mode {
+                    // 帮助视图下 Enter 不执行操作
                 } else {
                     // 播放选中的歌曲
                     self.play_song_by_index(self.selected_index);
@@ -2855,6 +3202,9 @@ impl UserInterface {
                 } else if self.song_info_mode {
                     // AI 信息视图下返回歌词视图
                     self.song_info_mode = false;
+                } else if self.help_mode {
+                    // 帮助视图下返回歌词视图
+                    self.help_mode = false;
                 } else {
                     // 停止播放
                     self.audio_player.lock().unwrap().stop();
@@ -2927,6 +3277,7 @@ impl UserInterface {
             KeyCode::Char('s') | KeyCode::Char('S') => {
                 // 进入本地搜索模式（搜索音乐目录）
                 self.search_mode = true;
+                self.help_mode = false;
                 self.online_search_mode = false;
                 self.search_query.clear();
                 self.search_results.clear();
@@ -2936,6 +3287,7 @@ impl UserInterface {
             KeyCode::Char('n') | KeyCode::Char('N') => {
                 // 进入网络搜索模式（搜索网络歌曲并下载）
                 self.search_mode = true;
+                self.help_mode = false;
                 self.online_search_mode = true;
                 self.search_query.clear();
                 self.online_search_results.clear();
@@ -2949,6 +3301,7 @@ impl UserInterface {
                 // 切换到评论视图，并从第1页开始加载
                 self.comments_mode = true;
                 self.song_info_mode = false;
+                self.help_mode = false;
                 self.comments_page = 1;
                 self.current_comments.clear();
                 self.comments_total = 0;
@@ -2983,6 +3336,20 @@ impl UserInterface {
                 };
                 if let Some(song_name) = current_song_name {
                     self.update_now_playing_status(&song_name);
+                }
+
+                // 如果正在显示歌曲信息，切换语言后重新查询
+                if self.song_info_mode {
+                    self.song_info_scroll_offset = 0;
+                    self.song_info_rx = None;
+                    self.song_info_loading = false;
+                    self.song_info_content.clear();
+                    if let Some(ref file) = {
+                        let player = self.audio_player.lock().unwrap();
+                        player.get_current_file()
+                    } {
+                        self.start_fetch_song_info_for_current_song(&file.name);
+                    }
                 }
 
                 self.save_config_now();
@@ -3032,14 +3399,21 @@ impl UserInterface {
             KeyCode::Char('v') | KeyCode::Char('V') => {
                 // 显示收藏列表
                 self.favorites_mode = true;
+                self.help_mode = false;
                 self.favorites_selected_index = 0;
                 self.favorites_scroll_offset = 0;
             }
-            KeyCode::Char('h') | KeyCode::Char('H') => {
+            KeyCode::Char('d') | KeyCode::Char('D') => {
                 // 显示音乐目录
                 self.dir_history_mode = true;
+                self.help_mode = false;
                 self.dir_history_selected_index = 0;
                 self.dir_history_scroll_offset = 0;
+            }
+            KeyCode::Char('h') | KeyCode::Char('H') => {
+                // 显示帮助信息
+                self.help_mode = true;
+                self.help_scroll_offset = 0;
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => {
                 // 退出
@@ -3389,7 +3763,10 @@ impl UserInterface {
                 }
 
                 // 评论模式：右侧区域左键点击，行为与 Enter 一致（选中并进入详情）
-                if self.comments_mode {
+                if self.help_mode {
+                    // 帮助视图：忽略右键点击
+                    return Ok(());
+                } else if self.comments_mode {
                     if !self.comments_detail_mode {
                         let left_width = (self.terminal_width as f32 * 0.50) as usize;
                         if col > left_width && row >= 6 {
@@ -3455,6 +3832,12 @@ impl UserInterface {
                     let left_width = (self.terminal_width as f32 * 0.50) as usize;
                     if col > left_width && self.song_info_scroll_offset > 0 {
                         self.song_info_scroll_offset -= 1;
+                    }
+                } else if self.help_mode {
+                    // 帮助视图：右侧区域滚轮向上滚动
+                    let left_width = (self.terminal_width as f32 * 0.50) as usize;
+                    if col > left_width && self.help_scroll_offset > 0 {
+                        self.help_scroll_offset -= 1;
                     }
                 } else if self.comments_mode {
                     let left_width = (self.terminal_width as f32 * 0.50) as usize;
@@ -3543,6 +3926,17 @@ impl UserInterface {
                         let max_offset = wrapped_lines.len().saturating_sub(visible_count);
                         if self.song_info_scroll_offset < max_offset {
                             self.song_info_scroll_offset += 1;
+                        }
+                    }
+                } else if self.help_mode {
+                    // 帮助视图：右侧区域滚轮向下滚动
+                    let left_width = (self.terminal_width as f32 * 0.50) as usize;
+                    if col > left_width {
+                        let help_lines = self.get_help_lines();
+                        let visible_count = self.terminal_height.saturating_sub(12) as usize;
+                        let max_offset = help_lines.len().saturating_sub(visible_count);
+                        if self.help_scroll_offset < max_offset {
+                            self.help_scroll_offset += 1;
                         }
                     }
                 } else if self.comments_mode {

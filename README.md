@@ -198,15 +198,16 @@ cargo run --release -- -o d:\Music
 | `1-5` | 切换播放模式 |
 | `o` | 打开音乐目录 |
 | `s` | 搜索本地歌曲 |
-| `n` | 搜索网络歌曲|
+| `n` | 搜索网络歌曲 |
+| `i` | 查看歌曲信息 |
 | `f` | 收藏/取消收藏 |
 | `v` | 查看收藏列表 |
-| `h` | 查看目录历史 |
+| `d` | 查看目录历史 |
+| `h` | 显示帮助信息 |
 | `c` | 查看歌曲评论 |
-| `i` | 歌曲信息查询（DeepSeek） |
-| `k` | 输入 DeepSeek API Key |
-| `l` | 切换界面语言（简中/繁中/英/日/韩） |
+| `l` | 切换界面语言 |
 | `t` | 切换界面主题 |
+| `k` | 设置API Key |
 | `q` | 退出音乐程序 |
 
 ### 歌曲搜索按键
@@ -625,9 +626,9 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604240651119322_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604240651221229_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604240651289339_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604241011468483_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604241011544507_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604241012038343_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 

@@ -200,14 +200,15 @@ cargo run --release -- -o d:\Music
 | `o` | 음악 디렉터리 열기 |
 | `s` | 로컬 곡 검색 |
 | `n` | 온라인 곡 검색 |
+| `i` | 곡 정보 조회 |
 | `f` | 즐겨찾기/해제 |
 | `v` | 즐겨찾기 목록 |
-| `h` | 디렉터리 기록 |
+| `d` | 디렉터리 기록 |
+| `h` | 도움말 정보 표시 |
 | `c` | 곡 댓글 보기 |
-| `i` | 곡 정보 조회(DeepSeek) |
-| `k` | DeepSeek API Key 입력 |
-| `l` | UI 언어 전환(간체/번체/영/일/한) |
+| `l` | UI 언어 전환 |
 | `t` | 테마 전환 |
+| `k` | API Key 입력 |
 | `q` | 종료 |
 
 ### 검색 화면
@@ -627,9 +628,9 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604240651119322_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604240651221229_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604240651289339_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604241011468483_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604241011544507_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604241012038343_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 
