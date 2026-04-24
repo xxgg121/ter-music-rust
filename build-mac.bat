@@ -41,7 +41,6 @@ if not exist "%MACOS_SYSROOT%\System\Library\Frameworks\CoreAudio.framework" (
     echo 交叉编译 MacOS 版本需要 MacOS SDK 头文件，请按以下步骤准备:
     echo.
     echo   方式 A: 从 GitHub 下载预打包 SDK（推荐）:
-    echo     下载: https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz
     echo     加速: https://ghfast.top/https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz
     echo     curl -L -o MacOSX13.3.sdk.tar.xz https://github.com/joseluisq/macosx-sdks/releases/download/13.3/MacOSX13.3.sdk.tar.xz
     echo     mkdir macos-sysroot
