@@ -218,14 +218,56 @@ Depends: libc6 (>= 2.31), libasound2
 Description: A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems.
 EOF
 
-cat > "$BIN_PKG_DIR/DEBIAN/postinst" <<EOF
+cat > "$BIN_PKG_DIR/DEBIAN/postinst" <<'POSTINST'
 #!/usr/bin/env bash
 set -e
+
+PKG_NAME="ter-music-rust"
 
 if [[ -d /usr/share/deepin/applications ]]; then
   install -m 0644 "/usr/share/applications/${PKG_NAME}.desktop" "/usr/share/deepin/applications/${PKG_NAME}.desktop" || true
 fi
 
+# Copy desktop file to all users' Desktop directories
+_copy_to_desktop() {
+  local home_dir="$1"
+  local username
+  username="$(basename "$home_dir")"
+
+  # Try xdg-user-dir first (handles localized Desktop folder names like 桌面)
+  local desktop_dir
+  if command -v sudo >/dev/null 2>&1 && id "$username" >/dev/null 2>&1; then
+    desktop_dir="$(sudo -u "$username" XDG_RUNTIME_DIR="/run/user/$(id -u "$username")" xdg-user-dir DESKTOP 2>/dev/null || true)"
+  fi
+
+  # Fallback to common Desktop directory names
+  if [[ -z "$desktop_dir" || ! -d "$desktop_dir" ]]; then
+    for dir_name in Desktop 桌面; do
+      if [[ -d "$home_dir/$dir_name" ]]; then
+        desktop_dir="$home_dir/$dir_name"
+        break
+      fi
+    done
+  fi
+
+  if [[ -n "$desktop_dir" && -d "$desktop_dir" ]]; then
+    cp "/usr/share/applications/${PKG_NAME}.desktop" "$desktop_dir/" 2>/dev/null || true
+    chmod 0755 "$desktop_dir/${PKG_NAME}.desktop" 2>/dev/null || true
+    chown "$username" "$desktop_dir/${PKG_NAME}.desktop" 2>/dev/null || true
+    # Mark as trusted for GNOME-based desktops
+    if command -v gio >/dev/null 2>&1 && id "$username" >/dev/null 2>&1; then
+      sudo -u "$username" gio set "$desktop_dir/${PKG_NAME}.desktop" metadata::trusted true 2>/dev/null || true
+    fi
+  fi
+}
+
+# Process all regular users
+while IFS=: read -r username _ uid _ _ home_dir _; do
+  if [[ "$uid" -ge 1000 && -d "$home_dir" ]]; then
+    _copy_to_desktop "$home_dir"
+  fi
+done </etc/passwd
+
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database /usr/share/applications || true
 fi
@@ -233,17 +275,44 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q /usr/share/icons/hicolor || true
 fi
 exit 0
-EOF
+POSTINST
 chmod 0755 "$BIN_PKG_DIR/DEBIAN/postinst"
 
-cat > "$BIN_PKG_DIR/DEBIAN/postrm" <<EOF
+cat > "$BIN_PKG_DIR/DEBIAN/postrm" <<'POSTRM'
 #!/usr/bin/env bash
 set -e
+
+PKG_NAME="ter-music-rust"
 
 if [[ -d /usr/share/deepin/applications ]]; then
   rm -f "/usr/share/deepin/applications/${PKG_NAME}.desktop" || true
 fi
 
+# Remove desktop file from all users' Desktop directories
+while IFS=: read -r username _ uid _ _ home_dir _; do
+  if [[ "$uid" -ge 1000 && -d "$home_dir" ]]; then
+    # Try xdg-user-dir first
+    local desktop_dir
+    if command -v sudo >/dev/null 2>&1 && id "$username" >/dev/null 2>&1; then
+      desktop_dir="$(sudo -u "$username" XDG_RUNTIME_DIR="/run/user/$(id -u "$username")" xdg-user-dir DESKTOP 2>/dev/null || true)"
+    fi
+
+    # Fallback to common Desktop directory names
+    if [[ -z "$desktop_dir" || ! -d "$desktop_dir" ]]; then
+      for dir_name in Desktop 桌面; do
+        if [[ -d "$home_dir/$dir_name" ]]; then
+          desktop_dir="$home_dir/$dir_name"
+          break
+        fi
+      done
+    fi
+
+    if [[ -n "$desktop_dir" && -d "$desktop_dir" ]]; then
+      rm -f "$desktop_dir/${PKG_NAME}.desktop" 2>/dev/null || true
+    fi
+  fi
+done </etc/passwd
+
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database /usr/share/applications || true
 fi
@@ -251,7 +320,7 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q /usr/share/icons/hicolor || true
 fi
 exit 0
-EOF
+POSTRM
 chmod 0755 "$BIN_PKG_DIR/DEBIAN/postrm"
 
 if [[ "$WITH_DEBUGINFO" -eq 1 ]]; then

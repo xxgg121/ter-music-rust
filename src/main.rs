@@ -55,7 +55,7 @@ fn show_help() {
     println!(" i 查看歌曲信息");
     println!(" f 添加到收藏夹");
     println!(" v 查看收藏列表");
-    println!(" d 音乐目录历史");
+    println!(" m 音乐目录历史");
     println!(" h 显示帮助信息");
     println!(" c 显示歌曲评论");
     println!(" l 切换界面语言");

@@ -73,7 +73,7 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 
 ### 📂 디렉터리 관리
 - **음악 디렉터리 선택**: `o` 키로 폴더 선택 대화상자 열기(최초 성공 시 자동 재생 시작)
-- **열기 기록 보기**: `d` 키로 열었던 디렉터리 기록을 보고 빠르게 전환
+- **열기 기록 보기**: `m` 키로 열었던 디렉터리 기록을 보고 빠르게 전환
 - **현재 디렉터리 표시**: `▶` 마커로 현재 사용 디렉터리 표시
 - **기록 삭제**: 기록 화면에서 `d`
 
@@ -203,7 +203,7 @@ cargo run --release -- -o d:\Music
 | `i` | 곡 정보 조회 |
 | `f` | 즐겨찾기/해제 |
 | `v` | 즐겨찾기 목록 |
-| `d` | 디렉터리 기록 |
+| `m` | 디렉터리 기록 |
 | `h` | 도움말 정보 표시 |
 | `c` | 곡 댓글 보기 |
 | `l` | UI 언어 전환 |
@@ -248,6 +248,21 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | 댓글 선택 |
 | `Enter` | 목록/상세 보기 전환 |
 | `PgUp/PgDn` | 페이지 이동 |
+| `Esc` | 가사 화면으로 복귀 |
+
+### 곡 정보 화면
+
+| 키 | 동작 |
+|------|------|
+| `↑/↓` | 정보 스크롤 |
+| `i` | 곡 정보 재조회 |
+| `Esc` | 가사 화면으로 복귀 |
+
+### 도움말 화면
+
+| 키 | 동작 |
+|------|------|
+| `↑/↓` | 도움말 스크롤 |
 | `Esc` | 가사 화면으로 복귀 |
 
 ---
@@ -541,7 +556,7 @@ strip = true        # 디버그 심볼 제거
 
 ---
 
-## 🆚 C 버전과 비교
+## Rust C 버전과 비교
 
 | 항목 | Rust 버전 | C 버전 |
 |------|-----------|--------|
@@ -628,9 +643,9 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604241011468483_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604241011544507_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604241012038343_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604250439321664_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604250439406264_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604250439455800_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 

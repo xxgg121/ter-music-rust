@@ -73,7 +73,7 @@
 
 ### 📂 目录管理
 - **音乐目录选择**：按 `o` 打开文件夹选择对话框（首次打开目录后会自动开始播放）
-- **打开目录历史**：按 `d` 查看所有打开过的目录，快速切换
+- **打开目录历史**：按 `m` 查看所有打开过的目录，快速切换
 - **当前目录标记**：用 `▶` 标记当前正在使用的目录
 - **删除目录历史**：按 `d` 删除不需要的目录记录
 
@@ -202,7 +202,7 @@ cargo run --release -- -o d:\Music
 | `i` | 查看歌曲信息 |
 | `f` | 收藏/取消收藏 |
 | `v` | 查看收藏列表 |
-| `d` | 查看目录历史 |
+| `m` | 查看目录历史 |
 | `h` | 显示帮助信息 |
 | `c` | 查看歌曲评论 |
 | `l` | 切换界面语言 |
@@ -247,6 +247,21 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | 选择评论 |
 | `Enter` | 切换列表/详情视图 |
 | `PgUp/PgDn` | 翻页 |
+| `Esc` | 返回歌词视图 |
+
+### 歌曲信息按键
+
+| 按键 | 功能 |
+|------|------|
+| `↑/↓` | 滚动查看信息 |
+| `i` | 重新查询歌曲信息 |
+| `Esc` | 返回歌词视图 |
+
+### 帮助信息按键
+
+| 按键 | 功能 |
+|------|------|
+| `↑/↓` | 滚动查看帮助 |
 | `Esc` | 返回歌词视图 |
 
 ---
@@ -539,7 +554,7 @@ strip = true        # 去除调试符号
 
 ---
 
-## 🆚 与 C 版本的对比
+## Rust 与 C 版本的对比
 
 | 特性 | Rust 版本 | C 版本 |
 |------|-----------|--------|
@@ -626,9 +641,9 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604241011468483_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604241011544507_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604241012038343_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604250439321664_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604250439406264_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604250439455800_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 

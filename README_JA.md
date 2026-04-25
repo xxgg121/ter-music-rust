@@ -73,7 +73,7 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 
 ### 📂 ディレクトリ管理
 - **音楽ディレクトリ選択**: `o` でフォルダ選択ダイアログを開く（初回読み込み成功後は自動再生開始）
-- **履歴表示**: `d` で開いたディレクトリ履歴を表示し、素早く切り替え
+- **履歴表示**: `m` で開いたディレクトリ履歴を表示し、素早く切り替え
 - **現在ディレクトリ表示**: `▶` が現在使用中のディレクトリ
 - **履歴削除**: 履歴画面で `d`
 
@@ -203,7 +203,7 @@ cargo run --release -- -o d:\Music
 | `i` | 楽曲情報検索 |
 | `f` | お気に入り/解除 |
 | `v` | お気に入り一覧 |
-| `d` | ディレクトリ履歴 |
+| `m` | ディレクトリ履歴 |
 | `h` | ヘルプ情報を表示 |
 | `c` | 曲コメント |
 | `l` | UI 言語切り替え |
@@ -248,6 +248,21 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | コメント選択 |
 | `Enter` | 一覧/詳細切り替え |
 | `PgUp/PgDn` | ページ切り替え |
+| `Esc` | 歌詞画面へ戻る |
+
+### 楽曲情報画面
+
+| キー | 動作 |
+|------|------|
+| `↑/↓` | 情報をスクロール |
+| `i` | 楽曲情報を再取得 |
+| `Esc` | 歌詞画面へ戻る |
+
+### ヘルプ画面
+
+| キー | 動作 |
+|------|------|
+| `↑/↓` | ヘルプをスクロール |
 | `Esc` | 歌詞画面へ戻る |
 
 ---
@@ -541,7 +556,7 @@ strip = true        # デバッグシンボルを削除
 
 ---
 
-## 🆚 C 版との比較
+## Rust C 版との比較
 
 | 項目 | Rust 版 | C 版 |
 |------|-----------|--------|
@@ -628,9 +643,9 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 初回は依存関係のダウンロードとコンパイルが発生するため時間がかかります。2 回目以降は大幅に高速化されます。
 
 ### Release のダウンロード
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604241011468483_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604241011544507_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604241012038343_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604250439321664_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604250439406264_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604250439455800_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 

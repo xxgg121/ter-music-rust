@@ -2,7 +2,7 @@
 chcp 65001 >nul
 echo.
 echo ========================================
-echo   Ter-Music Windows 构建脚本
+echo   Ter-Music-Rust Windows 构建脚本
 echo ========================================
 echo.
 

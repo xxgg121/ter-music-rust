@@ -1006,8 +1006,8 @@ impl UserInterface {
         // 输入模式下，将光标定位到输入位置
         if self.api_key_input_mode {
             let prompt_text = self.i18n(
-                "输入 DEEPSEEK_API_KEY: ",
-                "輸入 DEEPSEEK_API_KEY: ",
+                "输入DEEPSEEK_API_KEY: ",
+                "輸入DEEPSEEK_API_KEY: ",
                 "Input DEEPSEEK_API_KEY: ",
                 "DEEPSEEK_API_KEY を入力: ",
                 "DEEPSEEK_API_KEY 입력: "
@@ -1696,8 +1696,8 @@ impl UserInterface {
             format!(
                 "{}{}",
                 self.i18n(
-                    "输入 DEEPSEEK_API_KEY: ",
-                    "輸入 DEEPSEEK_API_KEY: ",
+                    "输入DEEPSEEK_API_KEY: ",
+                    "輸入DEEPSEEK_API_KEY: ",
                     "Input DEEPSEEK_API_KEY: ",
                     "DEEPSEEK_API_KEY を入力: ",
                     "DEEPSEEK_API_KEY 입력: "
@@ -1832,7 +1832,7 @@ impl UserInterface {
                     // 快捷键行
                     queue!(
                         stdout,
-                        style::SetForegroundColor(self.theme_colors.lyric_highlight),
+                        style::SetForegroundColor(self.theme_colors.song_normal),
                         style::Print(truncate_to_width(line, width as usize)),
                         style::ResetColor,
                     )?;
@@ -1873,7 +1873,7 @@ impl UserInterface {
                 "→ i           查看歌曲信息".to_string(),
                 "→ f           添加到收藏夹".to_string(),
                 "→ v           查看收藏列表".to_string(),
-                "→ d           音乐目录历史".to_string(),
+                "→ m           音乐目录历史".to_string(),
                 "→ c           显示歌曲评论".to_string(),
                 "→ l           切换界面语言".to_string(),
                 "→ t           切换界面主题".to_string(),
@@ -1920,7 +1920,7 @@ impl UserInterface {
                 "→ i           查看歌曲資訊".to_string(),
                 "→ f           新增到收藏夾".to_string(),
                 "→ v           查看收藏列表".to_string(),
-                "→ d           音樂目錄歷史".to_string(),
+                "→ m           音樂目錄歷史".to_string(),
                 "→ c           顯示歌曲評論".to_string(),
                 "→ l           切換界面語言".to_string(),
                 "→ t           切換界面主題".to_string(),
@@ -1967,7 +1967,7 @@ impl UserInterface {
                 "→ i           Song info".to_string(),
                 "→ f           Add to favorites".to_string(),
                 "→ v           View favorites".to_string(),
-                "→ d           Music folder history".to_string(),
+                "→ m           Music folder history".to_string(),
                 "→ c           Song comments".to_string(),
                 "→ l           Switch language".to_string(),
                 "→ t           Switch theme".to_string(),
@@ -2014,7 +2014,7 @@ impl UserInterface {
                 "→ i           楽曲情報".to_string(),
                 "→ f           お気に入りに追加".to_string(),
                 "→ v           お気に入り一覧".to_string(),
-                "→ d           音楽フォルダ履歴".to_string(),
+                "→ m           音楽フォルダ履歴".to_string(),
                 "→ c           曲のコメント".to_string(),
                 "→ l           言語切替".to_string(),
                 "→ t           テーマ切替".to_string(),
@@ -2061,7 +2061,7 @@ impl UserInterface {
                 "→ i           곡 정보".to_string(),
                 "→ f           즐겨찾기 추가".to_string(),
                 "→ v           즐겨찾기 목록".to_string(),
-                "→ d           음악 폴더 기록".to_string(),
+                "→ m           음악 폴더 기록".to_string(),
                 "→ c           곡 댓글".to_string(),
                 "→ l           언어 전환".to_string(),
                 "→ t           테마 전환".to_string(),
@@ -2681,11 +2681,11 @@ impl UserInterface {
             } else if self.help_mode {
                 if self.terminal_width >= 80 {
                     self.i18n(
-                        "帮助信息: ↑/↓ 上下滚动 | Esc返回",
-                        "幫助資訊: ↑/↓ 上下滾動 | Esc返回",
-                        "Help: ↑/↓ Scroll | Esc Back",
-                        "ヘルプ: ↑/↓ スクロール | Esc戻る",
-                        "도움말: ↑/↓ 스크롤 | Esc 뒤로",
+                        "帮助信息: ↑/↓ 上下移动 | Up/Down 上下滚动 |  Esc返回",
+                        "幫助資訊: ↑/↓ 上下移動 | Up/Down 上下滾動 | Esc返回",
+                        "Help: ↑/↓ ↑/↓ Scroll | Up/Down Scroll | Esc Back",
+                        "ヘルプ: ↑/↓ スクロール | Up/Down スクロール |  Esc戻る",
+                        "도움말: ↑/↓ 스크롤 | Up/Down 스크롤 |  Esc 뒤로",
                     )
                 } else {
                     self.i18n(
@@ -2736,9 +2736,9 @@ impl UserInterface {
                 self.i18n(
                     "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | Esc停止 | ←→上下曲 | [,/].快退快进 | +-音量 | 1-5模式 | h帮助 | o打开 | q退出",
                     "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | Esc停止 | ←→上下曲 | [,/].快退快進 | +-音量 | 1-5模式 | h幫助 | o開啟 | q退出",
-                    "Keys: ↑↓ Select | Enter Play | Space Pause | Esc Stop | ←→ Prev/Next | [,/].Seek | +-Vol | 1-5 Mode | h Help| o Open | q Quit",
+                    "Keys: ↑↓ Select | Enter Play | Space Pause | Esc Stop | ←→ Prev/Next | [,/].Seek | +-Vol | 1-5Mode | h Help| o Open | q Quit",
                     "キー: ↑↓選択 | Enter再生 | Space一時停止 | Esc停止 | ←→前後曲 | [,/].シーク | +-音量 | 1-5モード | hヘルプ | o開く | q終了",
-                    "키: ↑↓ 선택 | Enter 재생 | Space 일시정지 | Esc 정지 | ←→ 이전/다음 | [,/].탐색 | +-볼륨 | 1-5 모드 | h도움말 | o 열기 | q 종료",
+                    "키: ↑↓ 선택 | Enter 재생 | Space 일시정지 | Esc 정지 | ←→ 이전/다음 | [,/].탐색 | +-볼륨 | 1-5모드 | h도움말 | o열기 | q종료",
                 )
             } else if self.terminal_width >= 80 {
                 self.i18n(
@@ -2746,7 +2746,7 @@ impl UserInterface {
                     "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | ←→上下曲 | [,/].快退快進 | +-音量 | h幫助 | o開啟 | q退出",
                     "Keys: ↑↓ | Enter | Space | ←→ | [,/].Seek | +-Vol | h Help| o Open | q Quit",
                     "キー: ↑↓ | Enter | Space | ←→ | [,/].シーク | +-音量 | hヘルプ | o開く | q終了",
-                    "키: ↑↓ | Enter | Space | ←→ | [,/].탐색 | +-볼륨 | h도움말 | o 열기 | q 종료",
+                    "키: ↑↓ | Enter | Space | ←→ | [,/].탐색 | +-볼륨 | h도움말 | o열기 | q종료",
                 )
             } else {
                 self.i18n(
@@ -2754,7 +2754,7 @@ impl UserInterface {
                     "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | h幫助 |q退出",
                     "Keys: ↑↓ | Enter | Space | h Help| q Quit",
                     "キー: ↑↓ | Enter | Space | hヘルプ | q終了",
-                    "키: ↑↓ | Enter | Space |  h도움말  | q 종료",
+                    "키: ↑↓ | Enter | Space |  h도움말  | q종료",
                 )
             };
 
@@ -3403,7 +3403,7 @@ impl UserInterface {
                 self.favorites_selected_index = 0;
                 self.favorites_scroll_offset = 0;
             }
-            KeyCode::Char('d') | KeyCode::Char('D') => {
+            KeyCode::Char('m') | KeyCode::Char('M') => {
                 // 显示音乐目录
                 self.dir_history_mode = true;
                 self.help_mode = false;

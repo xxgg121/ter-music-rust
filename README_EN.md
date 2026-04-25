@@ -75,7 +75,7 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 
 ### 📂 Directory Management
 - **Choose music directory**: press `o` to open folder picker dialog (playback starts automatically after first successful open)
-- **Open directory history**: press `d` to view and quickly switch directories
+- **Open directory history**: press `m` to view and quickly switch directories
 - **Current directory marker**: `▶` indicates currently active directory
 - **Delete history item**: press `d` in history view
 
@@ -205,7 +205,7 @@ cargo run --release -- -o d:\Music
 | `i` | song info query |
 | `f` | Favorite/Unfavorite |
 | `v` | View favorites |
-| `d` | View directory history |
+| `m` | View directory history |
 | `h` | Display help information |
 | `c` | View song comments |
 | `l` | Switch UI language |
@@ -250,6 +250,21 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | Select comment |
 | `Enter` | Toggle list/detail view |
 | `PgUp/PgDn` | Page up/down |
+| `Esc` | Back to lyrics view |
+
+### Song Info View
+
+| Key | Action |
+|------|------|
+| `↑/↓` | Scroll song info |
+| `i` | Re-query song info |
+| `Esc` | Back to lyrics view |
+
+### Help View
+
+| Key | Action |
+|------|------|
+| `↑/↓` | Scroll help content |
 | `Esc` | Back to lyrics view |
 
 ---
@@ -543,7 +558,7 @@ strip = true        # strip debug symbols
 
 ---
 
-## 🆚 Compared with C Version
+## Rust Compared with C Version
 
 | Feature | Rust Version | C Version |
 |------|-----------|--------|
@@ -630,9 +645,9 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604241011468483_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604241011544507_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604241012038343_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604250439321664_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604250439406264_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604250439455800_ter-music-rust-linux.zip "附件(Attached)")
 
 ---
 
