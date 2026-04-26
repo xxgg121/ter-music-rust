@@ -60,7 +60,7 @@ fn show_help() {
     println!(" c 显示歌曲评论");
     println!(" l 切换界面语言");
     println!(" t 切换界面主题");
-    println!(" k 设置API Key");
+    println!(" k 配置API 接口");
     println!(" q 退出音乐程序\n");
     println!("播放模式:");
     println!(" 1 - 单曲播放（歌曲播放完停止）");
@@ -79,12 +79,20 @@ fn show_help() {
 #[allow(clippy::arc_with_non_send_sync)]
 fn main() {
     setup_console();
-    let config = Config::load();
+    let mut config = Config::load();
 
     if std::env::var("DEEPSEEK_API_KEY").map(|v| v.trim().is_empty()).unwrap_or(true)
-        && !config.deepseek_api_key.trim().is_empty()
+        && !config.api_key.trim().is_empty()
     {
-        std::env::set_var("DEEPSEEK_API_KEY", config.deepseek_api_key.trim());
+        std::env::set_var("DEEPSEEK_API_KEY", config.api_key.trim());
+    }
+
+    // 确保 api_base_url 和 api_model 有默认值（兼容旧配置文件）
+    if config.api_base_url.trim().is_empty() {
+        config.api_base_url = "https://api.deepseek.com/".to_string();
+    }
+    if config.api_model.trim().is_empty() {
+        config.api_model = "deepseek-v4-flash".to_string();
     }
 
     // 解析命令行参数
@@ -166,7 +174,9 @@ fn main() {
     let mut ui = UserInterface::new(playlist.clone(), audio_player.clone());
     ui.set_theme_by_name(&config.theme);
     ui.set_language_by_name(&config.language);
-    ui.set_deepseek_api_key(config.deepseek_api_key.clone());
+    ui.set_api_key(config.api_key.clone());
+    ui.set_api_base_url(config.api_base_url.clone());
+    ui.set_api_model(config.api_model.clone());
 
     // 注册 Ctrl+C 信号处理器，优雅退出并保存配置
     {
@@ -234,7 +244,9 @@ fn main() {
             dir_history: ui.get_dir_history(),
             theme: ui.get_theme_key().to_string(),
             language: ui.get_language_key().to_string(),
-            deepseek_api_key: ui.get_deepseek_api_key(),
+            api_key: ui.get_api_key(),
+            api_base_url: ui.get_api_base_url(),
+            api_model: ui.get_api_model(),
         };
 
         new_config.save();

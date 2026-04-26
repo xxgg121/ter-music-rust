@@ -327,14 +327,20 @@ pub struct UserInterface {
     song_info_scroll_offset: usize,
     /// 是否正在查询 AI 歌曲信息
     song_info_loading: bool,
-    /// DeepSeek API Key（来自配置/用户输入）
-    deepseek_api_key: String,
-    /// 是否处于 DeepSeek API Key 输入模式
+    /// API Key（来自配置/用户输入）
+    api_key: String,
+    /// API 接口地址（OpenAI 兼容）
+    api_base_url: String,
+    /// API 模型名称
+    api_model: String,
+    /// 是否处于 API 配置输入模式
     api_key_input_mode: bool,
-    /// DeepSeek API Key 输入缓存
+    /// API 配置输入缓存
     api_key_input_value: String,
     /// 当前输入完成后是否继续执行歌曲信息查询（由 i 触发）
     api_key_input_for_song_info: bool,
+    /// API 配置输入步骤：0=接口地址, 1=API Key, 2=模型名称
+    api_input_step: u8,
     /// 是否处于搜索模式
     search_mode: bool,
     /// 搜索输入关键字
@@ -438,10 +444,13 @@ impl UserInterface {
             song_info_loading: false,
             help_mode: false,
             help_scroll_offset: 0,
-            deepseek_api_key: String::new(),
+            api_key: String::new(),
+            api_base_url: "https://api.deepseek.com/".to_string(),
+            api_model: "deepseek-v4-flash".to_string(),
             api_key_input_mode: false,
             api_key_input_value: String::new(),
             api_key_input_for_song_info: false,
+            api_input_step: 0,
             search_mode: false,
             search_query: String::new(),
             search_results: Vec::new(),
@@ -496,7 +505,7 @@ impl UserInterface {
         }
     }
 
-    fn resolved_deepseek_api_key(&self) -> Option<String> {
+    fn resolved_api_key(&self) -> Option<String> {
         if let Ok(env_key) = std::env::var("DEEPSEEK_API_KEY") {
             let trimmed = env_key.trim();
             if !trimmed.is_empty() {
@@ -504,7 +513,7 @@ impl UserInterface {
             }
         }
 
-        let trimmed = self.deepseek_api_key.trim();
+        let trimmed = self.api_key.trim();
         if !trimmed.is_empty() {
             Some(trimmed.to_string())
         } else {
@@ -515,7 +524,8 @@ impl UserInterface {
     fn open_api_key_input_mode(&mut self, for_song_info: bool) {
         self.api_key_input_mode = true;
         self.api_key_input_for_song_info = for_song_info;
-        self.api_key_input_value = self.resolved_deepseek_api_key().unwrap_or_default();
+        self.api_input_step = 0;
+        self.api_key_input_value = self.api_base_url.clone();
         self.cached_lyrics_title = None;
     }
 
@@ -781,23 +791,23 @@ impl UserInterface {
         let clean_name = song_name.trim();
         match self.language {
             UiLanguage::ZhCn => format!(
-                "请根据歌曲名称整理该歌曲的详细信息。禁止输出任何开场白、问候语或自我介绍，直接输出歌曲信息。\n\n歌曲名称：{}\n\n按以下结构详细输出，每项尽量展开，无法确认的标注「暂无公开资料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手详情：（包括国籍、出生地、出生日期、星座、血型、身高、体重、职业、毕业院校、代表作品、主要成就等）\n词曲创作：（作词、作曲、编曲、制作人等完整创作团队）\n发行时间：（具体日期，若有不同版本请分别列出）\n所属专辑：（专辑名称、第几首曲目、专辑曲目列表）\n创作背景：（详细描述创作灵感来源、幕后故事、创作过程中的趣闻等）\n歌曲大意：（深入解读歌词含义、表达的情感与主题思想）\n音乐风格：（流派、BPM、调性、节奏特点、特殊编曲或乐器使用等）\n商业成绩：（榜单排名、销量、播放量、认证等）\n获奖记录：（音乐奖项、提名等）\n影响评价：（乐评人评价、文化影响、历史地位等）\n翻唱引用：（知名翻唱版本、影视/广告/游戏等中的使用）\n有趣事实：（与歌曲相关的冷知识、轶事、趣闻等）\n\n要求：\n- 信息尽量准确详实，避免杜撰，不确定的标注「据传」或「待考证」。\n- 如有多个歌手或版本，以原唱或最知名版本为主，必要时补充其他版本。\n- 每项内容尽量详细展开，不要过于简略。\n- 绝对禁止输出开场白、问候语、自我介绍，禁止使用序号编号。\n- 必须使用简体中文回答。",
+                "请根据歌曲名称整理该歌曲的详细信息。禁止输出任何开场白、问候语或自我介绍，直接输出歌曲信息。\n\n歌曲名称：{}\n\n按以下结构详细输出，每项尽量展开，无法确认的标注「暂无公开资料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手详情：（包括国籍、出生地、出生日期、星座、血型、身高、体重、职业、毕业院校、代表作品、主要成就等）\n词曲创作：（作词、作曲、编曲、制作人等完整创作团队）\n发行时间：（具体日期，若有不同版本请分别列出）\n所属专辑：（专辑名称、第几首曲目、专辑曲目列表）\n创作背景：（详细描述创作灵感来源、幕后故事、创作过程中的趣闻等）\n歌词大意：（深入解读歌词含义、表达的情感与主题思想）\n音乐风格：（流派、BPM、调性、节奏特点、特殊编曲或乐器使用等）\n商业成绩：（榜单排名、销量、播放量、认证等）\n获奖记录：（音乐奖项、提名等）\n影响评价：（乐评人评价、文化影响、历史地位等）\n翻唱引用：（知名翻唱版本、影视/广告/游戏等中的使用）\n趣闻轶事：（与歌曲相关的冷知识、轶事、趣闻等）\n\n要求：\n- 信息尽量准确详实，避免杜撰，不确定的标注「据传」或「待考证」。\n- 如有多个歌手或版本，以原唱或最知名版本为主，必要时补充其他版本。\n- 每项内容尽量详细展开，不要过于简略。\n- 绝对禁止输出开场白、问候语、自我介绍，禁止使用序号编号。\n- 必须使用简体中文回答。",
                 clean_name
             ),
             UiLanguage::ZhTw => format!(
-                "請根據歌曲名稱整理該歌曲的詳細資訊。禁止輸出任何開場白、問候語或自我介紹，直接輸出歌曲資訊。\n\n歌曲名稱：{}\n\n依照以下結構詳細輸出，每項盡量展開，無法確認的標註「暫無公開資料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手詳情：（包括國籍、出生地、出生日期、星座、血型、身高、體重、職業、畢業院校、代表作、主要成就等）\n詞曲創作：（作詞、作曲、編曲、製作人等完整創作團隊）\n發行時間：（具體日期，若有不同版本請分別列出）\n所屬專輯：（專輯名稱、第幾首曲目、專輯曲目列表）\n創作背景：（詳細描述創作靈感來源、幕後故事、創作過程中的趣聞等）\n歌曲大意：（深入解讀歌詞含義、表達的情感與主題思想）\n音樂風格：（流派、BPM、調性、節奏特點、特殊編曲或樂器使用等）\n商業成績：（榜單排名、銷量、播放量、認證等）\n得獎紀錄：（音樂獎項、提名等）\n影響評價：（樂評人評價、文化影響、歷史地位等）\n翻唱引用：（知名翻唱版本、影視/廣告/遊戲等中的使用）\n有趣事實：（與歌曲相關的冷知識、軼事、趣聞等）\n\n要求：\n- 資訊盡量準確詳實，避免杜撰，不確定的標註「據傳」或「待考證」。\n- 若有多位歌手或多個版本，以原唱或最知名版本為主，必要時補充其他版本。\n- 每項內容盡量詳細展開，不要過於簡略。\n- 絕對禁止輸出開場白、問候語、自我介紹，禁止使用序號編號。\n- 必須使用繁體中文回答。",
+                "請根據歌曲名稱整理該歌曲的詳細資訊。禁止輸出任何開場白、問候語或自我介紹，直接輸出歌曲資訊。\n\n歌曲名稱：{}\n\n依照以下結構詳細輸出，每項盡量展開，無法確認的標註「暫無公開資料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手詳情：（包括國籍、出生地、出生日期、星座、血型、身高、體重、職業、畢業院校、代表作、主要成就等）\n詞曲創作：（作詞、作曲、編曲、製作人等完整創作團隊）\n發行時間：（具體日期，若有不同版本請分別列出）\n所屬專輯：（專輯名稱、第幾首曲目、專輯曲目列表）\n創作背景：（詳細描述創作靈感來源、幕後故事、創作過程中的趣聞等）\n歌詞大意：（深入解讀歌詞含義、表達的情感與主題思想）\n音樂風格：（流派、BPM、調性、節奏特點、特殊編曲或樂器使用等）\n商業成績：（榜單排名、銷量、播放量、認證等）\n得獎紀錄：（音樂獎項、提名等）\n影響評價：（樂評人評價、文化影響、歷史地位等）\n翻唱引用：（知名翻唱版本、影視/廣告/遊戲等中的使用）\n趣聞軼事：（與歌曲相關的冷知識、軼事、趣聞等）\n\n要求：\n- 資訊盡量準確詳實，避免杜撰，不確定的標註「據傳」或「待考證」。\n- 若有多位歌手或多個版本，以原唱或最知名版本為主，必要時補充其他版本。\n- 每項內容盡量詳細展開，不要過於簡略。\n- 絕對禁止輸出開場白、問候語、自我介紹，禁止使用序號編號。\n- 必須使用繁體中文回答。",
                 clean_name
             ),
             UiLanguage::En => format!(
-                "Compile detailed information about the song based on its title. Do NOT output any preamble, greeting, or self-introduction. Output the song information directly.\n\nSong Title: {}\n\nOutput in the following structure with detailed descriptions. If any item cannot be verified, write \"No public information available\":\n\nPerformers: (including lead vocals, backing vocals, featured artists, etc.)\nArtist Details: (including nationality, birthplace, date of birth, zodiac sign, blood type, height, weight, occupation, alma mater, notable works, major achievements, etc.)\nSongwriting & Production: (lyricist, composer, arranger, producer, full creative team)\nRelease Date: (specific date; list different versions separately if applicable)\nAlbum: (album name, track number, album track listing)\nCreative Background: (detailed description of inspiration, behind-the-scenes stories, interesting anecdotes during creation)\nSong Meaning: (in-depth interpretation of lyrics, emotions and themes expressed)\nMusical Style: (genre, BPM, key, rhythm characteristics, special arrangements or instruments)\nCommercial Performance: (chart positions, sales, streaming numbers, certifications)\nAwards & Nominations: (music awards, nominations)\nImpact & Reviews: (critic reviews, cultural impact, historical significance)\nCovers & Usage: (notable cover versions, usage in films/ads/games/etc.)\nFun Facts: (trivia, anecdotes related to the song)\n\nRequirements:\n- Keep information as accurate and detailed as possible; avoid fabrication. Mark uncertain info as \"Reportedly\" or \"Unverified\".\n- If multiple singers or versions exist, prioritize the original or most well-known version, and supplement with others.\n- Elaborate on each item in detail rather than being too brief.\n- Absolutely NO preamble, greeting, or self-introduction. Do NOT use numbered lists.\n- You MUST respond in English.",
+                "Compile detailed information about the song based on its title. Do NOT output any preamble, greeting, or self-introduction. Output the song information directly.\n\nSong Title: {}\n\nOutput in the following structure with detailed descriptions. If any item cannot be verified, write \"No public information available\":\n\nPerformers: (including lead vocals, backing vocals, featured artists, etc.)\nArtist Details: (including nationality, birthplace, date of birth, zodiac sign, blood type, height, weight, occupation, alma mater, notable works, major achievements, etc.)\nSongwriting & Production: (lyricist, composer, arranger, producer, full creative team)\nRelease Date: (specific date; list different versions separately if applicable)\nAlbum: (album name, track number, album track listing)\nCreative Background: (detailed description of inspiration, behind-the-scenes stories, interesting anecdotes during creation)\nLyrics Meaning: (in-depth interpretation of lyrics, emotions and themes expressed)\nMusical Style: (genre, BPM, key, rhythm characteristics, special arrangements or instruments)\nCommercial Performance: (chart positions, sales, streaming numbers, certifications)\nAwards & Nominations: (music awards, nominations)\nImpact & Reviews: (critic reviews, cultural impact, historical significance)\nCovers & Usage: (notable cover versions, usage in films/ads/games/etc.)\nAnecdotes: (trivia, anecdotes related to the song)\n\nRequirements:\n- Keep information as accurate and detailed as possible; avoid fabrication. Mark uncertain info as \"Reportedly\" or \"Unverified\".\n- If multiple singers or versions exist, prioritize the original or most well-known version, and supplement with others.\n- Elaborate on each item in detail rather than being too brief.\n- Absolutely NO preamble, greeting, or self-introduction. Do NOT use numbered lists.\n- You MUST respond in English.",
                 clean_name
             ),
             UiLanguage::Ja => format!(
-                "楽曲名に基づいて楽曲の詳細情報を整理してください。冒頭の挨拶や自己紹介は一切出力せず、直接楽曲情報を出力してください。\n\n楽曲名：{}\n\n以下の構成で各項目を詳しく記述してください。取得できない項目は「公開情報なし」と記載してください。\n\n歌手：（メインボーカル、コーラス、フィーチャリングアーティストなど）\n歌手詳細：（国籍、出身地、生年月日、星座、血液型、身長、体重、職業、卒業校、代表作、主な受賞歴など）\n作詞・作曲・制作：（作詞、作曲、編曲、プロデューサーなど完全な制作チーム）\nリリース日：（具体的な日付、異なるバージョンがあればそれぞれ記載）\n収録アルバム：（アルバム名、トラック番号、アルバム収録曲一覧）\n制作背景：（インスピレーションの源泉、舞台裏のエピソード、制作中の逸話などを詳しく）\n楽曲の意味：（歌詞の解釈、表現されている感情とテーマを深く考察）\n音楽スタイル：（ジャンル、BPM、キー、リズムの特徴、特殊なアレンジや楽器使用など）\n商業成績：（チャート順位、売上、再生回数、認定など）\n受賞・ノミネート：（音楽賞、ノミネーションなど）\n影響と評価：（評論家の評価、文化的影響、歴史的意義など）\nカバーと使用例：（有名なカバーバージョン、映画/CM/ゲームなどでの使用）\n面白い事実：（楽曲にまつわるトリビア、逸話など）\n\n要求：\n- 情報はできるだけ正確かつ詳細にし、捏造を避けてください。不確かな情報は「伝聞」や「未確認」と記載してください。\n- 複数の歌手やバージョンがある場合は、原曲または最も有名な版を優先し、必要に応じて補足してください。\n- 各項目を簡略にせず、できるだけ詳しく記述してください。\n- 冒頭の挨拶や自己紹介は絶対に出力せず、番号付きリストの使用も禁止します。\n- 必ず日本語で回答してください。",
+                "楽曲名に基づいて楽曲の詳細情報を整理してください。冒頭の挨拶や自己紹介は一切出力せず、直接楽曲情報を出力してください。\n\n楽曲名：{}\n\n以下の構成で各項目を詳しく記述してください。取得できない項目は「公開情報なし」と記載してください。\n\n歌手：（メインボーカル、コーラス、フィーチャリングアーティストなど）\n歌手詳細：（国籍、出身地、生年月日、星座、血液型、身長、体重、職業、卒業校、代表作、主な受賞歴など）\n作詞・作曲・制作：（作詞、作曲、編曲、プロデューサーなど完全な制作チーム）\nリリース日：（具体的な日付、異なるバージョンがあればそれぞれ記載）\n収録アルバム：（アルバム名、トラック番号、アルバム収録曲一覧）\n制作背景：（インスピレーションの源泉、舞台裏のエピソード、制作中の逸話などを詳しく）\n歌詞の大意：（歌詞の解釈、表現されている感情とテーマを深く考察）\n音楽スタイル：（ジャンル、BPM、キー、リズムの特徴、特殊なアレンジや楽器使用など）\n商業成績：（チャート順位、売上、再生回数、認定など）\n受賞・ノミネート：（音楽賞、ノミネーションなど）\n影響と評価：（評論家の評価、文化的影響、歴史的意義など）\nカバーと使用例：（有名なカバーバージョン、映画/CM/ゲームなどでの使用）\n興味深い逸話：（楽曲にまつわるトリビア、逸話など）\n\n要求：\n- 情報はできるだけ正確かつ詳細にし、捏造を避けてください。不確かな情報は「伝聞」や「未確認」と記載してください。\n- 複数の歌手やバージョンがある場合は、原曲または最も有名な版を優先し、必要に応じて補足してください。\n- 各項目を簡略にせず、できるだけ詳しく記述してください。\n- 冒頭の挨拶や自己紹介は絶対に出力せず、番号付きリストの使用も禁止します。\n- 必ず日本語で回答してください。",
                 clean_name
             ),
             UiLanguage::Ko => format!(
-                "곡명을 바탕으로 해당 곡의 상세 정보를 정리해 주세요. 서론, 인사말, 자기소개를 절대 출력하지 말고 곡 정보를 직접 출력해 주세요.\n\n곡명: {}\n\n아래 구조로 각 항목을 자세히 서술해 주세요. 확인할 수 없는 항목은 \"공개 자료 없음\"으로 표시해 주세요.\n\n가수：（메인 보컬, 백보컬, 피처링 아티스트 등）\n가수 상세：（국적, 출생지, 생년월일, 별자리, 혈액형, 키, 몸무게, 직업, 졸업 학교, 대표작, 주요 수상 경력 등）\n작사·작곡·제작：（작사, 작곡, 편곡, 프로듀서 등 전체 크리에이티브 팀）\n발매일：（구체적인 날짜, 다른 버전이 있으면 각각 표기）\n수록 앨범：（앨범명, 트랙 번호, 앨범 트랙 목록）\n창작 배경：（영감의 원천, 비하인드 스토리, 제작 중 에피소드 등 상세히）\n곡의 의미：（가사 해석, 표현된 감정과 주제를 깊이 있게 분석）\n음악 스타일：（장르, BPM, 조성, 리듬 특징, 특수 편곡이나 악기 사용 등）\n상업 성적：（차트 순위, 판매량, 스트리밍 수, 인증 등）\n수상 및 후보：（음악상, 후보 지명 등）\n영향과 평가：（평론가 평가, 문화적 영향, 역사적 의의 등）\n커버 및 사용：（유명한 커버 버전, 영화/광고/게임 등에서의 사용）\n흥미로운 사실：（곡과 관련된 트리비아, 일화 등）\n\n요구사항：\n- 정보는 최대한 정확하고 상세하게 작성하며, 지어내지 마세요. 불확실한 정보는 \"전해짐\" 또는 \"미확인\"으로 표시하세요.\n- 여러 가수나 버전이 있으면 원곡 또는 가장 널리 알려진 버전을 우선하고, 필요하면 보충하세요.\n- 각 항목을 너무 간단히 하지 말고 최대한 자세히 서술해 주세요.\n- 서론, 인사말, 자기소개는 절대 출력하지 말고, 번호 매기기 목록 사용도 금지합니다.\n- 반드시 한국어로 답변해 주세요.",
+                "곡명을 바탕으로 해당 곡의 상세 정보를 정리해 주세요. 서론, 인사말, 자기소개를 절대 출력하지 말고 곡 정보를 직접 출력해 주세요.\n\n곡명: {}\n\n아래 구조로 각 항목을 자세히 서술해 주세요. 확인할 수 없는 항목은 \"공개 자료 없음\"으로 표시해 주세요.\n\n가수：（메인 보컬, 백보컬, 피처링 아티스트 등）\n가수 상세：（국적, 출생지, 생년월일, 별자리, 혈액형, 키, 몸무게, 직업, 졸업 학교, 대표작, 주요 수상 경력 등）\n작사·작곡·제작：（작사, 작곡, 편곡, 프로듀서 등 전체 크리에이티브 팀）\n발매일：（구체적인 날짜, 다른 버전이 있으면 각각 표기）\n수록 앨범：（앨범명, 트랙 번호, 앨범 트랙 목록）\n창작 배경：（영감의 원천, 비하인드 스토리, 제작 중 에피소드 등 상세히）\n가사 개요：（가사 해석, 표현된 감정과 주제를 깊이 있게 분석）\n음악 스타일：（장르, BPM, 조성, 리듬 특징, 특수 편곡이나 악기 사용 등）\n상업 성적：（차트 순위, 판매량, 스트리밍 수, 인증 등）\n수상 및 후보：（음악상, 후보 지명 등）\n영향과 평가：（평론가 평가, 문화적 영향, 역사적 의의 등）\n커버 및 사용：（유명한 커버 버전, 영화/광고/게임 등에서의 사용）\n흥미로운 이야기：（곡과 관련된 트리비아, 일화 등）\n\n요구사항：\n- 정보는 최대한 정확하고 상세하게 작성하며, 지어내지 마세요. 불확실한 정보는 \"전해짐\" 또는 \"미확인\"으로 표시하세요.\n- 여러 가수나 버전이 있으면 원곡 또는 가장 널리 알려진 버전을 우선하고, 필요하면 보충하세요.\n- 각 항목을 너무 간단히 하지 말고 최대한 자세히 서술해 주세요.\n- 서론, 인사말, 자기소개는 절대 출력하지 말고, 번호 매기기 목록 사용도 금지합니다.\n- 반드시 한국어로 답변해 주세요.",
                 clean_name
             ),
         }
@@ -805,27 +815,15 @@ impl UserInterface {
 
     /// 启动后台查询 AI 歌曲信息
     fn start_fetch_song_info_for_current_song(&mut self, song_name: &str) {
-        let Some(api_key) = self.resolved_deepseek_api_key() else {
-            self.song_info_loading = false;
-            self.song_info_rx = None;
-            self.song_info_content = self
-                .i18n(
-                    "未设置 DEEPSEEK_API_KEY，请按 i 或 k 输入并保存。",
-                    "未設定 DEEPSEEK_API_KEY，請按 i 或 k 輸入並儲存。",
-                    "DEEPSEEK_API_KEY is not set. Press i or k to input and save it.",
-                    "DEEPSEEK_API_KEY が未設定です。i または k で入力して保存してください。",
-                    "DEEPSEEK_API_KEY가 설정되지 않았습니다. i 또는 k로 입력 후 저장하세요."
-                )
-                .to_string();
-            return;
-        };
-
-        std::env::set_var("DEEPSEEK_API_KEY", &api_key);
-
         self.song_info_loading = true;
         self.song_info_content.clear();
         let prompt = self.build_song_info_prompt(song_name);
-        self.song_info_rx = Some(crate::search::fetch_song_info_streaming(prompt));
+        let config = crate::search::AiQueryConfig {
+            api_base_url: self.api_base_url.clone(),
+            api_key: self.resolved_api_key().unwrap_or_default(),
+            api_model: self.api_model.clone(),
+        };
+        self.song_info_rx = Some(crate::search::fetch_song_info_streaming(prompt, config));
     }
 
     /// 非阻塞检查 AI 歌曲信息查询结果
@@ -849,11 +847,11 @@ impl UserInterface {
                                 ),
                                 err,
                                 self.i18n(
-                                    "提示：可按 i 或 k 输入 DEEPSEEK_API_KEY 并保存配置。",
-                                    "提示：可按 i 或 k 輸入 DEEPSEEK_API_KEY 並儲存設定。",
-                                    "Tip: Press i or k to input DEEPSEEK_API_KEY and save config.",
-                                    "ヒント: i または k で DEEPSEEK_API_KEY を入力して保存できます。",
-                                    "팁: i 또는 k를 눌러 DEEPSEEK_API_KEY를 입력하고 저장할 수 있습니다."
+                                    "提示：可按 k 配置自定义 API 接口。",
+                                    "提示：可按 k 設定自訂 API 接口。",
+                                    "Tip: Press k to configure custom API endpoint.",
+                                    "ヒント: k でカスタム API エンドポイントを設定できます。",
+                                    "팁: k를 눌러 커스텀 API 엔드포인트를 설정할 수 있습니다."
                                 )
                             );
                             break;
@@ -1005,13 +1003,30 @@ impl UserInterface {
 
         // 输入模式下，将光标定位到输入位置
         if self.api_key_input_mode {
-            let prompt_text = self.i18n(
-                "输入DEEPSEEK_API_KEY: ",
-                "輸入DEEPSEEK_API_KEY: ",
-                "Input DEEPSEEK_API_KEY: ",
-                "DEEPSEEK_API_KEY を入力: ",
-                "DEEPSEEK_API_KEY 입력: "
-            );
+            let prompt_text = match self.api_input_step {
+                0 => self.i18n(
+                    "输入接口地址: ",
+                    "輸入接口地址: ",
+                    "Input API URL: ",
+                    "API URLを入力: ",
+                    "API URL 입력: "
+                ),
+                1 => self.i18n(
+                    "输入API_KEY: ",
+                    "輸入API_KEY: ",
+                    "Input API_KEY: ",
+                    "API_KEYを入力: ",
+                    "API_KEY 입력: "
+                ),
+                2 => self.i18n(
+                    "输入模型名称: ",
+                    "輸入模型名稱: ",
+                    "Input model name: ",
+                    "モデル名を入力: ",
+                    "모델명 입력: "
+                ),
+                _ => "",
+            };
             let prompt_len = unicode_width::UnicodeWidthStr::width(prompt_text);
             let value_len = unicode_width::UnicodeWidthStr::width(self.api_key_input_value.as_str());
             let left_width = (self.terminal_width as f32 * 0.50) as u16;
@@ -1691,19 +1706,44 @@ impl UserInterface {
             )?;
         }
 
-        // 绘制右侧标题（歌词/评论/API Key输入）
+        // 绘制右侧标题（歌词/评论/API 配置输入）
         let lyrics_title = if self.api_key_input_mode {
-            format!(
-                "{}{}",
-                self.i18n(
-                    "输入DEEPSEEK_API_KEY: ",
-                    "輸入DEEPSEEK_API_KEY: ",
-                    "Input DEEPSEEK_API_KEY: ",
-                    "DEEPSEEK_API_KEY を入力: ",
-                    "DEEPSEEK_API_KEY 입력: "
+            match self.api_input_step {
+                0 => format!(
+                    "{}{}",
+                    self.i18n(
+                        "输入接口地址: ",
+                        "輸入接口地址: ",
+                        "Input API URL: ",
+                        "API URLを入力: ",
+                        "API URL 입력: "
+                    ),
+                    self.api_key_input_value
                 ),
-                self.api_key_input_value
-            )
+                1 => format!(
+                    "{}{}",
+                    self.i18n(
+                        "输入API_KEY: ",
+                        "輸入API_KEY: ",
+                        "Input API_KEY: ",
+                        "API_KEYを入力: ",
+                        "API_KEY 입력: "
+                    ),
+                    self.api_key_input_value
+                ),
+                2 => format!(
+                    "{}{}",
+                    self.i18n(
+                        "输入模型名称: ",
+                        "輸入模型名稱: ",
+                        "Input model name: ",
+                        "モデル名を入力: ",
+                        "모델명 입력: "
+                    ),
+                    self.api_key_input_value
+                ),
+                _ => self.api_key_input_value.clone(),
+            }
         } else if self.comments_mode {
             match self.language {
                 UiLanguage::ZhCn => format!("歌曲评论 共{}条（第{}页）", self.comments_total, self.comments_page),
@@ -1877,7 +1917,7 @@ impl UserInterface {
                 "→ c           显示歌曲评论".to_string(),
                 "→ l           切换界面语言".to_string(),
                 "→ t           切换界面主题".to_string(),
-                "→ k           设置API Key".to_string(),
+                "→ k           配置API接口".to_string(),
                 "→ q           退出音乐程序".to_string(),
                 "".to_string(),
                 "§播放模式".to_string(),
@@ -1924,7 +1964,7 @@ impl UserInterface {
                 "→ c           顯示歌曲評論".to_string(),
                 "→ l           切換界面語言".to_string(),
                 "→ t           切換界面主題".to_string(),
-                "→ k           設定API Key".to_string(),
+                "→ k           設定API接口".to_string(),
                 "→ q           退出音樂程式".to_string(),
                 "".to_string(),
                 "§播放模式".to_string(),
@@ -1971,7 +2011,7 @@ impl UserInterface {
                 "→ c           Song comments".to_string(),
                 "→ l           Switch language".to_string(),
                 "→ t           Switch theme".to_string(),
-                "→ k           Set API Key".to_string(),
+                "→ k           Configure API".to_string(),
                 "→ q           Quit".to_string(),
                 "".to_string(),
                 "§Play Modes".to_string(),
@@ -2018,7 +2058,7 @@ impl UserInterface {
                 "→ c           曲のコメント".to_string(),
                 "→ l           言語切替".to_string(),
                 "→ t           テーマ切替".to_string(),
-                "→ k           API Key 設定".to_string(),
+                "→ k           API 設定".to_string(),
                 "→ q           終了".to_string(),
                 "".to_string(),
                 "§再生モード".to_string(),
@@ -2065,7 +2105,7 @@ impl UserInterface {
                 "→ c           곡 댓글".to_string(),
                 "→ l           언어 전환".to_string(),
                 "→ t           테마 전환".to_string(),
-                "→ k           API Key 설정".to_string(),
+                "→ k           API 설정".to_string(),
                 "→ q           종료".to_string(),
                 "".to_string(),
                 "§재생 모드".to_string(),
@@ -2809,48 +2849,63 @@ impl UserInterface {
 
     /// 处理键盘事件
     fn handle_key_event(&mut self, code: KeyCode) -> io::Result<()> {
-        // DeepSeek API Key 输入模式
+        // API 配置输入模式（三步：接口地址 → API Key → 模型名称）
         if self.api_key_input_mode {
             match code {
                 KeyCode::Esc => {
                     self.api_key_input_mode = false;
                     self.api_key_input_for_song_info = false;
+                    self.api_input_step = 0;
                     self.api_key_input_value.clear();
                     self.cached_lyrics_title = None;
                 }
                 KeyCode::Enter => {
-                    let key = self.api_key_input_value.trim().to_string();
-                    self.deepseek_api_key = key.clone();
+                    let value = self.api_key_input_value.trim().to_string();
+                    match self.api_input_step {
+                        0 => {
+                            // 步骤1：保存接口地址，进入 API Key 输入
+                            self.api_base_url = if value.is_empty() {
+                                "https://api.deepseek.com/".to_string()
+                            } else {
+                                // 确保以 / 结尾
+                                if value.ends_with('/') { value } else { format!("{}/", value) }
+                            };
+                            self.api_input_step = 1;
+                            self.api_key_input_value = self.resolved_api_key().unwrap_or_default();
+                            self.cached_lyrics_title = None;
+                        }
+                        1 => {
+                            // 步骤2：保存 API Key，进入模型名称输入
+                            self.api_key = value.clone();
+                            if value.is_empty() {
+                                std::env::remove_var("DEEPSEEK_API_KEY");
+                            } else {
+                                std::env::set_var("DEEPSEEK_API_KEY", &value);
+                            }
+                            self.api_input_step = 2;
+                            self.api_key_input_value = self.api_model.clone();
+                            self.cached_lyrics_title = None;
+                        }
+                        2 => {
+                            // 步骤3：保存模型名称，完成配置
+                            self.api_model = if value.is_empty() {
+                                "deepseek-v4-flash".to_string()
+                            } else {
+                                value
+                            };
+                            self.save_config_now();
+                            let continue_song_info = self.api_key_input_for_song_info;
+                            self.api_key_input_mode = false;
+                            self.api_key_input_for_song_info = false;
+                            self.api_input_step = 0;
+                            self.api_key_input_value.clear();
+                            self.cached_lyrics_title = None;
 
-                    if key.is_empty() {
-                        std::env::remove_var("DEEPSEEK_API_KEY");
-                        self.update_status(self.i18n(
-                            "已清空 DEEPSEEK_API_KEY 配置",
-                            "已清空 DEEPSEEK_API_KEY 設定",
-                            "DEEPSEEK_API_KEY has been cleared",
-                            "DEEPSEEK_API_KEY をクリアしました",
-                            "DEEPSEEK_API_KEY를 비웠습니다"
-                        ));
-                    } else {
-                        std::env::set_var("DEEPSEEK_API_KEY", &key);
-                        self.update_status(self.i18n(
-                            "DEEPSEEK_API_KEY 已保存",
-                            "DEEPSEEK_API_KEY 已儲存",
-                            "DEEPSEEK_API_KEY saved",
-                            "DEEPSEEK_API_KEY を保存しました",
-                            "DEEPSEEK_API_KEY 저장 완료"
-                        ));
-                    }
-
-                    self.save_config_now();
-                    let continue_song_info = self.api_key_input_for_song_info;
-                    self.api_key_input_mode = false;
-                    self.api_key_input_for_song_info = false;
-                    self.api_key_input_value.clear();
-                    self.cached_lyrics_title = None;
-
-                    if continue_song_info && !key.is_empty() {
-                        self.start_song_info_mode_for_current_song();
+                            if continue_song_info {
+                                self.start_song_info_mode_for_current_song();
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 KeyCode::Backspace => {
@@ -3313,15 +3368,11 @@ impl UserInterface {
                 self.comments_loading = false;
             }
             KeyCode::Char('i') | KeyCode::Char('I') => {
-                // i：若未配置 DeepSeek Key，先进入输入模式；已配置则直接查询
-                if self.resolved_deepseek_api_key().is_none() {
-                    self.open_api_key_input_mode(true);
-                } else {
-                    self.start_song_info_mode_for_current_song();
-                }
+                // i：直接查询歌曲信息（有 DeepSeek Key 用 DeepSeek，否则用 OpenRouter 免费模型）
+                self.start_song_info_mode_for_current_song();
             }
             KeyCode::Char('k') | KeyCode::Char('K') => {
-                // k：进入 DeepSeek API Key 输入模式
+                // k：进入 API 配置输入模式（接口地址 → API Key → 模型名称）
                 self.open_api_key_input_mode(false);
             }
             KeyCode::Char('l') | KeyCode::Char('L') => {
@@ -4276,14 +4327,46 @@ impl UserInterface {
         self.cached_lyrics_title = None;
     }
 
-    /// 设置 DeepSeek API Key（从配置加载）
-    pub fn set_deepseek_api_key(&mut self, key: String) {
-        self.deepseek_api_key = key.trim().to_string();
+    /// 设置 API Key（从配置加载）
+    pub fn set_api_key(&mut self, key: String) {
+        self.api_key = key.trim().to_string();
     }
 
-    /// 获取 DeepSeek API Key（保存到配置）
-    pub fn get_deepseek_api_key(&self) -> String {
-        self.deepseek_api_key.clone()
+    /// 设置 API 接口地址（从配置加载）
+    pub fn set_api_base_url(&mut self, url: String) {
+        let url = url.trim().to_string();
+        self.api_base_url = if url.is_empty() {
+            "https://api.deepseek.com/".to_string()
+        } else if url.ends_with('/') {
+            url
+        } else {
+            format!("{}/", url)
+        };
+    }
+
+    /// 设置 API 模型名称（从配置加载）
+    pub fn set_api_model(&mut self, model: String) {
+        let model = model.trim().to_string();
+        self.api_model = if model.is_empty() {
+            "deepseek-v4-flash".to_string()
+        } else {
+            model
+        };
+    }
+
+    /// 获取 API Key（保存到配置）
+    pub fn get_api_key(&self) -> String {
+        self.api_key.clone()
+    }
+
+    /// 获取 API 接口地址（保存到配置）
+    pub fn get_api_base_url(&self) -> String {
+        self.api_base_url.clone()
+    }
+
+    /// 获取 API 模型名称（保存到配置）
+    pub fn get_api_model(&self) -> String {
+        self.api_model.clone()
     }
 
     /// 获取当前语言配置键
@@ -4306,7 +4389,9 @@ impl UserInterface {
             dir_history: self.dir_history.clone(),
             theme: self.get_theme_key().to_string(),
             language: self.get_language_key().to_string(),
-            deepseek_api_key: self.deepseek_api_key.clone(),
+            api_key: self.api_key.clone(),
+            api_base_url: self.api_base_url.clone(),
+            api_model: self.api_model.clone(),
         };
 
         new_config.save();

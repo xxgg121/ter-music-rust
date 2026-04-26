@@ -52,11 +52,12 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 - **온라인 다운로드**: 온라인 검색 결과 선택 후 `Enter`로 현재 음악 디렉터리에 다운로드(진행률 표시)
 
 ### 🤖 곡 정보
-- **스마트 조회**: `i` 키로 DeepSeek AI를 사용하여 현재 곡의 상세 정보 조회
+- **스마트 조회**: `i` 키로 현재 곡의 상세 정보를 조회, 모든 OpenAI 호환 API 지원
 - **스트리밍 출력**: 조회 결과가 글자 단위로 스트리밍 표시되어 전체 생성 대기 불필요
-- **풍부한 정보**: 가수 상세, 작사작곡, 수록 앨범(트랙 목록 포함), 창작 배경, 곡의 의미, 음악 스타일 등 13개 항목 제공
+- **풍부한 정보**: 가수 상세, 작사작곡, 수록 앨범(트랙 목록 포함), 창작 배경, 가사 의미, 음악 스타일, 흥미로운 이야기 13개 항목 제공
 - **다국어 지원**: 응답 언어가 UI 언어 설정을 따름(간체/번체/영/일/한)
-- **API Key 설정**: `k` 키로 DeepSeek API Key 입력, 환경 변수 `DEEPSEEK_API_KEY`로도 설정 가능
+- **커스텀 API**: `k` 키로 3단계 설정(API 베이스 URL → API Key → 모델명) — DeepSeek, OpenRouter, AIHubMix 등 모든 OpenAI 호환 엔드포인트 지원
+- **무료 폴백**: API Key 미설정 시 OpenRouter 무료 모델(minimax/minimax-m2.5:free) 자동 사용
 
 ### ⭐ 즐겨찾기
 - **추가/해제**: `f` 키로 현재 곡 즐겨찾기 상태 전환
@@ -123,7 +124,9 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 | `volume` | 볼륨 (0-100) |
 | `favorites` | 즐겨찾기 목록 |
 | `dir_history` | 디렉터리 기록 |
-| `deepseek_api_key` | DeepSeek API Key(곡 정보 조회용) |
+| `api_key` | API Key(곡 정보 조회용, 기존 필드 `deepseek_api_key`와 호환) |
+| `api_base_url` | API 베이스 URL(기본값: `https://api.deepseek.com/`) |
+| `api_model` | AI 모델명(기본값: `deepseek-v4-flash`) |
 | `theme` | 테마 이름 |
 | `language` | UI 언어 (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
 
@@ -208,7 +211,7 @@ cargo run --release -- -o d:\Music
 | `c` | 곡 댓글 보기 |
 | `l` | UI 언어 전환 |
 | `t` | 테마 전환 |
-| `k` | API Key 입력 |
+| `k` | API 엔드포인트 설정 |
 | `q` | 종료 |
 
 ### 검색 화면
@@ -634,22 +637,42 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 
 ### 곡 정보 조회 실패
 
-- `DEEPSEEK_API_KEY`가 설정되어 있는지 확인(`k` 키로 입력 또는 환경 변수 설정)
-- DeepSeek API Key는 [platform.deepseek.com](https://platform.deepseek.com/)에서 취득 가능
-- DeepSeek API 네트워크 연결 상태 확인
+- API Key 미설정 시 OpenRouter 무료 모델이 자동 사용되므로 수동 설정 불필요
+- 커스텀 엔드포인트를 사용하려면 `k` 키로 API 베이스 URL, API Key, 모델명을 순서대로 입력
+- 모든 OpenAI 호환 API 지원(DeepSeek, OpenRouter, AIHubMix 등)
+- 해당 API 서비스에 대한 네트워크 연결 상태 확인
 
 ### 첫 빌드가 느림
 
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604250439321664_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604250439406264_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604250439455800_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260426074922321_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604260749346646_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604260749443146_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604260750051351_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 변경 로그
+
+## 버전 1.3.0 (2026-04-26)
+
+### 🎉 신규 기능
+
+#### 커스텀 AI API 엔드포인트
+- ✨ **OpenAI 호환 API**: 모든 OpenAI 호환 API로 곡 정보 조회 지원(DeepSeek, OpenRouter, OpenAI 등)
+- ✨ **3단계 설정**: `k` 키로 API 베이스 URL → API Key → 모델명 순서대로 입력
+- ✨ **무료 폴백**: API Key 미설정 시 OpenRouter 무료 모델(minimax/minimax-m2.5:free) 자동 사용
+- ✨ **직접 조회**: `i` 키로 사전 API Key 설정 없이 곡 정보 바로 조회 가능
+
+### 🔧 기능 개선
+
+- 🔍 **프롬프트 최적화**: "곡의 의미" → "가사 의미", "흥미로운 사실" → "흥미로운 일화"로 변경
+- 🔍 **설정 필드명 변경**: `deepseek_api_key` → `api_key`(기존 설정 파일과 호환)
+- 🔍 **신규 설정 항목**: `api_base_url`(API 엔드포인트, 기본값 DeepSeek), `api_model`(모델명, 기본값 deepseek-v4-flash)
+
+---
 
 ## 버전 1.2.0 (2026-04-24)
 

@@ -289,27 +289,33 @@ if [[ -d /usr/share/deepin/applications ]]; then
 fi
 
 # Remove desktop file from all users' Desktop directories
+_remove_from_desktop() {
+  local home_dir="$1"
+  local username
+  username="$(basename "$home_dir")"
+
+  local desktop_dir
+  if command -v sudo >/dev/null 2>&1 && id "$username" >/dev/null 2>&1; then
+    desktop_dir="$(sudo -u "$username" XDG_RUNTIME_DIR="/run/user/$(id -u "$username")" xdg-user-dir DESKTOP 2>/dev/null || true)"
+  fi
+
+  if [[ -z "$desktop_dir" || ! -d "$desktop_dir" ]]; then
+    for dir_name in Desktop 桌面; do
+      if [[ -d "$home_dir/$dir_name" ]]; then
+        desktop_dir="$home_dir/$dir_name"
+        break
+      fi
+    done
+  fi
+
+  if [[ -n "$desktop_dir" && -d "$desktop_dir" ]]; then
+    rm -f "$desktop_dir/${PKG_NAME}.desktop" 2>/dev/null || true
+  fi
+}
+
 while IFS=: read -r username _ uid _ _ home_dir _; do
   if [[ "$uid" -ge 1000 && -d "$home_dir" ]]; then
-    # Try xdg-user-dir first
-    local desktop_dir
-    if command -v sudo >/dev/null 2>&1 && id "$username" >/dev/null 2>&1; then
-      desktop_dir="$(sudo -u "$username" XDG_RUNTIME_DIR="/run/user/$(id -u "$username")" xdg-user-dir DESKTOP 2>/dev/null || true)"
-    fi
-
-    # Fallback to common Desktop directory names
-    if [[ -z "$desktop_dir" || ! -d "$desktop_dir" ]]; then
-      for dir_name in Desktop 桌面; do
-        if [[ -d "$home_dir/$dir_name" ]]; then
-          desktop_dir="$home_dir/$dir_name"
-          break
-        fi
-      done
-    fi
-
-    if [[ -n "$desktop_dir" && -d "$desktop_dir" ]]; then
-      rm -f "$desktop_dir/${PKG_NAME}.desktop" 2>/dev/null || true
-    fi
+    _remove_from_desktop "$home_dir"
   fi
 done </etc/passwd
 

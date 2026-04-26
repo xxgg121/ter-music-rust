@@ -52,11 +52,12 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 - **オンラインダウンロード**: オンライン検索結果を選択して `Enter` で現在ディレクトリへ保存（進捗表示あり）
 
 ### 🤖 楽曲情報
-- **スマート検索**: `i` キーで DeepSeek を使用して現在の楽曲の詳細情報を検索
+- **スマート検索**: `i` キーで現在の楽曲の詳細情報を検索、任意の OpenAI 互換 API に対応
 - **ストリーミング出力**: 検索結果が1文字ずつストリーミング表示され、全生成の待機不要
-- **豊富な情報**: 歌手詳細、作詞作曲、収録アルバム（トラックリスト付き）、制作背景、楽曲の意味、音楽スタイルなど13項目をカバー
+- **豊富な情報**: 歌手詳細、作詞作曲、収録アルバム（トラックリスト付き）、制作背景、歌詞の意味、音楽スタイル、興味深い逸話13項目をカバー
 - **多言語対応**: 応答言語が UI 言語設定に追従（簡中/繁中/英/日/韓）
-- **API Key 設定**: `k` キーで DeepSeek API Key を入力、環境変数 `DEEPSEEK_API_KEY` でも設定可能
+- **カスタム API**: `k` キーで3ステップ設定（API ベース URL → API Key → モデル名）— DeepSeek、OpenRouter、AIHubMix など任意の OpenAI 互換エンドポイントに対応
+- **無料フォールバック**: API Key 未設定時は OpenRouter の無料モデル（minimax/minimax-m2.5:free）を自動使用
 
 ### ⭐ お気に入り
 - **追加/削除**: `f` で現在曲のお気に入り状態を切り替え
@@ -123,7 +124,9 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 | `volume` | 音量 (0-100) |
 | `favorites` | お気に入り一覧 |
 | `dir_history` | ディレクトリ履歴 |
-| `deepseek_api_key` | DeepSeek API Key（楽曲情報検索用） |
+| `api_key` | API Key（楽曲情報検索用、旧フィールド `deepseek_api_key` と互換） |
+| `api_base_url` | API ベース URL（デフォルト: `https://api.deepseek.com/`） |
+| `api_model` | AI モデル名（デフォルト: `deepseek-v4-flash`） |
 | `theme` | テーマ名 |
 | `language` | UI 言語（`zh-CN` / `zh-TW` / `en` / `ja` / `ko`） |
 
@@ -208,7 +211,7 @@ cargo run --release -- -o d:\Music
 | `c` | 曲コメント |
 | `l` | UI 言語切り替え |
 | `t` | テーマ切り替え |
-| `k` | API Key 入力 |
+| `k` | API エンドポイント設定 |
 | `q` | 終了 |
 
 ### 検索画面
@@ -634,22 +637,42 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 
 ### 楽曲情報検索失敗
 
-- `DEEPSEEK_API_KEY` が設定されているか確認（`k` キーで入力または環境変数を設定）
-- DeepSeek API Key は [platform.deepseek.com](https://platform.deepseek.com/) で取得可能
-- DeepSeek API へのネットワーク接続を確認
+- API Key 未設定時は OpenRouter の無料モデルが自動使用されるため、手動設定は不要
+- カスタムエンドポイントを使用する場合、`k` キーで API ベース URL、API Key、モデル名を順に入力
+- 任意の OpenAI 互換 API に対応（DeepSeek、OpenRouter、AIHubMix など）
+- 対応する API サービスへのネットワーク接続を確認
 
 ### 初回ビルドが遅い
 
 初回は依存関係のダウンロードとコンパイルが発生するため時間がかかります。2 回目以降は大幅に高速化されます。
 
 ### Release のダウンロード
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604250439321664_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604250439406264_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604250439455800_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260426074922321_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604260749346646_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604260749443146_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604260750051351_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 変更履歴
+
+## バージョン 1.3.0 (2026-04-26)
+
+### 🎉 新機能
+
+#### カスタム AI API エンドポイント
+- ✨ **OpenAI 互換 API**: 任意の OpenAI 互換 API で楽曲情報検索に対応（DeepSeek、OpenRouter、AIHubMix など）
+- ✨ **3ステップ設定**: `k` キーで API ベース URL → API Key → モデル名を順に入力
+- ✨ **無料フォールバック**: API Key 未設定時は OpenRouter の無料モデル（minimax/minimax-m2.5:free）を自動使用
+- ✨ **直接検索**: `i` キーで事前の API Key 設定なしに楽曲情報を検索可能
+
+### 🔧 機能改善
+
+- 🔍 **プロンプト最適化**: 「楽曲の意味」→「歌詞の意味」、「面白い事実」→「興味深い逸話」に変更
+- 🔍 **設定フィールド名変更**: `deepseek_api_key` → `api_key`（既存の設定ファイルと互換）
+- 🔍 **新規設定項目**: `api_base_url`（API エンドポイント、デフォルトは DeepSeek）、`api_model`（モデル名、デフォルトは deepseek-v4-flash）
+
+---
 
 ## バージョン 1.2.0 (2026-04-24)
 

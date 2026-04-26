@@ -16,8 +16,16 @@ fn default_language() -> String {
     "zh-CN".to_string()
 }
 
-fn default_deepseek_api_key() -> String {
+fn default_api_key() -> String {
     String::new()
+}
+
+fn default_api_base_url() -> String {
+    "https://api.deepseek.com/".to_string()
+}
+
+fn default_api_model() -> String {
+    "deepseek-v4-flash".to_string()
 }
 
 /// 应用配置
@@ -43,9 +51,15 @@ pub struct Config {
     /// 界面语言
     #[serde(default = "default_language")]
     pub language: String,
-    /// DeepSeek API Key（可选，未设置时可从环境变量读取）
-    #[serde(default = "default_deepseek_api_key")]
-    pub deepseek_api_key: String,
+    /// API Key（兼容旧配置文件中的 deepseek_api_key 字段）
+    #[serde(default = "default_api_key", alias = "deepseek_api_key")]
+    pub api_key: String,
+    /// API 接口地址（OpenAI 兼容，默认 DeepSeek）
+    #[serde(default = "default_api_base_url")]
+    pub api_base_url: String,
+    /// API 模型名称
+    #[serde(default = "default_api_model")]
+    pub api_model: String,
 }
 
 impl Default for Config {
@@ -59,7 +73,9 @@ impl Default for Config {
             dir_history: Vec::new(),
             theme: default_theme(),
             language: default_language(),
-            deepseek_api_key: default_deepseek_api_key(),
+            api_key: default_api_key(),
+            api_base_url: default_api_base_url(),
+            api_model: default_api_model(),
         }
     }
 }
@@ -81,7 +97,7 @@ impl Config {
             || self.volume != 50
             || self.theme != default_theme()
             || self.language != default_language()
-            || !self.deepseek_api_key.trim().is_empty()
+            || !self.api_key.trim().is_empty()
     }
 
     /// 自动修复常见历史配置错误：相邻字符串项缺少逗号

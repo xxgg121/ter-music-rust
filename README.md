@@ -52,11 +52,12 @@
 - **在线下载**：搜索结果选中后按 `Enter` 下载到当前音乐目录，显示下载进度
 
 ### 🤖 歌曲信息
-- **智能查询**：按 `i` 使用 DeepSeek查询当前歌曲详细信息
+- **智能查询**：按 `i` 查询当前歌曲详细信息，支持任意 OpenAI 兼容接口
 - **流式输出**：查询结果逐字流式显示，无需等待全部生成
-- **丰富信息**：涵盖歌手详情、词曲创作、所属专辑曲目、创作背景、歌曲大意、音乐风格等 13 项分类
+- **丰富信息**：涵盖歌手详情、词曲创作、所属专辑曲目、创作背景、歌词大意、音乐风格、趣闻轶事等 13 项分类
 - **多语言支持**：回复语言跟随界面语言设置（简中/繁中/英/日/韩）
-- **API Key 配置**：按 `k` 输入 DeepSeek API Key，也可通过环境变量 `DEEPSEEK_API_KEY` 设置
+- **自定义接口**：按 `k` 三步配置 API 接口地址、API Key、模型名称，支持 DeepSeek、OpenRouter、AIHubMix 等任意 OpenAI 兼容接口
+- **免费兜底**：未配置 API Key 时自动使用 OpenRouter 免费模型（minimax/minimax-m2.5:free）查询
 
 ### ⭐ 收藏功能
 - **添加/移除收藏**：按 `f` 切换当前歌曲收藏状态
@@ -123,7 +124,9 @@
 | `volume` | 音量大小 (0-100) |
 | `favorites` | 收藏列表 |
 | `dir_history` | 目录历史记录 |
-| `deepseek_api_key` | DeepSeek API Key（歌曲信息查询用） |
+| `api_key` | API Key（歌曲信息查询用，兼容旧字段 `deepseek_api_key`） |
+| `api_base_url` | API 接口地址（默认 `https://api.deepseek.com/`） |
+| `api_model` | AI 模型名称（默认 `deepseek-v4-flash`） |
 | `theme` | 界面主题名称 |
 | `language` | 界面语言（`zh-CN` / `zh-TW` / `en` / `ja` / `ko`） |
 
@@ -207,7 +210,7 @@ cargo run --release -- -o d:\Music
 | `c` | 查看歌曲评论 |
 | `l` | 切换界面语言 |
 | `t` | 切换界面主题 |
-| `k` | 设置API Key |
+| `k` | 配置API 接口 |
 | `q` | 退出音乐程序 |
 
 ### 歌曲搜索按键
@@ -632,22 +635,42 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 
 ### 歌曲信息查询失败
 
-- 确保已设置 `DEEPSEEK_API_KEY`（按 `k` 输入或设置环境变量）
-- DeepSeek API Key 可在 [platform.deepseek.com](https://platform.deepseek.com/) 获取
-- 检查网络连接是否可访问 DeepSeek API
+- 未配置 API Key 时会自动使用 OpenRouter 免费模型，无需手动设置
+- 如需使用自定义接口，按 `k` 依次输入接口地址、API Key、模型名称
+- 支持任何 OpenAI 兼容接口（DeepSeek、OpenRouter、AIHubMix 等）
+- 检查网络连接是否可访问对应 API 服务
 
 ### 首次编译慢
 
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604250439321664_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604250439406264_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604250439455800_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260426074922321_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604260749346646_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604260749443146_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604260750051351_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新日志
+
+## 版本 1.3.0 (2026-04-26)
+
+### 🎉 新功能
+
+#### 自定义 AI 接口
+- ✨ **OpenAI 兼容接口**：支持任意 OpenAI 兼容 API 接口查询歌曲信息（DeepSeek、OpenRouter、AIHubMix 等）
+- ✨ **三步配置**：按 `k` 依次输入接口地址 → API Key → 模型名称，完成自定义接口配置
+- ✨ **免费兜底**：未配置 API Key 时自动使用 OpenRouter 免费模型（minimax/minimax-m2.5:free）查询
+- ✨ **直接查询**：按 `i` 直接查询歌曲信息，无需预先配置 API Key
+
+### 🔧 功能改进
+
+- 🔍 **提示词优化**：「歌曲大意」改为「歌词大意」，「有趣事实」改为「趣闻轶事」
+- 🔍 **配置字段重命名**：`deepseek_api_key` → `api_key`（兼容旧配置文件）
+- 🔍 **新增配置项**：`api_base_url`（接口地址，默认 DeepSeek）、`api_model`（模型名称，默认 deepseek-v4-flash）
+
+---
 
 ## 版本 1.2.0 (2026-04-24)
 

@@ -53,12 +53,13 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 - **Paging**: `PgUp` / `PgDn` for more results
 - **Online download**: press `Enter` on selected online result to download into current music directory (with progress display)
 
-### 🤖 song Info
-- **Smart query**: press `i` to query detailed song information using DeepSeek
+### 🤖 Song Info
+- **Smart query**: press `i` to query detailed song information, supports any OpenAI-compatible API
 - **Streaming output**: results are displayed character by character, no need to wait for full generation
-- **Rich information**: covers 13 categories including artist details, songwriting, album track listing, creative background, song meaning, musical style, and more
+- **Rich information**: covers 13 categories including artist details, songwriting, album track listing, creative background, lyric meaning, musical style, anecdotes, and more
 - **Multi-language support**: response language follows the UI language setting (SC/TC/EN/JP/KR)
-- **API Key configuration**: press `k` to input DeepSeek API Key, or set via `DEEPSEEK_API_KEY` environment variable
+- **Custom API**: press `k` to configure API base URL, API Key, and model name in 3 steps — supports DeepSeek, OpenRouter, AIHubMix, and any OpenAI-compatible endpoint
+- **Free fallback**: automatically uses OpenRouter's free model (minimax/minimax-m2.5:free) when no API Key is configured
 
 ### ⭐ Favorites
 - **Add/remove favorites**: press `f` to toggle favorite state of current track
@@ -125,7 +126,9 @@ Configuration is stored in `USERPROFILE/ter-music-rust/config.json` in the progr
 | `volume` | Volume (0-100) |
 | `favorites` | Favorites list |
 | `dir_history` | Directory history |
-| `deepseek_api_key` | DeepSeek API Key (for song info query) |
+| `api_key` | API Key (for song info query, backward compatible with `deepseek_api_key`) |
+| `api_base_url` | API base URL (default: `https://api.deepseek.com/`) |
+| `api_model` | AI model name (default: `deepseek-v4-flash`) |
 | `theme` | Theme name |
 | `language` | UI language (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
 
@@ -210,7 +213,7 @@ cargo run --release -- -o d:\Music
 | `c` | View song comments |
 | `l` | Switch UI language |
 | `t` | Switch theme |
-| `k` | Input API Key |
+| `k` | Configure API endpoint |
 | `q` | Quit |
 
 ### Search View
@@ -634,24 +637,44 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - Some songs may require VIP access or may be removed
 - Lyric file must be valid standard LRC format
 
-### song info query fails
+### Song info query fails
 
-- Make sure `DEEPSEEK_API_KEY` is set (press `k` or set environment variable)
-- DeepSeek API Key can be obtained at [platform.deepseek.com](https://platform.deepseek.com/)
-- Check network connectivity to DeepSeek API
+- When no API Key is configured, OpenRouter's free model is used automatically — no manual setup needed
+- To use a custom endpoint, press `k` and enter API base URL, API Key, and model name in sequence
+- Supports any OpenAI-compatible API (DeepSeek, OpenRouter, AIHubMix, etc.)
+- Check network connectivity to the corresponding API service
 
 ### Slow first build
 
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604250439321664_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604250439406264_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604250439455800_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260426074922321_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604260749346646_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604260749443146_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604260750051351_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Changelog
+
+## Version 1.3.0 (2026-04-26)
+
+### 🎉 New Features
+
+#### Custom AI API Endpoint
+- ✨ **OpenAI-compatible API**: supports any OpenAI-compatible API for song info queries (DeepSeek, OpenRouter, OpenAI, etc.)
+- ✨ **3-step configuration**: press `k` to enter API base URL → API Key → model name sequentially
+- ✨ **Free fallback**: automatically uses OpenRouter's free model (minimax/minimax-m2.5:free) when no API Key is set
+- ✨ **Direct query**: press `i` to query song info directly — no API Key pre-configuration required
+
+### 🔧 Improvements
+
+- 🔍 **Prompt optimization**: renamed "Song Meaning" → "Lyric Meaning", "Fun Facts" → "Anecdotes"
+- 🔍 **Config field renamed**: `deepseek_api_key` → `api_key` (backward compatible with existing config files)
+- 🔍 **New config items**: `api_base_url` (API endpoint, defaults to DeepSeek), `api_model` (model name, defaults to deepseek-v4-flash)
+
+---
 
 ## Version 1.2.0 (2026-04-24)
 

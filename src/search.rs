@@ -300,20 +300,34 @@ pub fn fetch_song_comments_background(query: String, page: usize, page_size: usi
     rx
 }
 
-/// 在后台线程中查询歌曲详细信息（DeepSeek）- 流式输出
-pub fn fetch_song_info_streaming(prompt: String) -> mpsc::Receiver<SongInfoChunk> {
+/// AI 查询配置
+pub struct AiQueryConfig {
+    /// API 接口地址（如 https://api.deepseek.com/）
+    pub api_base_url: String,
+    /// API Key
+    pub api_key: String,
+    /// 模型名称
+    pub api_model: String,
+}
+
+/// 在后台线程中查询歌曲详细信息（支持自定义 OpenAI 兼容接口 / OpenRouter 免费模型兜底）- 流式输出
+pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc::Receiver<SongInfoChunk> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let api_key = match std::env::var("DEEPSEEK_API_KEY") {
-            Ok(v) if !v.trim().is_empty() => v,
-            _ => {
-                let _ = tx.send(SongInfoChunk {
-                    delta: String::new(),
-                    done: true,
-                    error: Some("未设置 DEEPSEEK_API_KEY 环境变量".to_string()),
-                });
-                return;
-            }
+        // 确定最终的 API URL、模型、认证头
+        // 如果用户未设置 API Key，则使用 OpenRouter 免费模型兜底
+        let (api_url, model, auth_header) = if !config.api_key.trim().is_empty() {
+            // 用户配置了 API Key，使用自定义接口
+            let base = config.api_base_url.trim().trim_end_matches('/');
+            let url = format!("{}/chat/completions", base);
+            (url, config.api_model.trim().to_string(), format!("Bearer {}", config.api_key.trim()))
+        } else {
+            // 无 API Key，使用内置 OpenRouter 免费模型兜底
+            (
+                "https://openrouter.ai/api/v1/chat/completions".to_string(),
+                "minimax/minimax-m2.5:free".to_string(),
+                "Bearer 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".to_string(),
+            )
         };
 
         let client = match reqwest::blocking::Client::builder()
@@ -332,11 +346,11 @@ pub fn fetch_song_info_streaming(prompt: String) -> mpsc::Receiver<SongInfoChunk
             }
         };
 
-        let response = match client
-            .post("https://api.deepseek.com/chat/completions")
-            .bearer_auth(&api_key)
+        let request_builder = client
+            .post(&api_url)
+            .header("Authorization", &auth_header)
             .json(&json!({
-                "model": "deepseek-v4-flash",
+                "model": model,
                 "messages": [
                     {
                         "role": "user",
@@ -345,15 +359,15 @@ pub fn fetch_song_info_streaming(prompt: String) -> mpsc::Receiver<SongInfoChunk
                 ],
                 "temperature": 0.2,
                 "stream": true
-            }))
-            .send()
-        {
+            }));
+
+        let response = match request_builder.send() {
             Ok(r) => r,
             Err(e) => {
                 let _ = tx.send(SongInfoChunk {
                     delta: String::new(),
                     done: true,
-                    error: Some(format!("请求 DeepSeek 失败: {}", e)),
+                    error: Some(format!("请求API接口失败: {}", e)),
                 });
                 return;
             }
@@ -371,7 +385,7 @@ pub fn fetch_song_info_streaming(prompt: String) -> mpsc::Receiver<SongInfoChunk
             let _ = tx.send(SongInfoChunk {
                 delta: String::new(),
                 done: true,
-                error: Some(format!("DeepSeek 接口错误: {}", msg)),
+                error: Some(format!("请求API接口错误: {}", msg)),
             });
             return;
         }
