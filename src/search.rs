@@ -326,7 +326,7 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
             (
                 "https://openrouter.ai/api/v1/chat/completions".to_string(),
                 "minimax/minimax-m2.5:free".to_string(),
-                "Bearer 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".to_string(),
+                "Bearer sk-xxxxxx".to_string(),
             )
         };
 
