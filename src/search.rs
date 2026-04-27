@@ -1,5 +1,5 @@
 // 网络搜索下载模块
-// 支持多平台搜索：酷我音乐 + 网易云音乐 + 酷狗音乐
+// 支持多平台搜索：酷我音乐 + 网易音乐 + 酷狗音乐
 
 use chrono::{Local, TimeZone};
 use serde::Deserialize;
@@ -29,7 +29,7 @@ pub struct OnlineSong {
 pub enum MusicSource {
     /// 酷我音乐
     Kuwo,
-    /// 网易云音乐
+    /// 网易音乐
     NetEase,
     /// 酷狗音乐
     Kugou,
@@ -166,7 +166,7 @@ struct KuwoPlayResult {
 }
 
 // ============================================================
-// 网易云音乐 JSON 结构（备用）
+// 网易音乐 JSON 结构（备用）
 // ============================================================
 
 #[derive(Debug, Deserialize)]
@@ -255,7 +255,7 @@ fn create_download_client() -> Option<reqwest::blocking::Client> {
         .ok()
 }
 
-/// 将网易云毫秒时间戳转换为本地日期时间文本
+/// 将网易毫秒时间戳转换为本地日期时间文本
 fn format_datetime_from_millis(ms: i64) -> Option<String> {
     Local
         .timestamp_millis_opt(ms)
@@ -290,7 +290,7 @@ pub fn download_song_background(song: OnlineSong, save_dir: PathBuf) -> mpsc::Re
     rx
 }
 
-/// 在后台线程中获取歌曲评论（基于歌曲名搜索网易云）
+/// 在后台线程中获取歌曲评论（基于歌曲名搜索网易）
 pub fn fetch_song_comments_background(query: String, page: usize, page_size: usize) -> mpsc::Receiver<SongCommentsResult> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
@@ -326,13 +326,13 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
             (
                 "https://openrouter.ai/api/v1/chat/completions".to_string(),
                 "minimax/minimax-m2.5:free".to_string(),
-                "Bearer sk-xxxxxx".to_string(),
+                "Bearer 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".to_string(),
             )
         };
 
         let client = match reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(60))
-            .user_agent("TerMusicRust/1.2.0")
+            .user_agent("TerMusicRust/1.3.0")
             .build()
         {
             Ok(c) => c,
@@ -458,10 +458,8 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
 }
 
 // ============================================================
-// 搜索逻辑：酷我优先，网易云备用
+// 搜索逻辑：酷我优先，网易备用
 // ============================================================
-
-
 
 /// 搜索网络歌曲（同步）
 fn search_online(query: &str, page: usize) -> SearchDownloadResult {
@@ -495,7 +493,7 @@ fn search_online(query: &str, page: usize) -> SearchDownloadResult {
         }
     }
 
-    // 酷狗无结果，尝试网易云音乐
+    // 酷狗无结果，尝试网易音乐
     if let Some(songs) = search_netease(&client, query, page) {
         if !songs.is_empty() {
             return SearchDownloadResult {
@@ -546,7 +544,7 @@ fn search_kuwo(client: &reqwest::blocking::Client, query: &str, page: usize) -> 
     }).collect())
 }
 
-/// 网易云音乐搜索（备用）
+/// 网易音乐搜索（备用）
 fn search_netease(client: &reqwest::blocking::Client, query: &str, page: usize) -> Option<Vec<OnlineSong>> {
     let offset = (page.saturating_sub(1)) * 20;
     let search_url = format!(
@@ -622,7 +620,7 @@ fn search_kugou(client: &reqwest::blocking::Client, query: &str, page: usize) ->
 }
 
 // ============================================================
-// 评论拉取逻辑（网易云）
+// 评论拉取逻辑（网易）
 // ============================================================
 
 /// 获取歌曲评论（通过歌曲名先搜索歌曲ID）
@@ -645,7 +643,7 @@ fn fetch_song_comments(query: &str, page: usize, page_size: usize) -> SongCommen
         None => return empty,
     };
 
-    // 先用歌曲名搜索一个网易云歌曲ID
+    // 先用歌曲名搜索一个网易歌曲ID
     let search_url = format!(
         "https://music.163.com/api/search/get?s={}&type=1&limit=1&offset=0",
         urlencoding::encode(query)
@@ -1181,7 +1179,7 @@ fn get_kugou_download_url(client: &reqwest::blocking::Client, hash: &str) -> Opt
     None
 }
 
-/// 获取网易云音乐下载链接（备用）
+/// 获取网易音乐下载链接（备用）
 fn get_netease_download_url(client: &reqwest::blocking::Client, song_id: i64) -> Option<String> {
     // 方式1: 使用歌曲详情 API
     let url_api = format!(

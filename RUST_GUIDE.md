@@ -94,7 +94,7 @@ terminal::disable_raw_mode()?;
 reqwest = { version = "0.12", features = ["blocking"] }
 ```
 
-用于网络搜索下载（酷我/网易云搜索）、歌词下载、评论拉取。
+用于网络搜索下载（酷我/酷狗/网易搜索）、歌词下载、评论拉取。
 
 ### 4. serde + serde_json - JSON 序列化
 
@@ -149,7 +149,7 @@ src/
 ├── analyzer.rs   # 音频分析器（实时 RMS 音量、EMA 平滑、波形可视化）
 ├── playlist.rs   # 播放列表管理（目录扫描、并行获取时长、文件夹选择对话框）
 ├── lyrics.rs     # 歌词解析（LRC 格式、本地查找、编码检测、后台下载）
-├── search.rs     # 网络搜索下载（酷我+网易搜索、在线下载、评论拉取）
+├── search.rs     # 网络搜索下载（酷我+酷狗+网易搜索、在线下载、评论拉取）
 ├── config.rs     # 配置文件管理（JSON 序列化、8 项配置持久化）
 └── ui.rs         # 用户界面（终端渲染、事件处理、多视图模式、主题/语言系统）
 ```
@@ -164,7 +164,7 @@ ui.rs（事件处理 + 界面渲染）
     ├── analyzer.rs ←→ audio.rs（RMS 音量、波形可视化）
     ├── playlist.rs ←→ 文件系统（目录扫描、歌曲列表）
     ├── lyrics.rs ←→ 文件系统 / 网络搜索（本地 LRC / 后台下载）
-    ├── search.rs ←→ 网络（酷我+网易搜索、评论拉取、在线下载）
+    ├── search.rs ←→ 网络（酷我+酷狗+网易搜索、评论拉取、在线下载）
     ├── config.rs ←→ config.json（配置持久化）
     └── defs.rs（公共数据结构）
 ```

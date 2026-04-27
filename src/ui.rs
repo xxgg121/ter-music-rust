@@ -1917,7 +1917,7 @@ impl UserInterface {
                 "→ c           显示歌曲评论".to_string(),
                 "→ l           切换界面语言".to_string(),
                 "→ t           切换界面主题".to_string(),
-                "→ k           配置API接口".to_string(),
+                "→ k           配置API 接口".to_string(),
                 "→ q           退出音乐程序".to_string(),
                 "".to_string(),
                 "§播放模式".to_string(),
