@@ -2,9 +2,10 @@
 
 [简体中文](README.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md)
 
+# 🎵 Ter-Music-Rust - 终端音乐播放器
+
 </div>
 
-# 🎵 Ter-Music-Rust - 终端音乐播放器
 
 一个简洁实用的终端音乐播放器，使用 Rust 实现，支持本地/网络歌曲搜索下载、自动下载歌词显示、评论查看、多语言与主题切换等功能，支持Windows、Linux、MacOS系统。
 

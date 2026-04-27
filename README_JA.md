@@ -2,9 +2,9 @@
 
 [简体中文](README.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md)
 
-</div>
-
 # 🎵 Ter-Music-Rust - ターミナル音楽プレーヤー
+
+</div>
 
 Rust で実装された、シンプルで実用的なターミナル向け音楽プレーヤーです。ローカル/ネットワークの楽曲検索とダウンロード、歌詞の自動取得と表示、コメント閲覧、言語・テーマ切り替えなどを備え、Windows・Linux・MacOS をサポートします。
 

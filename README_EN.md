@@ -2,9 +2,9 @@
 
 [简体中文](README.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md)
 
-</div>
-
 # 🎵 Ter-Music-Rust - Terminal Music Player
+
+</div>
 
 A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems.
 
