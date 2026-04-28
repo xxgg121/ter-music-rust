@@ -130,6 +130,7 @@ Configuration is stored in `USERPROFILE/ter-music-rust/config.json` in the progr
 | `api_key` | API Key (for song info query, backward compatible with `deepseek_api_key`) |
 | `api_base_url` | API base URL (default: `https://api.deepseek.com/`) |
 | `api_model` | AI model name (default: `deepseek-v4-flash`) |
+| `github_token` | GitHub Token (used for submitting song info discussions; leave empty to use default Token) |
 | `theme` | Theme name |
 | `language` | UI language (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
 

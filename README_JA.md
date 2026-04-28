@@ -128,6 +128,7 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 | `api_key` | API Key（楽曲情報検索用、旧フィールド `deepseek_api_key` と互換） |
 | `api_base_url` | API ベース URL（デフォルト: `https://api.deepseek.com/`） |
 | `api_model` | AI モデル名（デフォルト: `deepseek-v4-flash`） |
+| `github_token` | GitHub Token（楽曲情報 Discussion 投稿用、空欄でデフォルト Token を使用） |
 | `theme` | テーマ名 |
 | `language` | UI 言語（`zh-CN` / `zh-TW` / `en` / `ja` / `ko`） |
 

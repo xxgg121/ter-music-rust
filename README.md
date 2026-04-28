@@ -129,6 +129,7 @@
 | `api_key` | API Key（歌曲信息查询用，兼容旧字段 `deepseek_api_key`） |
 | `api_base_url` | API 接口地址（默认 `https://api.deepseek.com/`） |
 | `api_model` | AI 模型名称（默认 `deepseek-v4-flash`） |
+| `github_token` | GitHub Token（用于提交歌曲信息 Discussion，留空使用默认 Token） |
 | `theme` | 界面主题名称 |
 | `language` | 界面语言（`zh-CN` / `zh-TW` / `en` / `ja` / `ko`） |
 

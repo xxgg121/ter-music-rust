@@ -129,6 +129,7 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 | `api_key` | API Key(곡 정보 조회용, 기존 필드 `deepseek_api_key`와 호환) |
 | `api_base_url` | API 베이스 URL(기본값: `https://api.deepseek.com/`) |
 | `api_model` | AI 모델명(기본값: `deepseek-v4-flash`) |
+| `github_token` | GitHub Token(곡 정보 Discussion 제출용, 비워두면 기본 Token 사용) |
 | `theme` | 테마 이름 |
 | `language` | UI 언어 (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
 
