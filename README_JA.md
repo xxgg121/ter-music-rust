@@ -47,7 +47,8 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 
 ### 🔍 検索
 - **ローカル検索**: `s` で現在の音楽ディレクトリ内を検索
-- **オンライン検索**: `n` でキーワードによるネット検索（酷我＋酷狗＋網易の3プラットフォーム対応）
+- **オンライン検索**: `n` でキーワードによるネット検索
+- **アグリゲート検索**：`j` を押して入力し、キーワードに照らして曲を検索する
 - **ページ切り替え**: `PgUp` / `PgDn` で結果を切り替え
 - **オンラインダウンロード**: オンライン検索結果を選択して `Enter` で現在ディレクトリへ保存（進捗表示あり）
 
@@ -647,14 +648,34 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 初回は依存関係のダウンロードとコンパイルが発生するため時間がかかります。2 回目以降は大幅に高速化されます。
 
 ### Release のダウンロード
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260426074922321_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604260749346646_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604260749443146_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604260750051351_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604281254083505_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604281254169808_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260428125427848_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604281254393938_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 変更履歴
+
+## バージョン 1.4.0 (2026-04-28)
+
+### 🎉 新機能
+
+#### 歌曲の統合検索で安心
+- ✨ **統合検索による楽曲検索**：ネット上で見つからない場合、統合検索を使って楽曲名や歌手で検索し、ダウンロード可能  
+- ✨ **統合検索による歌詞検索**：ローカルに歌詞がなく、ネットからダウンロードできない場合、自動的に統合検索で楽曲名や歌手を検索し、歌詞をダウンロード
+- ✨ **シームレス体験**: 検索とダウンロードはバックグラウンドで実行され、UI をブロックしません
+
+#### GitHub Token 設定
+- ✨ **カスタム GitHub Token**: `g` キーで自分の GitHub Token を入力、設定ファイルに保存
+- ✨ **デフォルトフォールバック**: 未設定時はデフォルト Token を自動使用
+- ✨ **アイデンティティ認証**：自身のトークンを使用して楽曲情報のディスカッションに投稿すると、自分のGitHubアカウントとして表示されます
+
+### 🔧 機能改善
+
+- 🔍 **新規設定項目**: `github_token`（GitHub Token、空欄でデフォルト使用）
+
+---
 
 ## バージョン 1.3.0 (2026-04-26)
 

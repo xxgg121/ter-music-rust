@@ -48,7 +48,8 @@
 
 ### 🔍 搜索功能
 - **本地搜索**：按 `s` 进入，根据关键字匹配音乐目录歌曲
-- **网络搜索**：按 `n` 进入，根据关键字匹配搜索网络歌曲（酷我 + 酷狗 + 网易三平台）
+- **网络搜索**：按 `n` 进入，根据关键字匹配搜索网络歌曲
+- **聚合搜索**：按 `j` 进入，根据关键字匹配搜索聚合歌曲
 - **翻页浏览**：`PgUp`/`PgDn` 翻页查看更多结果
 - **在线下载**：搜索结果选中后按 `Enter` 下载到当前音乐目录，显示下载进度
 
@@ -646,14 +647,34 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260426074922321_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604260749346646_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604260749443146_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604260750051351_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604281254083505_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604281254169808_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260428125427848_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604281254393938_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新日志
+
+## 版本 1.4.0 (2026-04-28)
+
+### 🎉 新功能
+
+#### 歌曲聚合搜索兜底
+- ✨ **聚合搜索歌曲**：网络搜索不到时可以通过聚合搜索按歌名/歌手搜索并下载歌曲
+- ✨ **聚合搜索歌词**：本地无歌词且网络下载失败时，自动通过聚合搜索按歌名/歌手搜索并下载歌词
+- ✨ **无缝体验**：搜索和下载均在后台进行，不阻塞 UI
+
+#### GitHub Token 配置
+- ✨ **自定义 GitHub Token**：按 `g` 输入自己的 GitHub Token，保存到配置文件
+- ✨ **默认兜底**：未配置 Token 时自动使用默认 Token
+- ✨ **身份识别**：使用自己的 Token 提交歌曲信息 Discussion 时显示为自己的 GitHub 身份
+
+### 🔧 功能改进
+
+- 🔍 **新增配置项**：`github_token`（GitHub Token，留空使用默认）
+
+---
 
 ## 版本 1.3.0 (2026-04-26)
 

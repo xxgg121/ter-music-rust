@@ -28,6 +28,10 @@ fn default_api_model() -> String {
     "deepseek-v4-flash".to_string()
 }
 
+fn default_github_token() -> String {
+    String::new()
+}
+
 /// 应用配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -60,6 +64,9 @@ pub struct Config {
     /// API 模型名称
     #[serde(default = "default_api_model")]
     pub api_model: String,
+    /// GitHub Token（用于创建 Discussions，为空则使用默认 Token）
+    #[serde(default = "default_github_token")]
+    pub github_token: String,
 }
 
 impl Default for Config {
@@ -76,6 +83,7 @@ impl Default for Config {
             api_key: default_api_key(),
             api_base_url: default_api_base_url(),
             api_model: default_api_model(),
+            github_token: default_github_token(),
         }
     }
 }
@@ -98,6 +106,7 @@ impl Config {
             || self.theme != default_theme()
             || self.language != default_language()
             || !self.api_key.trim().is_empty()
+        || !self.github_token.trim().is_empty()
     }
 
     /// 自动修复常见历史配置错误：相邻字符串项缺少逗号

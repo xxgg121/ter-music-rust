@@ -48,7 +48,8 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 
 ### 🔍 검색
 - **로컬 검색**: `s` 키로 현재 음악 디렉터리에서 검색
-- **온라인 검색**: `n` 키로 키워드 기반 온라인 검색（쿠워+쿠거+왕이윈 3개 플랫폼）
+- **온라인 검색**: `n` 키로 키워드 기반 온라인 검색
+- **폴리머 검색**: `j`를 눌러 들어가면 키워드에 맞는 곡을 합성하여 검색할 수 있습니다.
 - **페이지 이동**: `PgUp` / `PgDn`으로 더 많은 결과 확인
 - **온라인 다운로드**: 온라인 검색 결과 선택 후 `Enter`로 현재 음악 디렉터리에 다운로드(진행률 표시)
 
@@ -648,14 +649,34 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260426074922321_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604260749346646_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604260749443146_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604260750051351_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604281254083505_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604281254169808_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260428125427848_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604281254393938_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 변경 로그
+
+## 버전 1.4.0 (2026-04-28)
+
+### 🎉 신규 기능
+
+#### 가사 통합 검색 폴백
+- ✨ **곡 합성 검색**: 네트워크에서 검색할 수 없을 경우, 곡명/가수로 합성 검색하여 곡을 찾아 다운로드할 수 있습니다.
+- ✨ **곡 가사 합성 검색**: 로컬에 가사가 없고 네트워크 다운로드가 실패한 경우, 자동으로 곡명/가수로 합성 검색하여 가사를 찾아 다운로드합니다.
+- ✨ **원활한 경험**: 검색과 다운로드는 백그라운드에서 진행되어 UI를 차단하지 않음
+
+#### GitHub Token 설정
+- ✨ **커스텀 GitHub Token**: `g` 키로 자신의 GitHub Token 입력, 설정 파일에 저장
+- ✨ **기본 폴백**: 미설정 시 기본 Token 자동 사용
+- ✨ **아이덴티티 인식**: 자신의 토큰을 사용하여 곡 정보를 제출할 때, 토론에서 자신의 GitHub 아이디로 표시됨
+
+### 🔧 기능 개선
+
+- 🔍 **신규 설정 항목**: `github_token`(GitHub Token, 비워두면 기본값 사용)
+
+---
 
 ## 버전 1.3.0 (2026-04-26)
 

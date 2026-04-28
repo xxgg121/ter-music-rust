@@ -14,7 +14,9 @@ use crossterm::{
 use crate::audio::AudioPlayer;
 use crate::defs::{PlayMode, PlayState, Playlist};
 use crate::lyrics::{Lyrics, LyricsDownloadResult};
-use crate::search::{OnlineSong, SearchDownloadResult, DownloadProgress, SongCommentItem, SongCommentsResult};
+use crate::search::{OnlineSong, SearchDownloadResult, DownloadProgress, SongCommentItem, SongCommentsResult, GitHubDiscussionResult};
+
+const DEFAULT_GITHUB_TOKEN: &str = "github_xxxxxx";
 
 // 主题色定义（使用显式 RGB，避免不同系统终端默认色表差异）
 #[derive(Debug, Clone, Copy)]
@@ -116,6 +118,8 @@ impl UiTheme {
                 song_playing: style::Color::Rgb { r: 166, g: 255, b: 234 },
                 lyric_highlight: style::Color::Rgb { r: 168, g: 255, b: 245 },
                 status_text: style::Color::Rgb { r: 134, g: 235, b: 255 },
+              
+              
                 progress_text: style::Color::Rgb { r: 108, g: 188, b: 255 },
                 info_text: style::Color::Rgb { r: 120, g: 224, b: 255 },
             },
@@ -327,12 +331,28 @@ pub struct UserInterface {
     song_info_scroll_offset: usize,
     /// 是否正在查询 AI 歌曲信息
     song_info_loading: bool,
+    /// AI 歌曲信息对应的歌曲名称（用于 GitHub Discussion 标题）
+    song_info_name: String,
+    /// GitHub Discussion 创建结果接收器
+    github_discussion_rx: Option<std::sync::mpsc::Receiver<GitHubDiscussionResult>>,
+    /// GitHub Discussion 创建状态信息
+    github_discussion_status: String,
+    /// 是否正在创建 GitHub Discussion（用于自动滚动）
+    github_discussion_loading: bool,
+    /// 是否强制滚动到歌曲信息底部（Discussion 结果到达时触发）
+    song_info_force_scroll: bool,
+    /// 已尝试创建 Discussion 的歌曲名称（防止同一首歌重复创建）
+    github_discussion_attempted_name: String,
     /// API Key（来自配置/用户输入）
     api_key: String,
     /// API 接口地址（OpenAI 兼容）
     api_base_url: String,
     /// API 模型名称
     api_model: String,
+    /// GitHub Token（用于创建 Discussions）
+    github_token: String,
+    /// GitHub 仓库（owner/repo 格式）
+    github_repo: String,
     /// 是否处于 API 配置输入模式
     api_key_input_mode: bool,
     /// API 配置输入缓存
@@ -341,6 +361,10 @@ pub struct UserInterface {
     api_key_input_for_song_info: bool,
     /// API 配置输入步骤：0=接口地址, 1=API Key, 2=模型名称
     api_input_step: u8,
+    /// 是否处于 GitHub Token 输入模式
+    github_token_input_mode: bool,
+    /// GitHub Token 输入缓存
+    github_token_input_value: String,
     /// 是否处于搜索模式
     search_mode: bool,
     /// 搜索输入关键字
@@ -389,6 +413,12 @@ pub struct UserInterface {
     online_download_rx: Option<std::sync::mpsc::Receiver<DownloadProgress>>,
     /// 下载进度百分比（0-100）
     online_download_percent: u8,
+    /// 是否处于聚合搜索搜索模式
+    juhe_search_mode: bool,
+    /// 聚合搜索歌词接收器
+    juhe_lyrics_rx: Option<std::sync::mpsc::Receiver<crate::search::JuheLyricsResult>>,
+    /// 聚合搜索歌词下载中
+    juhe_lyrics_loading: bool,
     /// 当前主题
     theme: UiTheme,
     /// 当前主题颜色缓存
@@ -442,15 +472,25 @@ impl UserInterface {
             song_info_rx: None,
             song_info_scroll_offset: 0,
             song_info_loading: false,
+            song_info_name: String::new(),
+            github_discussion_rx: None,
+            github_discussion_status: String::new(),
+            github_discussion_loading: false,
+            song_info_force_scroll: false,
+            github_discussion_attempted_name: String::new(),
             help_mode: false,
             help_scroll_offset: 0,
             api_key: String::new(),
             api_base_url: "https://api.deepseek.com/".to_string(),
             api_model: "deepseek-v4-flash".to_string(),
+            github_token: DEFAULT_GITHUB_TOKEN.to_string(),
+            github_repo: "xxgg121/ter-music-rust".to_string(),
             api_key_input_mode: false,
             api_key_input_value: String::new(),
             api_key_input_for_song_info: false,
             api_input_step: 0,
+            github_token_input_mode: false,
+            github_token_input_value: String::new(),
             search_mode: false,
             search_query: String::new(),
             search_results: Vec::new(),
@@ -475,6 +515,9 @@ impl UserInterface {
             online_downloading: false,
             online_download_rx: None,
             online_download_percent: 0,
+            juhe_search_mode: false,
+            juhe_lyrics_rx: None,
+            juhe_lyrics_loading: false,
             theme: UiTheme::Neon,
             theme_colors: UiTheme::Neon.colors(),
             language: UiLanguage::ZhCn,
@@ -545,8 +588,14 @@ impl UserInterface {
         self.song_info_rx = None;
         self.song_info_loading = false;
         self.song_info_content.clear();
+        self.song_info_name.clear();
+        self.github_discussion_rx = None;
+        self.github_discussion_status.clear();
+        self.github_discussion_loading = false;
+        self.song_info_force_scroll = false;
 
         if let Some(file) = current_file {
+            self.song_info_name = file.name.trim().to_string();
             self.start_fetch_song_info_for_current_song(&file.name);
         } else {
             self.song_info_content = self
@@ -864,6 +913,9 @@ impl UserInterface {
                         if chunk.done {
                             self.song_info_loading = false;
                             self.song_info_rx = None;
+                            self.song_info_force_scroll = true;
+                            // 流式输出完成后，自动创建 GitHub Discussion
+                            self.start_github_discussion_for_song_info();
                             break;
                         }
                     }
@@ -876,6 +928,79 @@ impl UserInterface {
                 }
             }
         }
+
+        // 检查 GitHub Discussion 创建结果
+        if let Some(ref rx) = self.github_discussion_rx {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.github_discussion_rx = None;
+                    self.github_discussion_loading = false;
+                    self.song_info_force_scroll = true;
+                    if let Some(url) = result.url {
+                        self.github_discussion_status = format!(
+                            "{} {}",
+                            self.i18n(
+                                "已创建 Discussion:",
+                                "已建立 Discussion:",
+                                "Discussion created:",
+                                "Discussion 作成済み:",
+                                "Discussion 생성됨:"
+                            ),
+                            url
+                        );
+                    } else if let Some(err) = result.error {
+                        self.github_discussion_status = format!(
+                            "{} {}",
+                            self.i18n(
+                                "创建 Discussion 失败:",
+                                "建立 Discussion 失敗:",
+                                "Discussion creation failed:",
+                                "Discussion 作成失敗:",
+                                "Discussion 생성 실패:"
+                            ),
+                            err
+                        );
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.github_discussion_rx = None;
+                    self.github_discussion_loading = false;
+                }
+            }
+        }
+    }
+
+    /// 流式输出完成后，创建 GitHub Discussion
+    fn start_github_discussion_for_song_info(&mut self) {
+        let content = self.song_info_content.trim().to_string();
+        let name = self.song_info_name.trim().to_string();
+
+        if content.is_empty() || name.is_empty() {
+            return;
+        }
+
+        // 如果已经为这首歌创建过 Discussion，跳过（防止重复创建和重复显示 URL）
+        if self.github_discussion_attempted_name == name {
+            return;
+        }
+        self.github_discussion_attempted_name = name.clone();
+
+        let token = self.github_token.clone();
+        let repo = self.github_repo.clone();
+
+        self.github_discussion_loading = true;
+        self.github_discussion_status = self.i18n(
+            "正在创建 Discussion...",
+            "正在建立 Discussion...",
+            "Creating Discussion...",
+            "Discussion を作成中...",
+            "Discussion 생성 중..."
+        ).to_string();
+
+        self.github_discussion_rx = Some(
+            crate::search::create_github_discussion_background(token, repo, name, content)
+        );
     }
 
     /// 绘制 AI 歌曲信息（右侧）
@@ -902,8 +1027,16 @@ impl UserInterface {
             self.song_info_loading = false;
             self.song_info_rx = None;
             self.song_info_scroll_offset = 0;
+            // 切歌时清除 Discussion 状态和歌名
+            self.github_discussion_status.clear();
+            self.github_discussion_rx = None;
+            self.github_discussion_loading = false;
+            self.song_info_force_scroll = false;
             if let Some(file) = current_file.as_ref() {
+                self.song_info_name = file.name.trim().to_string();
                 self.start_fetch_song_info_for_current_song(&file.name);
+            } else {
+                self.song_info_name.clear();
             }
         }
 
@@ -945,23 +1078,89 @@ impl UserInterface {
         };
 
         let wrapped_lines = wrap_text_to_width(&content, width.saturating_sub(1) as usize);
-        let total_lines = wrapped_lines.len();
+
+        // 追加 GitHub Discussion 状态行
+        // 拆分为前缀和 URL 两部分，URL 用 OSC 8 可点击，前缀为普通文本
+        let (discussion_prefix, discussion_url) = if !self.github_discussion_status.is_empty() {
+            if let Some(url_start) = self.github_discussion_status.find("http://").or_else(|| self.github_discussion_status.find("https://")) {
+                let prefix = self.github_discussion_status[..url_start].to_string();
+                let url = self.github_discussion_status[url_start..].trim_end().to_string();
+                (prefix, Some(url))
+            } else {
+                (self.github_discussion_status.clone(), None)
+            }
+        } else {
+            (String::new(), None)
+        };
+
+        let discussion_lines = if !discussion_prefix.is_empty() {
+            let mut lines = Vec::new();
+            // 空一行分隔
+            lines.push(String::new());
+            // 前缀行
+            if !discussion_prefix.trim().is_empty() {
+                lines.extend(wrap_text_to_width(&discussion_prefix, width.saturating_sub(1) as usize));
+            }
+            // URL 单独一行（OSC 8 处理，不换行截断）
+            if let Some(ref url) = discussion_url {
+                lines.push(url.clone());
+            }
+            lines
+        } else {
+            Vec::new()
+        };
+
+        let total_lines = wrapped_lines.len() + discussion_lines.len();
         let max_offset = total_lines.saturating_sub(visible_count);
-        // 流式输出时自动滚动到底部，确保新内容可见
-        if self.song_info_loading {
+        // 流式输出时自动滚动到底部，确保新内容可见；内容变化时一次性滚动
+        if self.song_info_loading || self.song_info_force_scroll {
             self.song_info_scroll_offset = max_offset;
+            self.song_info_force_scroll = false;
         } else if self.song_info_scroll_offset > max_offset {
             self.song_info_scroll_offset = max_offset;
         }
-        for (row, line) in wrapped_lines.into_iter().skip(self.song_info_scroll_offset).take(visible_count).enumerate() {
+
+        // 计算可见范围内的行
+        let skip = self.song_info_scroll_offset;
+        let all_lines_count = wrapped_lines.len() + discussion_lines.len();
+        for (screen_row, line_idx) in (skip..all_lines_count).take(visible_count).enumerate() {
             queue!(
                 stdout,
-                cursor::MoveTo(start_x, (row + 6) as u16),
+                cursor::MoveTo(start_x, (screen_row + 6) as u16),
                 terminal::Clear(ClearType::UntilNewLine),
-                style::SetForegroundColor(self.theme_colors.song_normal),
-                style::Print(truncate_to_width(&line, width.saturating_sub(1) as usize)),
-                style::ResetColor,
             )?;
+
+            if line_idx < wrapped_lines.len() {
+                // 普通歌曲信息行
+                queue!(
+                    stdout,
+                    style::SetForegroundColor(self.theme_colors.song_normal),
+                    style::Print(truncate_to_width(&wrapped_lines[line_idx], width.saturating_sub(1) as usize)),
+                    style::ResetColor,
+                )?;
+            } else {
+                // Discussion 状态行
+                let disc_idx = line_idx - wrapped_lines.len();
+                let line = &discussion_lines[disc_idx];
+                // URL 行用 OSC 8 超链接，前缀行为普通文本
+                if discussion_url.as_ref() == Some(line) {
+                    // OSC 8 超链接格式: \x1b]8;;URL\x1b\\TEXT\x1b]8;;\x1b\\
+                    let hyperlink = format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", line, line);
+                    queue!(
+                        stdout,
+                        style::SetForegroundColor(self.theme_colors.song_normal),
+                        style::Print(&hyperlink),
+                        style::ResetColor,
+                    )?;
+                } else {
+                    queue!(
+                        stdout,
+                        style::SetForegroundColor(self.theme_colors.song_normal),
+                        style::Print(truncate_to_width(line, width.saturating_sub(1) as usize)),
+                        style::ResetColor,
+                    )?;
+                }
+            }
         }
 
         Ok(())
@@ -1036,9 +1235,30 @@ impl UserInterface {
                 cursor::MoveTo(target_col, 4),
                 cursor::Show,
             )?;
+        } else if self.github_token_input_mode {
+            let prompt_text = self.i18n(
+                "输入GitHub_Token: ",
+                "輸入GitHub_Token: ",
+                "Input GitHub_Token: ",
+                "GitHub_Tokenを入力: ",
+                "GitHub_Token 입력: "
+            );
+            let prompt_len = unicode_width::UnicodeWidthStr::width(prompt_text);
+            let value_len = unicode_width::UnicodeWidthStr::width(self.github_token_input_value.as_str());
+            let left_width = (self.terminal_width as f32 * 0.50) as u16;
+            let target_col = left_width + 1 + (prompt_len + value_len) as u16;
+            queue!(
+                stdout,
+                cursor::MoveTo(target_col, 4),
+                cursor::Show,
+            )?;
         } else if self.search_mode {
             let prompt_text = if self.online_search_mode {
-                self.i18n("网络搜索: ", "網路搜尋: ", "Online Search: ", "オンライン検索: ", "온라인 검색: ")
+                if self.juhe_search_mode {
+                    self.i18n("聚合搜索: ", "聚合搜索: ", "Juhe Search: ", "聚合検索: ", "폴리머 검색: ")
+                } else {
+                    self.i18n("网络搜索: ", "網路搜尋: ", "Online Search: ", "オンライン検索: ", "온라인 검색: ")
+                }
             } else {
                 self.i18n("本地搜索: ", "本地搜尋: ", "Local Search: ", "ローカル検索: ", "로컬 검색: ")
             };
@@ -1354,11 +1574,19 @@ impl UserInterface {
         } else if self.search_mode {
             // 搜索模式：标题显示搜索栏
             let search_prompt = if self.online_search_mode {
-                format!(
-                    "{}{}",
-                    self.i18n("网络搜索: ", "網路搜尋: ", "Online Search: ", "オンライン検索: ", "온라인 검색: "),
-                    self.search_query
-                )
+                if self.juhe_search_mode {
+                    format!(
+                        "{}{}",
+                        self.i18n("聚合搜索: ", "聚合搜索: ", "Juhe Search: ", "聚合検索: ", "폴리머 검색: "),
+                        self.search_query
+                    )
+                } else {
+                    format!(
+                        "{}{}",
+                        self.i18n("网络搜索: ", "網路搜尋: ", "Online Search: ", "オンライン検索: ", "온라인 검색: "),
+                        self.search_query
+                    )
+                }
             } else {
                 format!(
                     "{}{}",
@@ -1427,7 +1655,8 @@ impl UserInterface {
                     };
 
                     let max_width = left_width.saturating_sub(15) as usize;
-                    let name = Self::truncate_with_ellipsis(&display_name, max_width);
+                    let full_display = display_name.clone();
+                    let name = Self::truncate_with_ellipsis(&full_display, max_width);
 
                     queue!(
                         stdout,
@@ -1455,13 +1684,23 @@ impl UserInterface {
                 // 如果没有搜索结果
                 if total == 0 && !self.online_searching {
                     let hint = if self.search_query.is_empty() {
-                        self.i18n(
-                            "输入歌曲名称后按 Enter 搜索网络歌曲",
-                            "輸入歌曲名稱後按 Enter 搜尋網路歌曲",
-                            "Enter song name, then press Enter to search online",
-                            "曲名を入力して Enter でオンライン検索",
-                            "곡명을 입력하고 Enter로 온라인 검색",
-                        ).to_string()
+                        if self.juhe_search_mode {
+                            self.i18n(
+                                "输入歌曲名称后按 Enter 搜索聚合搜索",
+                                "輸入歌曲名稱後按 Enter 搜尋獨家音源",
+                                "Enter song name, then press Enter to search Juhe",
+                                "曲名を入力して Enter で独占音源検索",
+                                "곡명을 입력하고 Enter로 독점음원 검색",
+                            ).to_string()
+                        } else {
+                            self.i18n(
+                                "输入歌曲名称后按 Enter 搜索网络歌曲",
+                                "輸入歌曲名稱後按 Enter 搜尋網路歌曲",
+                                "Enter song name, then press Enter to search online",
+                                "曲名を入力して Enter でオンライン検索",
+                                "곡명을 입력하고 Enter로 온라인 검색",
+                            ).to_string()
+                        }
                     } else if self.online_search_page > 1 {
                         match self.language {
                             UiLanguage::ZhCn => format!("第{}页无结果，PgUp翻上页", self.online_search_page),
@@ -1706,7 +1945,7 @@ impl UserInterface {
             )?;
         }
 
-        // 绘制右侧标题（歌词/评论/API 配置输入）
+        // 绘制右侧标题（歌词/评论/API 配置输入/GitHub Token 输入）
         let lyrics_title = if self.api_key_input_mode {
             match self.api_input_step {
                 0 => format!(
@@ -1744,6 +1983,18 @@ impl UserInterface {
                 ),
                 _ => self.api_key_input_value.clone(),
             }
+        } else if self.github_token_input_mode {
+            format!(
+                "{}{}",
+                self.i18n(
+                    "输入GitHub_Token: ",
+                    "輸入GitHub_Token: ",
+                    "Input GitHub_Token: ",
+                    "GitHub_Tokenを入力: ",
+                    "GitHub_Token 입력: "
+                ),
+                self.github_token_input_value
+            )
         } else if self.comments_mode {
             match self.language {
                 UiLanguage::ZhCn => format!("歌曲评论 共{}条（第{}页）", self.comments_total, self.comments_page),
@@ -1910,6 +2161,7 @@ impl UserInterface {
                 "→ o           打开音乐目录".to_string(),
                 "→ s           搜索本地歌曲".to_string(),
                 "→ n           搜索网络歌曲".to_string(),
+                "→ j           搜索聚合歌曲".to_string(),
                 "→ i           查看歌曲信息".to_string(),
                 "→ f           添加到收藏夹".to_string(),
                 "→ v           查看收藏列表".to_string(),
@@ -1918,6 +2170,7 @@ impl UserInterface {
                 "→ l           切换界面语言".to_string(),
                 "→ t           切换界面主题".to_string(),
                 "→ k           配置API 接口".to_string(),
+                "→ g           配置GitHub Token".to_string(),
                 "→ q           退出音乐程序".to_string(),
                 "".to_string(),
                 "§播放模式".to_string(),
@@ -1940,6 +2193,9 @@ impl UserInterface {
                 "  点击进度条跳转播放位置".to_string(),
                 "  点击音量条调节音量".to_string(),
                 "  拖动歌词区域跳转歌词".to_string(),
+                "".to_string(),
+                "§GitHub仓库".to_string(),
+                "  https://github.com/xxgg121/ter-music-rust".to_string(),
             ],
             UiLanguage::ZhTw => vec![
                 "§快捷按鍵".to_string(),
@@ -1957,6 +2213,7 @@ impl UserInterface {
                 "→ o           打開音樂目錄".to_string(),
                 "→ s           搜尋本地歌曲".to_string(),
                 "→ n           搜尋網路歌曲".to_string(),
+                "→ j           搜尋聚合歌曲".to_string(),
                 "→ i           查看歌曲資訊".to_string(),
                 "→ f           新增到收藏夾".to_string(),
                 "→ v           查看收藏列表".to_string(),
@@ -1965,6 +2222,7 @@ impl UserInterface {
                 "→ l           切換界面語言".to_string(),
                 "→ t           切換界面主題".to_string(),
                 "→ k           設定API接口".to_string(),
+                "→ g           設定GitHub Token".to_string(),
                 "→ q           退出音樂程式".to_string(),
                 "".to_string(),
                 "§播放模式".to_string(),
@@ -1987,6 +2245,9 @@ impl UserInterface {
                 "  點擊進度條跳轉播放位置".to_string(),
                 "  點擊音量條調節音量".to_string(),
                 "  拖動歌詞區域跳轉歌詞".to_string(),
+                "".to_string(),
+                "§GitHub倉庫".to_string(),
+                "  https://github.com/xxgg121/ter-music-rust".to_string(),
             ],
             UiLanguage::En => vec![
                 "§Keyboard Shortcuts".to_string(),
@@ -2004,6 +2265,7 @@ impl UserInterface {
                 "→ o           Open music folder".to_string(),
                 "→ s           Search local songs".to_string(),
                 "→ n           Search online songs".to_string(),
+                "→ j           Search Juhe songs".to_string(),
                 "→ i           Song info".to_string(),
                 "→ f           Add to favorites".to_string(),
                 "→ v           View favorites".to_string(),
@@ -2012,6 +2274,7 @@ impl UserInterface {
                 "→ l           Switch language".to_string(),
                 "→ t           Switch theme".to_string(),
                 "→ k           Configure API".to_string(),
+                "→ g           Configure GitHub Token".to_string(),
                 "→ q           Quit".to_string(),
                 "".to_string(),
                 "§Play Modes".to_string(),
@@ -2034,6 +2297,9 @@ impl UserInterface {
                 "  Click progress bar to seek".to_string(),
                 "  Click volume bar to adjust".to_string(),
                 "  Drag lyrics area to jump".to_string(),
+                "".to_string(),
+                "§GitHub Repository".to_string(),
+                "  https://github.com/xxgg121/ter-music-rust".to_string(),
             ],
             UiLanguage::Ja => vec![
                 "§ショートカットキー".to_string(),
@@ -2051,6 +2317,7 @@ impl UserInterface {
                 "→ o           音楽フォルダを開く".to_string(),
                 "→ s           ローカル曲を検索".to_string(),
                 "→ n           ネット曲を検索".to_string(),
+                "→ j           アグリゲート検索".to_string(),
                 "→ i           楽曲情報".to_string(),
                 "→ f           お気に入りに追加".to_string(),
                 "→ v           お気に入り一覧".to_string(),
@@ -2059,6 +2326,7 @@ impl UserInterface {
                 "→ l           言語切替".to_string(),
                 "→ t           テーマ切替".to_string(),
                 "→ k           API 設定".to_string(),
+                "→ g           GitHub Token 設定".to_string(),
                 "→ q           終了".to_string(),
                 "".to_string(),
                 "§再生モード".to_string(),
@@ -2081,6 +2349,9 @@ impl UserInterface {
                 "  プログレスバーをクリックしてシーク".to_string(),
                 "  音量バーをクリックして調整".to_string(),
                 "  歌詞エリアをドラッグしてジャンプ".to_string(),
+                "".to_string(),
+                "§GitHubリポジトリ".to_string(),
+                "  https://github.com/xxgg121/ter-music-rust".to_string(),
             ],
             UiLanguage::Ko => vec![
                 "§단축키".to_string(),
@@ -2098,6 +2369,7 @@ impl UserInterface {
                 "→ o           음악 폴더 열기".to_string(),
                 "→ s           로컬 곡 검색".to_string(),
                 "→ n           온라인 곡 검색".to_string(),
+                "→ j           폴리머 검색".to_string(),
                 "→ i           곡 정보".to_string(),
                 "→ f           즐겨찾기 추가".to_string(),
                 "→ v           즐겨찾기 목록".to_string(),
@@ -2106,6 +2378,7 @@ impl UserInterface {
                 "→ l           언어 전환".to_string(),
                 "→ t           테마 전환".to_string(),
                 "→ k           API 설정".to_string(),
+                "→ g           GitHub Token 설정".to_string(),
                 "→ q           종료".to_string(),
                 "".to_string(),
                 "§재생 모드".to_string(),
@@ -2128,6 +2401,9 @@ impl UserInterface {
                 "  진행 막대 클릭하여 이동".to_string(),
                 "  볼륨 막대 클릭하여 조절".to_string(),
                 "  가사 영역 드래그하여 이동".to_string(),
+                "".to_string(),
+                "§GitHub저장소".to_string(),
+                "  https://github.com/xxgg121/ter-music-rust".to_string(),
             ],
         }
     }
@@ -2158,7 +2434,23 @@ impl UserInterface {
                     .map(|f| f.path == result.music_path)
                     .unwrap_or(false);
                 if is_current {
-                    self.current_lyrics = result.lyrics;
+                    if result.lyrics.is_some() {
+                        self.current_lyrics = result.lyrics;
+                    } else {
+                        // 常规下载失败，尝试通过聚合搜索获取歌词
+                        let music_path = std::path::Path::new(&result.music_path);
+                        let file_stem = music_path.file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("");
+                        let (artist, title) = crate::lyrics::Lyrics::parse_artist_title(file_stem)
+                            .unwrap_or_else(|| ("".to_string(), file_stem.to_string()));
+                        self.juhe_lyrics_loading = true;
+                        self.juhe_lyrics_rx = Some(
+                            crate::search::search_and_get_juhe_lyrics_background(
+                                artist, title, result.music_path.clone()
+                            )
+                        );
+                    }
                 }
                 self.lyrics_download_rx = None;
                 self.lyrics_downloading = false;
@@ -2245,8 +2537,8 @@ impl UserInterface {
                     style::ResetColor,
                 )?;
             }
-        } else if self.lyrics_downloading {
-            // 正在后台下载
+        } else if self.lyrics_downloading || self.juhe_lyrics_loading {
+            // 正在后台下载（常规下载或聚合搜索下载）
             queue!(
                 stdout,
                 cursor::MoveTo(start_x, 8),
@@ -2640,30 +2932,17 @@ impl UserInterface {
             let tip_line = self.terminal_height.saturating_sub(5);
             let help_text = if self.search_mode {
                 if self.online_search_mode {
-                    if self.terminal_width >= 80 {
-                        self.i18n(
-                            "网络搜索: 输入歌名Enter搜索 | ↑↓选择 | Enter下载 | PgUp/PgDn翻页 | Esc退出",
-                            "網路搜尋: 輸入歌名 Enter 搜尋 | ↑↓選擇 | Enter 下載 | PgUp/PgDn 翻頁 | Esc 退出",
-                            "Online Search: Type song and Enter | ↑↓ Select | Enter Download | PgUp/PgDn | Esc",
-                            "オンライン検索: 曲名入力してEnter | ↑↓選択 | EnterでDL | PgUp/PgDn | Esc",
-                            "온라인 검색: 곡명 입력 후 Enter | ↑↓ 선택 | Enter 다운로드 | PgUp/PgDn | Esc",
-                        )
-                    } else if self.terminal_width >= 60 {
-                        self.i18n(
-                            "网络搜索: Enter搜索|↑↓选择|Enter下载|PgUp/PgDn翻页|Esc退出",
-                            "網路搜尋: Enter搜尋|↑↓選擇|Enter下載|PgUp/PgDn翻頁|Esc退出",
-                            "Online: Enter Search|↑↓ Select|Enter DL|PgUp/PgDn|Esc",
-                            "オンライン: Enter検索|↑↓選択|EnterDL|PgUp/PgDn|Esc",
-                            "온라인: Enter검색|↑↓선택|EnterDL|PgUp/PgDn|Esc",
-                        )
+                    let search_label = if self.juhe_search_mode {
+                        self.i18n("聚合搜索", "聚合搜索", "Juhe", "聚合検索", "폴리머 검색")
                     } else {
-                        self.i18n(
-                            "网络搜索: Enter搜索|↑↓选择|Enter下载|PgUp/Dn翻页|Esc退出",
-                            "網路搜尋: Enter搜尋|↑↓選擇|Enter下載|PgUp/Dn翻頁|Esc退出",
-                            "Online: Enter|↑↓|DL|PgUp/Dn|Esc",
-                            "オンライン: Enter|↑↓|DL|PgUp/Dn|Esc",
-                            "온라인: Enter|↑↓|DL|PgUp/Dn|Esc",
-                        )
+                        self.i18n("网络搜索", "網路搜尋", "Online", "オンライン", "온라인")
+                    };
+                    if self.terminal_width >= 80 {
+                        format!("{}: 输入歌名Enter搜索 | ↑↓选择 | Enter下载 | PgUp/PgDn翻页 | Esc退出", search_label)
+                    } else if self.terminal_width >= 60 {
+                        format!("{}: Enter搜索|↑↓选择|Enter下载|PgUp/PgDn翻页|Esc退出", search_label)
+                    } else {
+                        format!("{}: Enter|↑↓|DL|PgUp/Dn|Esc", search_label)
                     }
                 } else if self.terminal_width >= 60 {
                     self.i18n(
@@ -2672,7 +2951,7 @@ impl UserInterface {
                         "Local Search: keyword + Enter | ↑↓ Select | Enter Play | Esc",
                         "ローカル検索: キーワード+Enter | ↑↓選択 | Enter再生 | Esc",
                         "로컬 검색: 키워드+Enter | ↑↓ 선택 | Enter 재생 | Esc",
-                    )
+                    ).to_string()
                 } else {
                     self.i18n(
                         "本地搜索: 输入Enter搜索|↑↓选择|Enter播放|Esc退出",
@@ -2680,7 +2959,7 @@ impl UserInterface {
                         "Local: Enter Search|↑↓|Enter Play|Esc",
                         "ローカル: Enter検索|↑↓|Enter再生|Esc",
                         "로컬: Enter검색|↑↓|Enter재생|Esc",
-                    )
+                    ).to_string()
                 }
             } else if self.favorites_mode {
                 if self.terminal_width >= 60 {
@@ -2690,7 +2969,7 @@ impl UserInterface {
                         "Favorites: ↑↓ Select | Enter Play | d Delete | Esc Back",
                         "お気に入り: ↑↓選択 | Enter再生 | d削除 | Esc戻る",
                         "즐겨찾기: ↑↓ 선택 | Enter 재생 | d 삭제 | Esc 뒤로",
-                    )
+                    ).to_string()
                 } else {
                     self.i18n(
                         "收藏列表: ↑↓选择|Enter播放|d删除|Esc返回",
@@ -2698,7 +2977,7 @@ impl UserInterface {
                         "Fav: ↑↓|Enter|d Del|Esc",
                         "お気に入り: ↑↓|Enter|d削除|Esc",
                         "즐겨찾기: ↑↓|Enter|d삭제|Esc",
-                    )
+                    ).to_string()
                 }
             } else if self.dir_history_mode {
                 if self.terminal_width >= 60 {
@@ -2708,7 +2987,7 @@ impl UserInterface {
                         "Folders: ↑↓ Select | Enter Switch | d Delete | Esc Back",
                         "音楽フォルダ: ↑↓選択 | Enter切替 | d削除 | Esc戻る",
                         "음악 폴더: ↑↓ 선택 | Enter 전환 | d 삭제 | Esc 뒤로",
-                    )
+                    ).to_string()
                 } else {
                     self.i18n(
                         "音乐目录: ↑↓选择|Enter切换|d删除|Esc返回",
@@ -2716,7 +2995,7 @@ impl UserInterface {
                         "Folders: ↑↓|Enter|d Del|Esc",
                         "音楽フォルダ: ↑↓|Enter|d削除|Esc",
                         "음악 폴더: ↑↓|Enter|d삭제|Esc",
-                    )
+                    ).to_string()
                 }
             } else if self.help_mode {
                 if self.terminal_width >= 80 {
@@ -2726,7 +3005,7 @@ impl UserInterface {
                         "Help: ↑/↓ ↑/↓ Scroll | Up/Down Scroll | Esc Back",
                         "ヘルプ: ↑/↓ スクロール | Up/Down スクロール |  Esc戻る",
                         "도움말: ↑/↓ 스크롤 | Up/Down 스크롤 |  Esc 뒤로",
-                    )
+                    ).to_string()
                 } else {
                     self.i18n(
                         "帮助: ↑↓滚动|Esc返回",
@@ -2734,7 +3013,7 @@ impl UserInterface {
                         "Help: ↑↓|Esc",
                         "ヘルプ: ↑↓|Esc",
                         "도움말: ↑↓|Esc",
-                    )
+                    ).to_string()
                 }
             } else if self.song_info_mode {
                 if self.terminal_width >= 80 {
@@ -2744,7 +3023,7 @@ impl UserInterface {
                         "Song Info: ↑/↓ Scroll | Up/Down Scroll | Esc Back",
                         "楽曲情報: ↑/↓ スクロール | Up/Down スクロール | Esc戻る",
                         "곡 정보: ↑/↓ 스크롤 | Up/Down 스크롤 | Esc 뒤로",
-                    )
+                    ).to_string()
                 } else {
                     self.i18n(
                         "歌曲信息: ↑↓移动|Scroll滚动|Esc返回",
@@ -2752,7 +3031,7 @@ impl UserInterface {
                         "Song Info: ↑↓|Scroll|Esc",
                         "楽曲情報: ↑↓|Scroll|Esc",
                         "곡 정보: ↑↓|Scroll|Esc",
-                    )
+                    ).to_string()
                 }
             } else if self.comments_mode {
                 if self.terminal_width >= 80 {
@@ -2762,7 +3041,7 @@ impl UserInterface {
                         "Comments: ↑↓ Select | PgUp/PgDn Page | Enter Detail | Esc Back",
                         "コメント: ↑↓選択 | PgUp/PgDn頁 | Enter詳細 | Esc戻る",
                         "댓글: ↑↓ 선택 | PgUp/PgDn 페이지 | Enter 상세 | Esc 뒤로",
-                    )
+                    ).to_string()
                 } else {
                     self.i18n(
                         "歌曲评论: ↑↓选择|PgUp/PgDn翻页|Enter详情|Esc返回",
@@ -2770,7 +3049,7 @@ impl UserInterface {
                         "Comments: ↑↓|PgUp/PgDn|Enter|Esc",
                         "コメント: ↑↓|PgUp/PgDn|Enter|Esc",
                         "댓글: ↑↓|PgUp/PgDn|Enter|Esc",
-                    )
+                    ).to_string()
                 }
             } else if self.terminal_width >= 100 {
                 self.i18n(
@@ -2779,7 +3058,7 @@ impl UserInterface {
                     "Keys: ↑↓ Select | Enter Play | Space Pause | Esc Stop | ←→ Prev/Next | [,/].Seek | +-Vol | 1-5Mode | h Help| o Open | q Quit",
                     "キー: ↑↓選択 | Enter再生 | Space一時停止 | Esc停止 | ←→前後曲 | [,/].シーク | +-音量 | 1-5モード | hヘルプ | o開く | q終了",
                     "키: ↑↓ 선택 | Enter 재생 | Space 일시정지 | Esc 정지 | ←→ 이전/다음 | [,/].탐색 | +-볼륨 | 1-5모드 | h도움말 | o열기 | q종료",
-                )
+                ).to_string()
             } else if self.terminal_width >= 80 {
                 self.i18n(
                     "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | ←→上下曲 | [,/].快退快进 | +-音量 | h帮助 | o打开 | q退出",
@@ -2787,7 +3066,7 @@ impl UserInterface {
                     "Keys: ↑↓ | Enter | Space | ←→ | [,/].Seek | +-Vol | h Help| o Open | q Quit",
                     "キー: ↑↓ | Enter | Space | ←→ | [,/].シーク | +-音量 | hヘルプ | o開く | q終了",
                     "키: ↑↓ | Enter | Space | ←→ | [,/].탐색 | +-볼륨 | h도움말 | o열기 | q종료",
-                )
+                ).to_string()
             } else {
                 self.i18n(
                     "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | h帮助 |q退出",
@@ -2795,7 +3074,7 @@ impl UserInterface {
                     "Keys: ↑↓ | Enter | Space | h Help| q Quit",
                     "キー: ↑↓ | Enter | Space | hヘルプ | q終了",
                     "키: ↑↓ | Enter | Space |  h도움말  | q종료",
-                )
+                ).to_string()
             };
 
             queue!(
@@ -2921,6 +3200,39 @@ impl UserInterface {
             return Ok(());
         }
 
+        // GitHub Token 输入模式
+        if self.github_token_input_mode {
+            match code {
+                KeyCode::Esc => {
+                    self.github_token_input_mode = false;
+                    self.github_token_input_value.clear();
+                    self.cached_lyrics_title = None;
+                }
+                KeyCode::Enter => {
+                    let value = self.github_token_input_value.trim().to_string();
+                    self.github_token = if value.is_empty() {
+                        DEFAULT_GITHUB_TOKEN.to_string()
+                    } else {
+                        value
+                    };
+                    self.github_token_input_mode = false;
+                    self.github_token_input_value.clear();
+                    self.cached_lyrics_title = None;
+                    self.save_config_now();
+                }
+                KeyCode::Backspace => {
+                    self.github_token_input_value.pop();
+                    self.cached_lyrics_title = None;
+                }
+                KeyCode::Char(c) => {
+                    self.github_token_input_value.push(c);
+                    self.cached_lyrics_title = None;
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
+
         // 音乐目录模式下的键盘处理
         if self.dir_history_mode {
             match code {
@@ -3034,6 +3346,7 @@ impl UserInterface {
                     // 退出搜索模式
                     self.search_mode = false;
                     self.online_search_mode = false;
+                    self.juhe_search_mode = false;
                     self.search_query.clear();
                     self.search_results.clear();
                     self.search_selected_index = 0;
@@ -3344,6 +3657,21 @@ impl UserInterface {
                 self.search_mode = true;
                 self.help_mode = false;
                 self.online_search_mode = true;
+                self.juhe_search_mode = false;
+                self.search_query.clear();
+                self.online_search_results.clear();
+                self.online_selected_index = 0;
+                self.online_scroll_offset = 0;
+                self.online_searching = false;
+                self.online_search_page = 1;
+                self.online_search_rx = None;
+            }
+            KeyCode::Char('j') | KeyCode::Char('J') => {
+                // 进入聚合搜索搜索模式（通过独家API获取播放链接和歌词）
+                self.search_mode = true;
+                self.help_mode = false;
+                self.online_search_mode = true;
+                self.juhe_search_mode = true;
                 self.search_query.clear();
                 self.online_search_results.clear();
                 self.online_selected_index = 0;
@@ -3395,10 +3723,15 @@ impl UserInterface {
                     self.song_info_rx = None;
                     self.song_info_loading = false;
                     self.song_info_content.clear();
+                    self.github_discussion_status.clear();
+                    self.github_discussion_rx = None;
+                    self.github_discussion_loading = false;
+                    self.song_info_force_scroll = false;
                     if let Some(ref file) = {
                         let player = self.audio_player.lock().unwrap();
                         player.get_current_file()
                     } {
+                        self.song_info_name = file.name.trim().to_string();
                         self.start_fetch_song_info_for_current_song(&file.name);
                     }
                 }
@@ -3466,6 +3799,16 @@ impl UserInterface {
                 self.help_mode = true;
                 self.help_scroll_offset = 0;
             }
+            KeyCode::Char('g') | KeyCode::Char('G') => {
+                // 输入 GitHub Token
+                self.github_token_input_mode = true;
+                if self.github_token == DEFAULT_GITHUB_TOKEN {
+                    self.github_token_input_value = String::new(); // 默认 token 显示为空
+                } else {
+                    self.github_token_input_value = self.github_token.clone();
+                }
+                self.cached_lyrics_title = None;
+            }
             KeyCode::Char('q') | KeyCode::Char('Q') => {
                 // 退出
                 *self.should_quit.lock().unwrap() = true;
@@ -3518,7 +3861,11 @@ impl UserInterface {
 
         let query = self.search_query.clone();
         let page = self.online_search_page;
-        let rx = crate::search::search_online_background(query, page);
+        let rx = if self.juhe_search_mode {
+            crate::search::search_juhe_background(query, page)
+        } else {
+            crate::search::search_online_background(query, page)
+        };
         self.online_search_rx = Some(rx);
     }
 
@@ -3537,6 +3884,17 @@ impl UserInterface {
 
     /// 启动下载歌曲
     fn start_download_song(&mut self, song: OnlineSong) {
+        // 写入日志文件
+        {
+            let log_msg = format!("[UI] start_download_song: {} - {}, source={:?}, juhe_platform={}, juhe_song_id={}",
+                song.artist, song.name, song.source, song.juhe_platform, song.juhe_song_id);
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("ter-music-debug.log")
+                .and_then(|mut f| std::io::Write::write_all(&mut f, format!("{}\n", log_msg).as_bytes()));
+        }
+
         let save_dir = {
             let playlist = self.playlist.lock().unwrap();
             // 保存到当前音乐目录
@@ -3554,10 +3912,17 @@ impl UserInterface {
             format!("{} - {}", song.artist, song.name)
         };
 
+        // 聚合搜索：同时启动歌词下载
+        if song.source == crate::search::MusicSource::Juhe {
+            self.juhe_lyrics_loading = true;
+            self.juhe_lyrics_rx = Some(crate::search::get_juhe_lyrics_background(song.clone()));
+        }
+
         let rx = crate::search::download_song_background(song, save_dir);
         self.online_download_rx = Some(rx);
     }
 
+    /// 检查歌词高亮行是否变化（用于判断是否需要重绘歌词区域）
     /// 检查下载进度/结果
     fn check_download_result(&mut self) {
         if let Some(ref rx) = self.online_download_rx {
@@ -3571,6 +3936,17 @@ impl UserInterface {
                         self.online_downloading = false;
                         self.online_download_rx = None;
                         self.online_download_percent = 0;
+
+                        // 写入日志
+                        {
+                            let log_msg = format!("[UI] 下载完成: path={:?}, error={:?}",
+                                result.local_path, result.error);
+                            let _ = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("ter-music-debug.log")
+                                .and_then(|mut f| std::io::Write::write_all(&mut f, format!("{}\n", log_msg).as_bytes()));
+                        }
 
                         match result.local_path {
                             Some(path) => {
@@ -3598,6 +3974,43 @@ impl UserInterface {
         }
     }
 
+    /// 检查聚合搜索歌词下载结果
+    fn check_juhe_lyrics_result(&mut self) {
+        if let Some(ref rx) = self.juhe_lyrics_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.juhe_lyrics_loading = false;
+                self.juhe_lyrics_rx = None;
+
+                if let Some(lyrics_content) = result.lyrics {
+                    // 将歌词保存到与音乐文件同目录的 .lrc 文件
+                    let mut saved_lrc_path: Option<std::path::PathBuf> = None;
+                    {
+                        let playlist = self.playlist.lock().unwrap();
+                        if let Some(current_file) = playlist.current_index.and_then(|idx| playlist.files.get(idx)) {
+                            let music_path = std::path::Path::new(&current_file.path);
+                            let clean_name = music_path
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("unknown");
+                            if let Some(parent) = music_path.parent() {
+                                let lrc_path = parent.join(format!("{}.lrc", clean_name));
+                                let _ = std::fs::write(&lrc_path, &lyrics_content);
+                                saved_lrc_path = Some(lrc_path);
+                            }
+                        }
+                    }
+
+                    // 解析歌词并更新显示
+                    if let Some(lrc_path) = saved_lrc_path {
+                        if let Some(lyrics) = crate::lyrics::Lyrics::from_local_lrc(&lrc_path) {
+                            self.current_lyrics = Some(lyrics);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// 获取收藏列表中指定索引对应的原始播放列表索引
     fn get_fav_orig_index(&self, fav_index: usize) -> Option<usize> {
         let path = self.favorites.get(fav_index)?;
@@ -3618,6 +4031,8 @@ impl UserInterface {
             // 切歌时重置歌词下载状态
             self.lyrics_download_rx = None;
             self.lyrics_downloading = false;
+            self.juhe_lyrics_rx = None;
+            self.juhe_lyrics_loading = false;
 
             // 切歌时重置评论状态
             self.comments_file_path = None;
@@ -3636,6 +4051,11 @@ impl UserInterface {
             self.song_info_content.clear();
             self.song_info_rx = None;
             self.song_info_loading = false;
+            self.song_info_name.clear();
+            self.github_discussion_status.clear();
+            self.github_discussion_rx = None;
+            self.github_discussion_loading = false;
+            self.song_info_force_scroll = false;
 
             let play_result = {
                 let mut audio_player = self.audio_player.lock().unwrap();
@@ -4354,6 +4774,25 @@ impl UserInterface {
         };
     }
 
+    /// 设置 GitHub Token（为空则使用默认 Token）
+    pub fn set_github_token(&mut self, token: String) {
+        let token = token.trim().to_string();
+        self.github_token = if token.is_empty() {
+            DEFAULT_GITHUB_TOKEN.to_string()
+        } else {
+            token
+        };
+    }
+
+    /// 获取 GitHub Token（保存到配置，空字符串表示使用默认）
+    pub fn get_github_token(&self) -> String {
+        if self.github_token == DEFAULT_GITHUB_TOKEN {
+            String::new() // 默认 token 保存为空，表示使用默认
+        } else {
+            self.github_token.clone()
+        }
+    }
+
     /// 获取 API Key（保存到配置）
     pub fn get_api_key(&self) -> String {
         self.api_key.clone()
@@ -4392,6 +4831,7 @@ impl UserInterface {
             api_key: self.api_key.clone(),
             api_base_url: self.api_base_url.clone(),
             api_model: self.api_model.clone(),
+            github_token: self.get_github_token(),
         };
 
         new_config.save();
@@ -4439,10 +4879,16 @@ impl UserInterface {
                 self.check_download_result();
             }
 
+            // 检查聚合搜索歌词下载结果
+            if self.juhe_lyrics_loading {
+                self.check_juhe_lyrics_result();
+            }
+
             // 检查是否需要更新进度条和歌词（播放中持续更新波形）
             let now = std::time::Instant::now();
             if (current_state == PlayState::Playing
-                || self.song_info_loading)
+                || self.song_info_loading
+                || self.github_discussion_loading)
                 && now.duration_since(last_progress_update) >= progress_update_interval
             {
                 self.draw()?;
@@ -4554,3 +5000,4 @@ fn wrap_text_to_width(text: &str, max_width: usize) -> Vec<String> {
 
     out
 }
+

@@ -310,7 +310,7 @@ impl Lyrics {
 
     /// 从文件名解析歌手和歌名
     /// 格式: "歌手 - 歌名" 或 "歌名"
-    fn parse_artist_title(filename: &str) -> Option<(String, String)> {
+    pub fn parse_artist_title(filename: &str) -> Option<(String, String)> {
         // 尝试按 " - " 分割
         if let Some(pos) = filename.find(" - ") {
             let artist = filename[..pos].trim().to_string();

@@ -49,7 +49,8 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 
 ### 🔍 Search
 - **Local search**: press `s` to search songs in current music directory
-- **Online search**: press `n` to search online songs by keyword (Kuwo + Kugou + NetEase, 3 platforms)
+- **Online search**: press `n` to search online songs by keyword
+- **Juhe Search**: Press `j` to enter. Search for juhe songs based on keyword matching.
 - **Paging**: `PgUp` / `PgDn` for more results
 - **Online download**: press `Enter` on selected online result to download into current music directory (with progress display)
 
@@ -649,14 +650,34 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260426074922321_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604260749346646_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202604260749443146_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604260750051351_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604281254083505_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604281254169808_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260428125427848_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604281254393938_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Changelog
+
+## Version 1.4.0 (2026-04-28)
+
+### 🎉 New Features
+
+#### Song Juhe Search as a Backup
+- ✨ **Juhe Search for Songs**: When searching online fails, you can use Juhe search to look for songs by song title/singer and download them.
+- ✨ **Juhe Search for Lyrics**: If there are no local lyrics and the online search fails, the system will automatically search for lyrics by song title/singer through Juhe search and download them.
+- ✨ **Seamless experience**: search and download happen in the background without blocking UI
+
+#### GitHub Token Configuration
+- ✨ **Custom GitHub Token**: press `g` to input your own GitHub Token, saved to config file
+- ✨ **Default fallback**: automatically uses a default Token when not configured
+- ✨ **Identity recognition**: When submitting song information for discussion using your own Token, it will display your own GitHub identity.
+
+### 🔧 Improvements
+
+- 🔍 **New config item**: `github_token` (GitHub Token, leave empty to use default)
+
+---
 
 ## Version 1.3.0 (2026-04-26)
 

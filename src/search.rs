@@ -7,6 +7,20 @@ use serde_json::json;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
+/// 写入日志文件（追加模式）
+macro_rules! log_file {
+    ($($arg:tt)*) => {{
+        let msg = format!($($arg)*);
+        let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
+        let line = format!("[{}] {}\n", timestamp, msg);
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("ter-music-debug.log")
+            .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+    }};
+}
+
 /// 网络搜索结果
 #[derive(Debug, Clone)]
 pub struct OnlineSong {
@@ -22,6 +36,10 @@ pub struct OnlineSong {
     pub duration_ms: Option<i64>,
     /// 来源平台
     pub source: MusicSource,
+    /// 聚合搜索平台标识（仅 Juhe 来源使用，如 "kw"/"kg"/"tx"/"wy"/"mg"）
+    pub juhe_platform: String,
+    /// 聚合搜索歌曲ID字符串（仅 Juhe 来源使用，平台特定ID的字符串形式）
+    pub juhe_song_id: String,
 }
 
 /// 音乐来源
@@ -33,6 +51,8 @@ pub enum MusicSource {
     NetEase,
     /// 酷狗音乐
     Kugou,
+    /// 聚合搜索（通过独家API获取播放链接）
+    Juhe,
 }
 
 /// 网络搜索下载结果
@@ -226,11 +246,49 @@ struct KugouSong {
     songname: Option<String>,
     /// 歌手名
     singername: Option<String>,
-    /// 时长（秒字符串）
-    duration: Option<String>,
+    /// 时长（秒，可能是字符串或整数）
+    duration: Option<StringOrInt>,
     /// 付费类型：0=免费，3=付费
     #[allow(dead_code)]
     pay_type: Option<i64>,
+}
+
+/// 兼容字符串和整数类型的反序列化辅助
+#[derive(Debug)]
+enum StringOrInt {
+    S(String),
+    I(i64),
+}
+
+impl<'de> serde::Deserialize<'de> for StringOrInt {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct StringOrIntVisitor;
+        impl<'de> serde::de::Visitor<'de> for StringOrIntVisitor {
+            type Value = StringOrInt;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a string or an integer")
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<StringOrInt, E> {
+                Ok(StringOrInt::S(v.to_string()))
+            }
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<StringOrInt, E> {
+                Ok(StringOrInt::I(v))
+            }
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<StringOrInt, E> {
+                Ok(StringOrInt::I(v as i64))
+            }
+        }
+        deserializer.deserialize_any(StringOrIntVisitor)
+    }
+}
+
+impl StringOrInt {
+    fn to_seconds(&self) -> Option<i64> {
+        match self {
+            StringOrInt::S(s) => s.parse::<i64>().ok(),
+            StringOrInt::I(n) => Some(*n),
+        }
+    }
 }
 
 // ============================================================
@@ -326,7 +384,7 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
             (
                 "https://openrouter.ai/api/v1/chat/completions".to_string(),
                 "minimax/minimax-m2.5:free".to_string(),
-                "Bearer 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".to_string(),
+                "Bearer sk-xxxxxx".to_string(),
             )
         };
 
@@ -540,6 +598,8 @@ fn search_kuwo(client: &reqwest::blocking::Client, query: &str, page: usize) -> 
             hash: String::new(),
             duration_ms,
             source: MusicSource::Kuwo,
+            juhe_platform: String::new(),
+            juhe_song_id: String::new(),
         }
     }).collect())
 }
@@ -576,6 +636,8 @@ fn search_netease(client: &reqwest::blocking::Client, query: &str, page: usize) 
             hash: String::new(),
             duration_ms: s.duration,
             source: MusicSource::NetEase,
+            juhe_platform: String::new(),
+            juhe_song_id: String::new(),
         }
     }).collect())
 }
@@ -587,16 +649,51 @@ fn search_kugou(client: &reqwest::blocking::Client, query: &str, page: usize) ->
         urlencoding::encode(query),
         page
     );
+    log_file!("[Kugou] 请求URL: {}", search_url);
 
-    let response = client.get(&search_url)
-        .send()
-        .ok()?;
+    let response = match client.get(&search_url).send() {
+        Ok(r) => r,
+        Err(e) => {
+            log_file!("[Kugou] HTTP请求失败: {}", e);
+            return None;
+        }
+    };
 
-    let text = response.text().ok()?;
-    let search_result: KugouSearchResult = serde_json::from_str(&text).ok()?;
+    let text = match response.text() {
+        Ok(t) => t,
+        Err(e) => {
+            log_file!("[Kugou] 读取响应失败: {}", e);
+            return None;
+        }
+    };
+    log_file!("[Kugou] 响应长度: {} 字节", text.len());
+    log_file!("[Kugou] 响应前200字符: {}", &text[..text.len().min(200)]);
 
-    let data = search_result.data?;
-    let info = data.info?;
+    let search_result: KugouSearchResult = match serde_json::from_str(&text) {
+        Ok(r) => r,
+        Err(e) => {
+            log_file!("[Kugou] JSON解析失败: {}", e);
+            return None;
+        }
+    };
+
+    let data = match search_result.data {
+        Some(d) => d,
+        None => {
+            log_file!("[Kugou] data字段为None");
+            return None;
+        }
+    };
+
+    let info = match data.info {
+        Some(i) => i,
+        None => {
+            log_file!("[Kugou] info字段为None");
+            return None;
+        }
+    };
+
+    log_file!("[Kugou] 解析到 {} 首歌", info.len());
 
     Some(info.into_iter().filter_map(|s| {
         let hash = s.hash.unwrap_or_default();
@@ -606,15 +703,17 @@ fn search_kugou(client: &reqwest::blocking::Client, query: &str, page: usize) ->
         let name = s.songname.unwrap_or_default();
         let artist = s.singername.unwrap_or_default();
         let duration_ms = s.duration
-            .and_then(|d| d.parse::<i64>().ok())
+            .and_then(|d| d.to_seconds())
             .map(|secs| secs * 1000);
         Some(OnlineSong {
             name,
             artist,
-            id: 0, // 酷狗不用数字ID，用 hash
+            id: 0,
             hash,
             duration_ms,
             source: MusicSource::Kugou,
+            juhe_platform: String::new(),
+            juhe_song_id: String::new(),
         })
     }).collect())
 }
@@ -793,9 +892,13 @@ fn download_song_with_progress<F>(song: &OnlineSong, save_dir: &PathBuf, on_prog
 where
     F: Fn(u8) + Send + Sync,
 {
+    log_file!("[Download] 开始下载: {} - {}, source={:?}, juhe_platform={}, juhe_song_id={}", 
+        song.artist, song.name, song.source, song.juhe_platform, song.juhe_song_id);
+
     let client = match create_download_client() {
         Some(c) => c,
         None => {
+            log_file!("[Download] 创建HTTP客户端失败");
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
@@ -809,11 +912,13 @@ where
         MusicSource::Kuwo => get_kuwo_download_url(&client, song.id),
         MusicSource::Kugou => get_kugou_download_url(&client, &song.hash),
         MusicSource::NetEase => get_netease_download_url(&client, song.id),
+        MusicSource::Juhe => get_juhe_download_url(&client, song),
     };
 
     let mp3_url = match mp3_url {
         Some(u) if !u.is_empty() => u,
         _ => {
+            log_file!("[Download] 无法获取下载链接, source={:?}", song.source);
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
@@ -822,12 +927,14 @@ where
         }
     };
 
+    log_file!("[Download] 获取到URL: {}...", &mp3_url[..mp3_url.len().min(80)]);
     on_progress(5);
 
     // 下载音频文件（流式读取以支持进度）
     let referer = match song.source {
         MusicSource::Kuwo | MusicSource::Kugou => "https://www.kuwo.cn/",
         MusicSource::NetEase => "https://music.163.com/",
+        MusicSource::Juhe => "https://www.kuwo.cn/",
     };
     let response = match client.get(&mp3_url)
         .header("Referer", referer)
@@ -938,6 +1045,37 @@ where
     match std::fs::write(&save_path, &all_bytes) {
         Ok(_) => {
             on_progress(100);
+
+            // 下载歌词并保存为 .lrc 文件
+            let lrc_filename = save_path.file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| format!("{}.lrc", s));
+            let lrc_path = lrc_filename.as_ref()
+                .and_then(|name| save_path.parent().map(|p| p.join(name)));
+
+            if let Some(ref lrc_path) = lrc_path {
+                let lyric_content = match song.source {
+                    MusicSource::Juhe => get_juhe_lyrics(&client, song),
+                    MusicSource::Kugou => {
+                        // 酷狗歌曲也通过Juhe API获取歌词
+                        let juhe_song = OnlineSong {
+                            juhe_platform: "kg".to_string(),
+                            juhe_song_id: song.hash.clone(),
+                            ..song.clone()
+                        };
+                        get_juhe_lyrics(&client, &juhe_song)
+                    }
+                    _ => None,
+                };
+
+                if let Some(content) = lyric_content {
+                    log_file!("[Download] 获取到歌词，保存到: {:?}", lrc_path);
+                    let _ = std::fs::write(lrc_path, &content);
+                } else {
+                    log_file!("[Download] 未获取到歌词");
+                }
+            }
+
             DownloadResult {
                 song: song.clone(),
                 local_path: Some(save_path),
@@ -971,6 +1109,7 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
         MusicSource::Kuwo => get_kuwo_download_url(&client, song.id),
         MusicSource::Kugou => get_kugou_download_url(&client, &song.hash),
         MusicSource::NetEase => get_netease_download_url(&client, song.id),
+        MusicSource::Juhe => get_juhe_download_url(&client, song),
     };
 
     let mp3_url = match mp3_url {
@@ -985,8 +1124,13 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
     };
 
     // 下载音频文件
+    let referer = match song.source {
+        MusicSource::Kuwo | MusicSource::Kugou => "https://www.kuwo.cn/",
+        MusicSource::NetEase => "https://music.163.com/",
+        MusicSource::Juhe => "https://www.kuwo.cn/",
+    };
     let response = match client.get(&mp3_url)
-        .header("Referer", "https://www.kuwo.cn/")
+        .header("Referer", referer)
         .send()
     {
         Ok(r) => r,
@@ -1289,4 +1433,723 @@ fn sanitize_filename(name: &str) -> String {
             _ => c,
         })
         .collect()
+}
+
+// ============================================================
+// GitHub Discussions API
+// ============================================================
+
+/// GitHub Discussion 创建结果
+#[derive(Debug, Clone)]
+pub struct GitHubDiscussionResult {
+    /// 创建成功时的 Discussion URL
+    pub url: Option<String>,
+    /// 错误信息
+    pub error: Option<String>,
+}
+
+/// 在后台线程中创建 GitHub Discussion
+pub fn create_github_discussion_background(
+    github_token: String,
+    github_repo: String,
+    title: String,
+    body: String,
+) -> mpsc::Receiver<GitHubDiscussionResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = create_github_discussion(&github_token, &github_repo, &title, &body);
+        let _ = tx.send(result);
+    });
+    rx
+}
+
+/// 创建 GitHub Discussion（show-and-tell 类别）
+fn create_github_discussion(
+    github_token: &str,
+    github_repo: &str,
+    title: &str,
+    body: &str,
+) -> GitHubDiscussionResult {
+    if github_token.trim().is_empty() {
+        return GitHubDiscussionResult {
+            url: None,
+            error: Some("未配置 GitHub Token，无法创建 Discussion。请在配置文件中设置 github_token。".to_string()),
+        };
+    }
+
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .user_agent("TerMusicRust/1.3.0")
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return GitHubDiscussionResult {
+                url: None,
+                error: Some(format!("创建 HTTP 客户端失败: {}", e)),
+            }
+        }
+    };
+
+    // 解析 owner/repo
+    let parts: Vec<&str> = github_repo.trim().split('/').collect();
+    if parts.len() != 2 {
+        return GitHubDiscussionResult {
+            url: None,
+            error: Some(format!("GitHub 仓库格式错误，应为 owner/repo，实际: {}", github_repo)),
+        };
+    }
+    let owner = parts[0];
+    let repo_name = parts[1];
+
+    // 第一步：列出仓库最近的 Discussions，按标题精确匹配检查是否已存在
+    // （不使用 search API，因为搜索索引有延迟且对中文标题匹配不可靠）
+    let check_query = json!({
+        "query": format!(
+            r#"{{
+                repository(owner: "{}", name: "{}") {{
+                    discussions(first: 100, orderBy: {{field: CREATED_AT, direction: DESC}}) {{
+                        nodes {{
+                            title
+                            url
+                        }}
+                    }}
+                }}
+            }}"#,
+            owner, repo_name
+        )
+    });
+
+    let mut existing_url: Option<String> = None;
+    if let Ok(response) = client
+        .post("https://api.github.com/graphql")
+        .header("Authorization", format!("Bearer {}", github_token.trim()))
+        .json(&check_query)
+        .send()
+    {
+        if let Ok(resp_json) = response.json::<serde_json::Value>() {
+            if let Some(nodes) = resp_json
+                .get("data")
+                .and_then(|d| d.get("repository"))
+                .and_then(|r| r.get("discussions"))
+                .and_then(|d| d.get("nodes"))
+                .and_then(|n| n.as_array())
+            {
+                for node in nodes {
+                    let existing_title = node.get("title").and_then(|t| t.as_str()).unwrap_or("");
+                    if existing_title.trim() == title.trim() {
+                        if let Some(url) = node.get("url").and_then(|u| u.as_str()) {
+                            existing_url = Some(url.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(url) = existing_url {
+        return GitHubDiscussionResult {
+            url: Some(url),
+            error: None,
+        };
+    }
+
+    // 第二步：获取仓库 ID 和 discussion category ID
+    let query_repo = json!({
+        "query": format!(
+            r#"{{
+                repository(owner: "{}", name: "{}") {{
+                    id
+                    discussionCategories(first: 20) {{
+                        nodes {{
+                            id
+                            name
+                            slug
+                        }}
+                    }}
+                }}
+            }}"#,
+            owner, repo_name
+        )
+    });
+
+    let response = match client
+        .post("https://api.github.com/graphql")
+        .header("Authorization", format!("Bearer {}", github_token.trim()))
+        .json(&query_repo)
+        .send()
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return GitHubDiscussionResult {
+                url: None,
+                error: Some(format!("请求 GitHub API 失败: {}", e)),
+            }
+        }
+    };
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().unwrap_or_default();
+        return GitHubDiscussionResult {
+            url: None,
+            error: Some(format!("GitHub API 请求失败 (HTTP {}): {}", status.as_u16(), text.chars().take(200).collect::<String>())),
+        };
+    }
+
+    let resp_json: serde_json::Value = match response.json() {
+        Ok(v) => v,
+        Err(e) => {
+            return GitHubDiscussionResult {
+                url: None,
+                error: Some(format!("解析 GitHub API 响应失败: {}", e)),
+            }
+        }
+    };
+
+    // 检查 GraphQL 错误
+    if let Some(errors) = resp_json.get("errors") {
+        let msg = errors
+            .as_array()
+            .and_then(|arr| arr.first())
+            .and_then(|e| e.get("message"))
+            .and_then(|m| m.as_str())
+            .unwrap_or("未知 GraphQL 错误");
+        return GitHubDiscussionResult {
+            url: None,
+            error: Some(format!("GitHub GraphQL 错误: {}", msg)),
+        };
+    }
+
+    let repository = match resp_json
+        .get("data")
+        .and_then(|d| d.get("repository"))
+    {
+        Some(r) => r,
+        None => {
+            return GitHubDiscussionResult {
+                url: None,
+                error: Some("未找到仓库，请检查 github_repo 配置。".to_string()),
+            }
+        }
+    };
+
+    let repo_id = match repository.get("id").and_then(|v| v.as_str()) {
+        Some(id) => id.to_string(),
+        None => {
+            return GitHubDiscussionResult {
+                url: None,
+                error: Some("无法获取仓库 ID。".to_string()),
+            }
+        }
+    };
+
+    // 查找 "show-and-tell" 类别
+    let category_id = repository
+        .get("discussionCategories")
+        .and_then(|c| c.get("nodes"))
+        .and_then(|n| n.as_array())
+        .and_then(|nodes| {
+            nodes.iter().find_map(|node| {
+                let slug = node.get("slug").and_then(|s| s.as_str()).unwrap_or("");
+                if slug == "show-and-tell" {
+                    node.get("id").and_then(|i| i.as_str()).map(|s| s.to_string())
+                } else {
+                    None
+                }
+            })
+        });
+
+    let category_id = match category_id {
+        Some(id) => id,
+        None => {
+            return GitHubDiscussionResult {
+                url: None,
+                error: Some("仓库中未找到 'show-and-tell' Discussion 类别。请先在 GitHub 仓库设置中启用 Discussions 并确认该类别存在。".to_string()),
+            }
+        }
+    };
+
+    // 第二步：创建 Discussion（使用 variables 避免 body 中的特殊字符破坏 GraphQL 语法）
+    let mutation = json!({
+        "query": r#"mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
+            createDiscussion(input: {repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body}) {
+                discussion {
+                    url
+                }
+            }
+        }"#,
+        "variables": {
+            "repoId": repo_id,
+            "categoryId": category_id,
+            "title": title,
+            "body": body
+        }
+    });
+
+    let response = match client
+        .post("https://api.github.com/graphql")
+        .header("Authorization", format!("Bearer {}", github_token.trim()))
+        .json(&mutation)
+        .send()
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return GitHubDiscussionResult {
+                url: None,
+                error: Some(format!("创建 Discussion 请求失败: {}", e)),
+            }
+        }
+    };
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().unwrap_or_default();
+        return GitHubDiscussionResult {
+            url: None,
+            error: Some(format!("创建 Discussion 失败 (HTTP {}): {}", status.as_u16(), text.chars().take(200).collect::<String>())),
+        };
+    }
+
+    let resp_json: serde_json::Value = match response.json() {
+        Ok(v) => v,
+        Err(e) => {
+            return GitHubDiscussionResult {
+                url: None,
+                error: Some(format!("解析创建 Discussion 响应失败: {}", e)),
+            }
+        }
+    };
+
+    // 检查 GraphQL 错误
+    if let Some(errors) = resp_json.get("errors") {
+        let msg = errors
+            .as_array()
+            .and_then(|arr| arr.first())
+            .and_then(|e| e.get("message"))
+            .and_then(|m| m.as_str())
+            .unwrap_or("未知 GraphQL 错误");
+        return GitHubDiscussionResult {
+            url: None,
+            error: Some(format!("创建 Discussion GraphQL 错误: {}", msg)),
+        };
+    }
+
+    let url = resp_json
+        .get("data")
+        .and_then(|d| d.get("createDiscussion"))
+        .and_then(|c| c.get("discussion"))
+        .and_then(|d| d.get("url"))
+        .and_then(|u| u.as_str())
+        .map(|s| s.to_string());
+
+    GitHubDiscussionResult {
+        url,
+        error: None,
+    }
+}
+
+// ============================================================
+// 聚合搜索 API
+// ============================================================
+
+/// 聚合搜索 API 基地址
+const JUHE_API_BASE: &str = "https://88.lxmusic.xn--fiqs8s";
+/// 聚合搜索 API 密钥
+const JUHE_API_KEY: &str = "lxmusic";
+/// 聚合搜索 API 路径前缀
+const JUHE_API_PREFIX: &str = "/v4";
+
+/// 聚合搜索歌词下载结果
+pub struct JuheLyricsResult {
+    /// 歌曲信息
+    #[allow(dead_code)]
+    pub song: OnlineSong,
+    /// 歌词内容（LRC 格式）
+    pub lyrics: Option<String>,
+    /// 错误信息
+    #[allow(dead_code)]
+    pub error: Option<String>,
+}
+
+/// 在后台线程中搜索聚合搜索
+pub fn search_juhe_background(query: String, page: usize) -> mpsc::Receiver<SearchDownloadResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = search_juhe(&query, page);
+        let _ = tx.send(result);
+    });
+    rx
+}
+
+/// 搜索聚合搜索（搜索所有平台，标记为 Juhe 来源）
+fn search_juhe(query: &str, page: usize) -> SearchDownloadResult {
+    log_file!("[Juhe] 搜索开始: query={}, page={}", query, page);
+    let client = match create_search_client() {
+        Some(c) => c,
+        None => {
+            log_file!("[Juhe] 创建HTTP客户端失败");
+            return SearchDownloadResult {
+                query: query.to_string(),
+                songs: Vec::new(),
+            }
+        }
+    };
+
+    let mut all_songs = Vec::new();
+
+    // 搜索酷狗音乐（主要平台，API 可正常获取播放URL）
+    if let Some(songs) = search_kugou(&client, query, page) {
+        log_file!("[Juhe] 酷狗搜索返回 {} 首歌", songs.len());
+        for s in songs {
+            all_songs.push(OnlineSong {
+                juhe_platform: "kg".to_string(),
+                juhe_song_id: s.hash.clone(),
+                source: MusicSource::Juhe,
+                ..s
+            });
+        }
+    } else {
+        log_file!("[Juhe] 酷狗搜索返回 None");
+    }
+
+    // 如果酷狗无结果，尝试酷我作为备用
+    if all_songs.is_empty() {
+        if let Some(songs) = search_kuwo(&client, query, page) {
+            log_file!("[Juhe] 酷我搜索返回 {} 首歌（备用）", songs.len());
+            for s in songs {
+                all_songs.push(OnlineSong {
+                    juhe_platform: "kw".to_string(),
+                    juhe_song_id: s.id.to_string(),
+                    source: MusicSource::Juhe,
+                    ..s
+                });
+            }
+        }
+    }
+
+    // 如果酷我也无结果，尝试网易作为备用
+    if all_songs.is_empty() {
+        if let Some(songs) = search_netease(&client, query, page) {
+            log_file!("[Juhe] 网易搜索返回 {} 首歌（备用）", songs.len());
+            for s in songs {
+                all_songs.push(OnlineSong {
+                    juhe_platform: "wy".to_string(),
+                    juhe_song_id: s.id.to_string(),
+                    source: MusicSource::Juhe,
+                    ..s
+                });
+            }
+        }
+    }
+
+    log_file!("[Juhe] 搜索完成: {} 首歌", all_songs.len());
+    SearchDownloadResult {
+        query: query.to_string(),
+        songs: all_songs,
+    }
+}
+
+/// 获取聚合搜索下载链接
+/// API 格式: GET /v4/url/{platform}/{songId}/{quality}?key=xxx
+/// 成功响应: {"code":0,"msg":"success","data":"https://...mp3"}  ← data 直接是 URL 字符串
+/// 或:      {"code":0,"msg":"success","data":{"url":"https://..."}}  ← data 是对象
+fn get_juhe_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+    let platform = &song.juhe_platform;
+    let song_id = &song.juhe_song_id;
+
+    log_file!("[JuheURL] 获取下载链接: platform={}, song_id={}", platform, song_id);
+
+    // 尝试多种音质，从低到高
+    let qualities = ["128k", "320k", "192kmp3", "128kmp3", "flac"];
+
+    for quality in &qualities {
+        let url = format!(
+            "{}{}/url/{}/{}/{}?key={}",
+            JUHE_API_BASE, JUHE_API_PREFIX, platform, song_id, quality, JUHE_API_KEY
+        );
+
+        log_file!("[JuheURL] 请求: {}", url);
+
+        if let Ok(response) = client
+            .get(&url)
+            .header("User-Agent", "lx-music-desktop/2.12.1")
+            .timeout(std::time::Duration::from_secs(15))
+            .send()
+        {
+            if let Ok(text) = response.text() {
+                log_file!("[JuheURL] 响应(前200): {}", &text[..text.len().min(200)]);
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                    // 检查 code: 0 表示成功
+                    let code = value.get("code").and_then(|c| c.as_i64()).unwrap_or(-1);
+                    if code != 0 {
+                        continue; // 尝试下一个音质
+                    }
+
+                    // 方式1: data 直接是 URL 字符串（常见格式）
+                    if let Some(url_str) = value.get("data").and_then(|d| d.as_str()) {
+                        if !url_str.is_empty() && url_str.starts_with("http") {
+                            return Some(url_str.to_string());
+                        }
+                    }
+
+                    // 方式2: data 是对象，包含 url 字段
+                    if let Some(url_str) = value
+                        .get("data")
+                        .and_then(|d| d.get("url"))
+                        .and_then(|u| u.as_str())
+                    {
+                        if !url_str.is_empty() {
+                            return Some(url_str.to_string());
+                        }
+                    }
+
+                    // 方式3: 直接从顶层 url 字段获取
+                    if let Some(url_str) = value.get("url").and_then(|u| u.as_str()) {
+                        if !url_str.is_empty() {
+                            return Some(url_str.to_string());
+                        }
+                    }
+
+                    // 方式4: data 对象中其他可能的 URL 字段
+                    let alt_fields = ["playUrl", "src", "mp3Url", "play_url"];
+                    for field in &alt_fields {
+                        if let Some(url_str) = value
+                            .get("data")
+                            .and_then(|d| d.get(*field))
+                            .and_then(|u| u.as_str())
+                        {
+                            if !url_str.is_empty() && url_str.starts_with("http") {
+                                return Some(url_str.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// 获取聚合搜索歌词
+/// API 格式: GET /v4/lyric/{platform}/{songId}?key=xxx
+/// 成功响应: {"code":0,"msg":"success","data":{"lyric":"[ti:...]..."}}
+fn get_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+    let platform = &song.juhe_platform;
+    let song_id = &song.juhe_song_id;
+
+    let url = format!(
+        "{}{}/lyric/{}/{}?key={}",
+        JUHE_API_BASE, JUHE_API_PREFIX, platform, song_id, JUHE_API_KEY
+    );
+
+    if let Ok(response) = client
+        .get(&url)
+        .header("User-Agent", "lx-music-desktop/2.12.1")
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+    {
+        if let Ok(text) = response.text() {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                // 检查 code: 0 表示成功
+                let code = value.get("code").and_then(|c| c.as_i64()).unwrap_or(-1);
+                if code != 0 {
+                    return None;
+                }
+
+                // 尝试多种路径获取歌词
+                let lyric_candidates = [
+                    // data.lyric
+                    value.get("data").and_then(|d| d.get("lyric")).and_then(|l| l.as_str()),
+                    // data.lrc.lyric
+                    value.get("data").and_then(|d| d.get("lrc")).and_then(|l| l.get("lyric")).and_then(|l| l.as_str()),
+                    // data.lrc
+                    value.get("data").and_then(|d| d.get("lrc")).and_then(|l| l.as_str()),
+                    // 直接 lyric
+                    value.get("lyric").and_then(|l| l.as_str()),
+                ];
+
+                for lyric_opt in &lyric_candidates {
+                    if let Some(lyric) = lyric_opt {
+                        if !lyric.is_empty() {
+                            return Some(lyric.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// 通过歌名和歌手名搜索并获取聚合歌词（用于本地歌曲回退歌词下载）
+/// 先搜索匹配歌曲，取第一个结果，再通过其 platform/song_id 获取歌词
+pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, _music_path: std::path::PathBuf) -> mpsc::Receiver<JuheLyricsResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let query = if artist.is_empty() {
+            title.clone()
+        } else {
+            format!("{} {}", artist, title)
+        };
+
+        log_file!("[JuheLyrics] 通过搜索获取歌词: query={}", query);
+
+        let client = match reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .user_agent("lx-music-desktop/2.12.1")
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = tx.send(JuheLyricsResult {
+                    song: OnlineSong {
+                        name: title,
+                        artist,
+                        id: 0,
+                        hash: String::new(),
+                        duration_ms: None,
+                        source: MusicSource::Juhe,
+                        juhe_platform: String::new(),
+                        juhe_song_id: String::new(),
+                    },
+                    lyrics: None,
+                    error: Some(format!("创建HTTP客户端失败: {}", e)),
+                });
+                return;
+            }
+        };
+
+        // 按优先级尝试搜索各平台，取第一个结果
+        let mut found_song: Option<OnlineSong> = None;
+
+        // 1. 先搜酷狗
+        if let Some(songs) = search_kugou(&client, &query, 1) {
+            if let Some(s) = songs.first() {
+                found_song = Some(OnlineSong {
+                    juhe_platform: "kg".to_string(),
+                    juhe_song_id: s.hash.clone(),
+                    source: MusicSource::Juhe,
+                    ..s.clone()
+                });
+                log_file!("[JuheLyrics] 酷狗搜索命中: {} - {}", s.artist, s.name);
+            }
+        }
+
+        // 2. 酷狗没搜到，试酷我
+        if found_song.is_none() {
+            if let Some(songs) = search_kuwo(&client, &query, 1) {
+                if let Some(s) = songs.first() {
+                    found_song = Some(OnlineSong {
+                        juhe_platform: "kw".to_string(),
+                        juhe_song_id: s.id.to_string(),
+                        source: MusicSource::Juhe,
+                        ..s.clone()
+                    });
+                    log_file!("[JuheLyrics] 酷我搜索命中: {} - {}", s.artist, s.name);
+                }
+            }
+        }
+
+        // 3. 酷我也没搜到，试网易
+        if found_song.is_none() {
+            if let Some(songs) = search_netease(&client, &query, 1) {
+                if let Some(s) = songs.first() {
+                    found_song = Some(OnlineSong {
+                        juhe_platform: "wy".to_string(),
+                        juhe_song_id: s.id.to_string(),
+                        source: MusicSource::Juhe,
+                        ..s.clone()
+                    });
+                    log_file!("[JuheLyrics] 网易搜索命中: {} - {}", s.artist, s.name);
+                }
+            }
+        }
+
+        let song = match found_song {
+            Some(s) => s,
+            None => {
+                log_file!("[JuheLyrics] 搜索无结果: {}", query);
+                let _ = tx.send(JuheLyricsResult {
+                    song: OnlineSong {
+                        name: title,
+                        artist,
+                        id: 0,
+                        hash: String::new(),
+                        duration_ms: None,
+                        source: MusicSource::Juhe,
+                        juhe_platform: String::new(),
+                        juhe_song_id: String::new(),
+                    },
+                    lyrics: None,
+                    error: Some("搜索无结果".to_string()),
+                });
+                return;
+            }
+        };
+
+        // 用搜索到的歌曲信息获取歌词
+        match get_juhe_lyrics(&client, &song) {
+            Some(lyrics) => {
+                log_file!("[JuheLyrics] 歌词获取成功，长度={}", lyrics.len());
+                let _ = tx.send(JuheLyricsResult {
+                    song,
+                    lyrics: Some(lyrics),
+                    error: None,
+                });
+            }
+            None => {
+                log_file!("[JuheLyrics] 歌词获取失败");
+                let _ = tx.send(JuheLyricsResult {
+                    song,
+                    lyrics: None,
+                    error: Some("无法获取歌词".to_string()),
+                });
+            }
+        }
+    });
+    rx
+}
+
+/// 在后台线程中下载聚合搜索歌词
+pub fn get_juhe_lyrics_background(song: OnlineSong) -> mpsc::Receiver<JuheLyricsResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let client = match reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .user_agent("lx-music-desktop/2.12.1")
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = tx.send(JuheLyricsResult {
+                    song: song.clone(),
+                    lyrics: None,
+                    error: Some(format!("创建HTTP客户端失败: {}", e)),
+                });
+                return;
+            }
+        };
+
+        match get_juhe_lyrics(&client, &song) {
+            Some(lyrics) => {
+                let _ = tx.send(JuheLyricsResult {
+                    song,
+                    lyrics: Some(lyrics),
+                    error: None,
+                });
+            }
+            None => {
+                let _ = tx.send(JuheLyricsResult {
+                    song,
+                    lyrics: None,
+                    error: Some("无法获取歌词".to_string()),
+                });
+            }
+        }
+    });
+    rx
 }

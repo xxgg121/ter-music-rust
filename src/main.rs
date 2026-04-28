@@ -52,6 +52,7 @@ fn show_help() {
     println!(" o 打开音乐目录");
     println!(" s 搜索本地歌曲");
     println!(" n 搜索网络歌曲");
+    println!(" j 搜索聚合歌曲");
     println!(" i 查看歌曲信息");
     println!(" f 添加到收藏夹");
     println!(" v 查看收藏列表");
@@ -61,6 +62,7 @@ fn show_help() {
     println!(" l 切换界面语言");
     println!(" t 切换界面主题");
     println!(" k 配置API 接口");
+    println!(" g 配置Github Token");
     println!(" q 退出音乐程序\n");
     println!("播放模式:");
     println!(" 1 - 单曲播放（歌曲播放完停止）");
@@ -72,7 +74,8 @@ fn show_help() {
     println!("MP3、WAV、FLAC、OGG、OGA、Opus、M4A、AAC、AIFF、APE\n");
     println!("配置文件:");
     println!(" 配置路径: 用户配置目录/ter-music-rust/config.json");
-    println!(" 自动保存: 音乐目录、播放模式、音量大小、收藏列表、当前歌曲、当前主题、当前语言\n");
+    println!(" 自动保存: 音乐目录、播放模式、音量大小、收藏列表、当前歌曲、当前主题、当前语言、API接口、Github Token\n");
+    println!("Github仓库: https://github.com/xxgg121/ter-music-rust\n");
 }
 
 /// 主函数
@@ -177,6 +180,7 @@ fn main() {
     ui.set_api_key(config.api_key.clone());
     ui.set_api_base_url(config.api_base_url.clone());
     ui.set_api_model(config.api_model.clone());
+    ui.set_github_token(config.github_token.clone());
 
     // 注册 Ctrl+C 信号处理器，优雅退出并保存配置
     {
@@ -247,6 +251,7 @@ fn main() {
             api_key: ui.get_api_key(),
             api_base_url: ui.get_api_base_url(),
             api_model: ui.get_api_model(),
+            github_token: ui.get_github_token(),
         };
 
         new_config.save();
