@@ -206,6 +206,7 @@ cargo run --release -- -o d:\Music
 | `o` | Open music directory |
 | `s` | Search local songs |
 | `n` | Search online songs |
+| `j` | Search Juhe songs |
 | `i` | song info query |
 | `f` | Favorite/Unfavorite |
 | `v` | View favorites |
@@ -215,6 +216,7 @@ cargo run --release -- -o d:\Music
 | `l` | Switch UI language |
 | `t` | Switch theme |
 | `k` | Configure API endpoint |
+| `g` | Configure GitHub Token |
 | `q` | Quit |
 
 ### Search View
