@@ -18,7 +18,7 @@ use crate::defs::{PlayMode, PlayState, Playlist};
 use crate::lyrics::{Lyrics, LyricsDownloadResult};
 use crate::search::{OnlineSong, OnlinePlaylist, SearchDownloadResult, PlaylistSearchResult, PlaylistSongsResult, DownloadProgress, SongCommentItem, SongCommentsResult, GitHubDiscussionResult};
 
-const DEFAULT_GITHUB_TOKEN: &str = "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";
+const DEFAULT_GITHUB_TOKEN: &str = "github_xxxxxx";
 
 // 主题色定义（使用显式 RGB，避免不同系统终端默认色表差异）
 #[derive(Debug, Clone, Copy)]
