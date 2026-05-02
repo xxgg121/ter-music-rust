@@ -53,6 +53,7 @@ fn show_help() {
     println!(" s 搜索本地歌曲");
     println!(" n 搜索网络歌曲");
     println!(" j 搜索聚合歌曲");
+    println!(" p 搜索在线歌单");
     println!(" i 查看歌曲信息");
     println!(" f 添加到收藏夹");
     println!(" v 查看收藏列表");

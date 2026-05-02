@@ -13,11 +13,13 @@ macro_rules! log_file {
         let msg = format!($($arg)*);
         let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
         let line = format!("[{}] {}\n", timestamp, msg);
+        let log_path = crate::config::get_daily_log_path();
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("ter-music-debug.log")
+            .open(log_path)
             .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+
     }};
 }
 
@@ -61,6 +63,59 @@ pub struct SearchDownloadResult {
     #[allow(dead_code)]
     pub query: String,
     /// 搜索到的歌曲列表
+    pub songs: Vec<OnlineSong>,
+}
+
+/// 歌单来源平台
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaylistSource {
+    Kugou,
+    Kuwo,
+    NetEase,
+}
+
+/// 网络歌单信息
+#[derive(Debug, Clone)]
+pub struct OnlinePlaylist {
+    /// 歌单名称
+    pub name: String,
+    /// 作者/创建者
+    #[allow(dead_code)]
+    pub author: String,
+
+    /// 歌单ID（平台原始ID字符串）
+    pub playlist_id: String,
+    /// 歌单来源平台
+    pub source: PlaylistSource,
+    /// 歌单歌曲数量
+    pub song_count: Option<usize>,
+    /// 歌单简介
+    #[allow(dead_code)]
+    pub description: String,
+
+    /// 播放数
+    pub play_count: Option<usize>,
+    /// 日期（创建/发布时间，yyyy-MM-dd）
+    #[allow(dead_code)]
+    pub date_text: Option<String>,
+
+}
+
+
+/// 歌单搜索结果
+pub struct PlaylistSearchResult {
+    /// 搜索关键字
+    #[allow(dead_code)]
+    pub query: String,
+    /// 搜索到的歌单列表
+    pub playlists: Vec<OnlinePlaylist>,
+}
+
+/// 歌单歌曲加载结果
+pub struct PlaylistSongsResult {
+    /// 歌单信息
+    pub playlist: OnlinePlaylist,
+    /// 歌单歌曲
     pub songs: Vec<OnlineSong>,
 }
 
@@ -321,6 +376,50 @@ fn format_datetime_from_millis(ms: i64) -> Option<String> {
         .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
 }
 
+/// 将秒/毫秒时间戳转换为日期文本（yyyy-MM-dd）
+fn format_date_from_timestamp(ts: i64) -> Option<String> {
+    let secs = if ts >= 1_000_000_000_000 { ts / 1000 } else { ts };
+    Local
+        .timestamp_opt(secs, 0)
+        .single()
+        .map(|dt| dt.format("%Y-%m-%d").to_string())
+}
+
+/// 从 JSON 条目中提取日期字段并格式化为 yyyy-MM-dd
+fn pick_date_field(v: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    for k in keys {
+        if let Some(n) = v.get(*k).and_then(|x| x.as_i64()) {
+            if let Some(d) = format_date_from_timestamp(n) {
+                return Some(d);
+            }
+        }
+        if let Some(n) = v.get(*k).and_then(|x| x.as_u64()) {
+            if let Some(d) = format_date_from_timestamp(n as i64) {
+                return Some(d);
+            }
+        }
+        if let Some(s) = v.get(*k).and_then(|x| x.as_str()) {
+            let t = s.trim();
+            if t.is_empty() {
+                continue;
+            }
+            if let Ok(n) = t.parse::<i64>() {
+                if let Some(d) = format_date_from_timestamp(n) {
+                    return Some(d);
+                }
+            }
+            if t.len() >= 10 {
+                let prefix = &t[..10];
+                if prefix.chars().nth(4) == Some('-') && prefix.chars().nth(7) == Some('-') {
+                    return Some(prefix.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+
 // ============================================================
 // 公共接口
 // ============================================================
@@ -344,6 +443,26 @@ pub fn download_song_background(song: OnlineSong, save_dir: PathBuf) -> mpsc::Re
             let _ = tx.send(DownloadProgress::Progress(percent));
         });
         let _ = tx.send(DownloadProgress::Done(result));
+    });
+    rx
+}
+
+/// 在后台线程中搜索歌单（合并酷狗 + 酷我 + 网易所有平台结果）
+pub fn search_playlist_background(query: String, page: usize) -> mpsc::Receiver<PlaylistSearchResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = search_playlist(&query, page);
+        let _ = tx.send(result);
+    });
+    rx
+}
+
+/// 在后台线程中加载歌单歌曲
+pub fn fetch_playlist_songs_background(playlist: OnlinePlaylist) -> mpsc::Receiver<PlaylistSongsResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let songs = fetch_playlist_songs(&playlist);
+        let _ = tx.send(PlaylistSongsResult { playlist, songs });
     });
     rx
 }
@@ -384,7 +503,7 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
             (
                 "https://openrouter.ai/api/v1/chat/completions".to_string(),
                 "minimax/minimax-m2.5:free".to_string(),
-                "Bearer sk-xxxxxx".to_string(),
+                "Bearer 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".to_string(),
             )
         };
 
@@ -519,8 +638,42 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
 // 搜索逻辑：酷我优先，网易备用
 // ============================================================
 
+fn kuwo_auth_cookie_and_csrf(client: &reqwest::blocking::Client) -> (String, String) {
+    let mut token = "1ABCDEF0".to_string();
+
+    if let Ok(resp) = client
+        .get("https://www.kuwo.cn/search/list?key=%E9%9F%B3%E4%B9%90")
+        .header("Referer", "https://www.kuwo.cn/")
+        .send()
+    {
+        for v in resp.headers().get_all(reqwest::header::SET_COOKIE).iter() {
+            if let Ok(s) = v.to_str() {
+                for part in s.split(';') {
+                    let part = part.trim();
+                    if let Some(t) = part.strip_prefix("kw_token=") {
+                        if !t.is_empty() {
+                            token = t.to_string();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 附带常见的统计 Cookie，模拟浏览器，提升通过率
+    let now = chrono::Local::now().timestamp();
+    let cookie = format!(
+        "kw_token={}; Hm_lvt_cdb524f42f0ce19b169a8071123a4797={}; Hm_lpvt_cdb524f42f0ce19b169a8071123a4797={};",
+        token, now, now
+    );
+
+    (cookie, token)
+}
+
 /// 搜索网络歌曲（同步）
 fn search_online(query: &str, page: usize) -> SearchDownloadResult {
+
     let client = match create_search_client() {
         Some(c) => c,
         None => {
@@ -716,6 +869,1111 @@ fn search_kugou(client: &reqwest::blocking::Client, query: &str, page: usize) ->
             juhe_song_id: String::new(),
         })
     }).collect())
+}
+
+/// 从 JSON 条目中提取字符串字段（按候选字段名）
+fn pick_str_field(v: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    for k in keys {
+        if let Some(s) = v.get(*k).and_then(|x| x.as_str()) {
+            let t = s.trim();
+            if !t.is_empty() {
+                return Some(t.to_string());
+            }
+        }
+        if let Some(n) = v.get(*k).and_then(|x| x.as_i64()) {
+            return Some(n.to_string());
+        }
+        if let Some(n) = v.get(*k).and_then(|x| x.as_u64()) {
+            return Some(n.to_string());
+        }
+    }
+    None
+}
+
+/// 从 JSON 条目中提取整数字段（支持纯数字字符串）
+fn pick_usize_field(v: &serde_json::Value, keys: &[&str]) -> Option<usize> {
+    for k in keys {
+        if let Some(n) = v.get(*k).and_then(|x| x.as_u64()) {
+            return Some(n as usize);
+        }
+        if let Some(n) = v.get(*k).and_then(|x| x.as_i64()) {
+            if n >= 0 {
+                return Some(n as usize);
+            }
+        }
+        if let Some(s) = v.get(*k).and_then(|x| x.as_str()) {
+            let normalized = s.trim().replace(',', "").replace('_', "");
+            if let Ok(n) = normalized.parse::<usize>() {
+                return Some(n);
+            }
+        }
+    }
+    None
+}
+
+/// 从 JSON 条目中提取歌曲数量
+fn pick_song_count(v: &serde_json::Value) -> Option<usize> {
+    let keys = [
+        "song_count",
+        "songCount",
+        "songcount",
+        "trackCount",
+        "track_count",
+        "total",
+        "count",
+        "num",
+        "musiccount",
+        "songnum",
+        "total_song",
+    ];
+    pick_usize_field(v, &keys)
+}
+
+
+/// 将 JSON 条目解析为歌单信息
+#[allow(dead_code)]
+fn parse_playlist_item(v: &serde_json::Value, source: PlaylistSource) -> Option<OnlinePlaylist> {
+
+    let playlist_id = pick_str_field(v, &["id", "rid", "dissid", "list_id", "playlist_id", "specialid"])?;
+    let name = pick_str_field(v, &["name", "title", "listname", "dissname", "specialname"])?;
+    let author = pick_str_field(v, &["author", "creator", "nickname", "nickName", "uname", "username", "singername"])
+        .unwrap_or_default();
+    let description = pick_str_field(v, &["description", "intro", "desc"]).unwrap_or_default();
+    let song_count = pick_song_count(v);
+
+    Some(OnlinePlaylist {
+        name,
+        author,
+        playlist_id,
+        source,
+        song_count,
+        description,
+        play_count: None,
+        date_text: pick_date_field(v, &["createTime", "create_time", "publishTime", "publish_time", "publish", "ctime"]),
+    })
+
+}
+
+/// 在任意 JSON 中提取数组（优先常见路径）
+fn extract_first_array<'a>(root: &'a serde_json::Value) -> Option<&'a Vec<serde_json::Value>> {
+    let candidates = [
+        vec!["data", "list"],
+        vec!["data", "lists"],
+        vec!["data", "playlists"],
+        vec!["data", "songList"],
+        vec!["result", "playlists"],
+        vec!["result", "list"],
+        vec!["playlist"],
+        vec!["playlists"],
+        vec!["list"],
+    ];
+    for path in candidates {
+        let mut cur = root;
+        let mut ok = true;
+        for p in path {
+            if let Some(next) = cur.get(p) {
+                cur = next;
+            } else {
+                ok = false;
+                break;
+            }
+        }
+        if ok {
+            if let Some(arr) = cur.as_array() {
+                return Some(arr);
+            }
+        }
+    }
+
+    fn dfs_find_array(v: &serde_json::Value) -> Option<&Vec<serde_json::Value>> {
+        if let Some(arr) = v.as_array() {
+            if !arr.is_empty() {
+                return Some(arr);
+            }
+        }
+        if let Some(obj) = v.as_object() {
+            for (_, child) in obj {
+                if let Some(arr) = dfs_find_array(child) {
+                    return Some(arr);
+                }
+            }
+        }
+        None
+    }
+
+    dfs_find_array(root)
+}
+
+/// 解析酷我旧接口返回的“单引号 JSON”
+fn parse_kuwo_legacy_value(text: &str) -> Option<serde_json::Value> {
+    let raw = text.trim().trim_start_matches('\u{feff}');
+    serde_json::from_str::<serde_json::Value>(raw)
+        .ok()
+        .or_else(|| {
+            // 旧接口返回单引号 JSON，简单转为双引号后再解析
+            let normalized = raw.replace('\'', "\"");
+            serde_json::from_str::<serde_json::Value>(&normalized).ok()
+        })
+}
+
+/// 酷我歌单搜索（旧接口兜底，规避新接口风控）
+fn search_kuwo_playlists_legacy(client: &reqwest::blocking::Client, query: &str, page: usize) -> Vec<OnlinePlaylist> {
+    let pn = page.saturating_sub(1);
+    let url = format!(
+        "http://search.kuwo.cn/r.s?all={}&ft=playlist&itemset=web_2013&client=kt&pn={}&rn=20&rformat=json&encoding=utf8",
+        urlencoding::encode(query),
+        pn
+    );
+    log_file!("[Playlist][KW][Legacy] 搜索URL: {}", url);
+
+    let text = match client
+        .get(&url)
+        .header("Referer", "http://search.kuwo.cn/")
+        .send()
+        .and_then(|r| r.text())
+    {
+        Ok(t) => t,
+        Err(e) => {
+            log_file!("[Playlist][KW][Legacy] 请求失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    log_file!("[Playlist][KW][Legacy] 响应(前200): {}", &text[..text.len().min(200)]);
+
+    let v = match parse_kuwo_legacy_value(&text) {
+        Some(v) => v,
+        None => {
+            log_file!("[Playlist][KW][Legacy] JSON解析失败");
+            return Vec::new();
+        }
+    };
+
+    let arr = v
+        .get("abslist")
+        .and_then(|x| x.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    arr.into_iter()
+        .filter_map(|item| {
+            let playlist_id = pick_str_field(&item, &["playlistid", "DC_TARGETID", "id"])?;
+            let name = pick_str_field(&item, &["name", "title"])?;
+            let author = pick_str_field(&item, &["nickname", "uname", "author"]).unwrap_or_default();
+            let song_count = pick_usize_field(&item, &["songnum", "song_count", "songCount", "total"]);
+            let description = pick_str_field(&item, &["intro", "description", "desc"]).unwrap_or_default();
+            let play_count = pick_usize_field(&item, &["playcnt", "play_count", "playCount", "listencount", "listen_count"]);
+
+            Some(OnlinePlaylist {
+                name,
+                author,
+                playlist_id,
+                source: PlaylistSource::Kuwo,
+                song_count,
+                description,
+                play_count,
+                date_text: None,
+            })
+        })
+        .collect()
+}
+
+/// 酷狗歌单搜索
+fn search_kugou_playlists(client: &reqwest::blocking::Client, query: &str, page: usize) -> Vec<OnlinePlaylist> {
+    let url = format!(
+        "http://mobilecdn.kugou.com/api/v3/search/special?format=json&keyword={}&page={}&pagesize=20",
+        urlencoding::encode(query),
+        page.max(1)
+    );
+    log_file!("[Playlist][KG] 搜索URL: {}", url);
+
+    let text = match client.get(&url).send().and_then(|r| r.text()) {
+        Ok(t) => t,
+        Err(e) => {
+            log_file!("[Playlist][KG] 请求失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let v: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            log_file!("[Playlist][KG] JSON解析失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let arr = v
+        .get("data")
+        .and_then(|d| d.get("info"))
+        .and_then(|x| x.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    arr.into_iter()
+        .filter_map(|item| {
+            let playlist_id = pick_str_field(&item, &["specialid", "id"])?;
+            if playlist_id == "0" {
+                // 酷狗搜索会返回 specialid=0 的占位歌单，详情接口无法拉取歌曲，直接过滤
+                return None;
+            }
+            let name = pick_str_field(&item, &["specialname", "name", "title"])?;
+
+            let author = pick_str_field(&item, &["nickname", "author", "username"]).unwrap_or_default();
+            let song_count = pick_song_count(&item);
+            let description = pick_str_field(&item, &["intro", "description", "desc"]).unwrap_or_default();
+            let play_count = pick_usize_field(
+                &item,
+                &["play_count", "playCount", "playcount", "total_play", "totalPlay", "listencount", "listen_count", "pv", "visit"],
+            );
+
+            Some(OnlinePlaylist {
+                name,
+                author,
+                playlist_id,
+                source: PlaylistSource::Kugou,
+                song_count,
+                description,
+                play_count,
+                date_text: pick_date_field(&item, &["publish_time", "publishTime", "publish", "createTime", "create_time", "ctime"]),
+            })
+
+        })
+        .collect()
+}
+
+/// 酷我歌单搜索
+fn search_kuwo_playlists(client: &reqwest::blocking::Client, query: &str, page: usize) -> Vec<OnlinePlaylist> {
+    let mut arr: Vec<serde_json::Value> = Vec::new();
+
+    // 酷我接口页码在不同环境可能有 0 基 / 1 基差异：两种都尝试一次
+    let mut pn_candidates = vec![page.saturating_sub(1), page.max(1)];
+    pn_candidates.dedup();
+
+    for pn in pn_candidates {
+        let url = format!(
+            "https://www.kuwo.cn/api/www/search/searchPlayListBykeyWord?key={}&pn={}&rn=20&httpsStatus=1",
+            urlencoding::encode(query),
+            pn
+        );
+        log_file!("[Playlist][KW] 搜索URL: {}", url);
+
+        let (cookie, csrf) = kuwo_auth_cookie_and_csrf(client);
+        let referer = format!("https://www.kuwo.cn/search/list?key={}", urlencoding::encode(query));
+        let text = match client
+            .get(&url)
+            .header("Referer", &referer)
+            .header("Cookie", &cookie)
+            .header("csrf", &csrf)
+            .send()
+            .and_then(|r| r.text())
+        {
+            Ok(t) => t,
+            Err(e) => {
+                log_file!("[Playlist][KW] 请求失败(pn={}): {}", pn, e);
+                continue;
+            }
+        };
+        log_file!("[Playlist][KW] 响应(前200): {}", &text[..text.len().min(200)]);
+
+        let v: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(e) => {
+                log_file!("[Playlist][KW] JSON解析失败(pn={}): {}", pn, e);
+                continue;
+            }
+        };
+
+        let mut candidate = v
+            .get("data")
+            .and_then(|d| d.get("list").and_then(|x| x.as_array()).or_else(|| d.get("abslist").and_then(|x| x.as_array())))
+            .cloned()
+            .or_else(|| extract_first_array(&v).cloned())
+            .unwrap_or_default();
+
+        let illegal_blocked = v
+            .get("success")
+            .and_then(|x| x.as_bool())
+            .map(|ok| !ok)
+            .unwrap_or(false)
+            && pick_str_field(&v, &["message", "msg"])
+                .map(|m| m.to_lowercase().contains("illegal"))
+                .unwrap_or(false);
+
+        if illegal_blocked {
+            log_file!("[Playlist][KW] 命中风控(pn={})，跳过备用URL与其他页，直接走旧接口", pn);
+            break;
+        }
+
+        if candidate.is_empty() {
+            let alt = format!(
+                "https://kuwo.cn/api/v1/www/search/searchPlayListBykeyWord?key={}&pn={}&rn=20&httpsStatus=1",
+                urlencoding::encode(query), pn
+            );
+            log_file!("[Playlist][KW] 备用URL: {}", alt);
+            if let Ok(t2) = client
+                .get(&alt)
+                .header("Referer", &referer)
+                .header("Cookie", &cookie)
+                .header("csrf", &csrf)
+                .send()
+                .and_then(|r| r.text())
+            {
+                log_file!("[Playlist][KW] 备用响应(前200): {}", &t2[..t2.len().min(200)]);
+                if let Ok(v2) = serde_json::from_str::<serde_json::Value>(&t2) {
+                    candidate = v2
+                        .get("data")
+                        .and_then(|d| d.get("list").and_then(|x| x.as_array()).or_else(|| d.get("abslist").and_then(|x| x.as_array())))
+                        .cloned()
+                        .or_else(|| extract_first_array(&v2).cloned())
+                        .unwrap_or_default();
+                }
+            }
+        }
+
+        if !candidate.is_empty() {
+            arr = candidate;
+            break;
+        }
+    }
+
+    if arr.is_empty() {
+        let legacy = search_kuwo_playlists_legacy(client, query, page);
+        log_file!("[Playlist][KW] 旧接口兜底返回 {} 个结果", legacy.len());
+        return legacy;
+    }
+
+    arr.into_iter()
+        .filter_map(|item| {
+            let playlist_id = pick_str_field(&item, &["id", "listid", "playlistid", "pid"])?;
+            let name = pick_str_field(&item, &["name", "title"])?;
+            let author = pick_str_field(&item, &["uname", "nickname", "author", "nickName"]).unwrap_or_default();
+            let song_count = pick_song_count(&item);
+            let description = pick_str_field(&item, &["intro", "description", "desc"]).unwrap_or_default();
+            let play_count = pick_usize_field(&item, &["play_count", "playCount", "playcount", "listencount", "listen_count", "listenNum"]);
+            Some(OnlinePlaylist {
+                name,
+                author,
+                playlist_id,
+                source: PlaylistSource::Kuwo,
+                song_count,
+                description,
+                play_count,
+                date_text: pick_date_field(&item, &["pub", "publishTime", "publish_time", "createTime", "create_time", "ctime"]),
+            })
+
+        })
+        .collect()
+}
+
+
+/// 网易歌单搜索
+fn search_netease_playlists(client: &reqwest::blocking::Client, query: &str, page: usize) -> Vec<OnlinePlaylist> {
+    let offset = (page.max(1) - 1) * 20;
+    let url = format!(
+        "https://music.163.com/api/search/get?s={}&type=1000&limit=20&offset={}",
+        urlencoding::encode(query),
+        offset
+    );
+    log_file!("[Playlist][WY] 搜索URL: {}", url);
+
+    let text = match client
+        .get(&url)
+        .header("Referer", "https://music.163.com/")
+        .header("Cookie", "MUSIC_U=; appver=2.0.2;")
+        .send()
+        .and_then(|r| r.text())
+    {
+        Ok(t) => t,
+        Err(e) => {
+            log_file!("[Playlist][WY] 请求失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let v: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            log_file!("[Playlist][WY] JSON解析失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let arr = v
+        .get("result")
+        .and_then(|r| r.get("playlists"))
+        .and_then(|x| x.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    arr.into_iter()
+        .filter_map(|item| {
+            let playlist_id = pick_str_field(&item, &["id"])?;
+            let name = pick_str_field(&item, &["name"])?;
+            let author = item
+                .get("creator")
+                .and_then(|c| pick_str_field(c, &["nickname", "userName", "name"]))
+                .unwrap_or_default();
+            let song_count = pick_song_count(&item);
+            let description = pick_str_field(&item, &["description"]).unwrap_or_default();
+            let play_count = item
+                .get("playCount")
+                .and_then(|x| x.as_u64())
+                .map(|n| n as usize)
+                .or_else(|| pick_str_field(&item, &["playCount", "play_count", "playcount"]).and_then(|s| s.parse::<usize>().ok()));
+            Some(OnlinePlaylist {
+                name,
+                author,
+                playlist_id,
+                source: PlaylistSource::NetEase,
+                song_count,
+                description,
+                play_count,
+                date_text: pick_date_field(&item, &["createTime", "updateTime", "publishTime"]),
+            })
+
+        })
+        .collect()
+}
+
+/// 搜索歌单（合并酷狗 + 酷我 + 网易所有平台结果）
+fn search_playlist(query: &str, page: usize) -> PlaylistSearchResult {
+    let client = match create_search_client() {
+        Some(c) => c,
+        None => {
+            return PlaylistSearchResult {
+                query: query.to_string(),
+                playlists: Vec::new(),
+            }
+        }
+    };
+
+    log_file!("[Playlist] 搜索开始 query='{}', page={}", query, page);
+    let mut playlists = Vec::new();
+
+    // 酷狗歌单
+    let kugou = search_kugou_playlists(&client, query, page);
+    log_file!("[Playlist] 酷狗返回 {} 个结果", kugou.len());
+    playlists.extend(kugou);
+
+    // 酷我歌单
+    let kuwo = search_kuwo_playlists(&client, query, page);
+    log_file!("[Playlist] 酷我返回 {} 个结果", kuwo.len());
+    playlists.extend(kuwo);
+
+    // 网易歌单
+    let netease = search_netease_playlists(&client, query, page);
+    log_file!("[Playlist] 网易返回 {} 个结果", netease.len());
+    playlists.extend(netease);
+
+    log_file!("[Playlist] 搜索结束，共 {} 个结果", playlists.len());
+
+    PlaylistSearchResult {
+        query: query.to_string(),
+        playlists,
+    }
+}
+
+/// 解析歌单歌曲条目为 OnlineSong（统一标记 Juhe 来源，播放下载复用 get_juhe_download_url）
+fn parse_duration_to_ms(raw: &str) -> Option<i64> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return None;
+    }
+
+    if let Some((m, s)) = t.split_once(':') {
+        let mm = m.trim().parse::<i64>().ok()?;
+        let ss = s.trim().parse::<i64>().ok()?;
+        return Some((mm * 60 + ss) * 1000);
+    }
+
+    t.parse::<i64>()
+        .ok()
+        .map(|secs_or_ms| if secs_or_ms > 10_000 { secs_or_ms } else { secs_or_ms * 1000 })
+}
+
+fn parse_playlist_song_item(v: &serde_json::Value, platform: &str, source: PlaylistSource) -> Option<OnlineSong> {
+    let mut name = pick_str_field(v, &["name", "title", "songname"]).unwrap_or_default();
+    let mut artist = String::new();
+
+    if source == PlaylistSource::Kugou {
+        if name.is_empty() {
+            if let Some(filename) = pick_str_field(v, &["filename"]) {
+                if let Some((a, n)) = filename.split_once(" - ") {
+                    artist = a.trim().to_string();
+                    name = n.trim().to_string();
+                } else {
+                    name = filename;
+                }
+            }
+        }
+        if artist.is_empty() {
+            artist = pick_str_field(v, &["singername", "artist", "author"]).unwrap_or_default();
+        }
+    } else if source == PlaylistSource::NetEase {
+        artist = v.get("ar")
+            .and_then(|a| a.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|x| x.get("name").and_then(|s| s.as_str()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| pick_str_field(v, &["artist", "singer", "singername", "author"]).unwrap_or_default());
+    } else {
+        artist = pick_str_field(v, &["artist", "singer", "singername", "author"]).unwrap_or_default();
+    }
+
+    if name.is_empty() {
+        return None;
+    }
+
+    let song_id = match source {
+        PlaylistSource::Kugou => {
+            pick_str_field(v, &["hash"])
+                .or_else(|| pick_str_field(v, &["audio_id", "id", "songid", "songId"]))
+        }
+        PlaylistSource::Kuwo => {
+            pick_str_field(v, &["rid", "musicrid", "id"]).map(|s| s.trim_start_matches("MUSIC_").to_string())
+        }
+        PlaylistSource::NetEase => pick_str_field(v, &["id", "songid", "songId"]),
+    }?;
+
+    let duration_ms = if source == PlaylistSource::NetEase {
+        v.get("dt").and_then(|x| x.as_i64()).or_else(|| {
+            pick_str_field(v, &["duration", "interval", "timeLength"])
+                .as_deref()
+                .and_then(parse_duration_to_ms)
+        })
+    } else {
+        pick_str_field(v, &["duration", "interval", "timeLength", "songTimeMinutes", "songTime"])
+            .as_deref()
+            .and_then(parse_duration_to_ms)
+    };
+
+    Some(OnlineSong {
+        name,
+        artist,
+        id: 0,
+        hash: String::new(),
+        duration_ms,
+        source: MusicSource::Juhe,
+        juhe_platform: platform.to_string(),
+        juhe_song_id: song_id,
+    })
+}
+
+/// 加载酷狗歌单歌曲
+fn fetch_kugou_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &str) -> Vec<OnlineSong> {
+    let url = format!(
+        "http://mobilecdnbj.kugou.com/api/v3/special/song?specialid={}&page=1&pagesize=200",
+        playlist_id
+    );
+    log_file!("[Playlist][KG] 歌单详情URL: {}", url);
+
+    let text = match client.get(&url).send().and_then(|r| r.text()) {
+        Ok(t) => t,
+        Err(e) => {
+            log_file!("[Playlist][KG] 歌单详情请求失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let v: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            log_file!("[Playlist][KG] 歌单详情JSON解析失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let arr = v
+        .get("data")
+        .and_then(|d| d.get("info").and_then(|x| x.as_array()).or_else(|| d.get("list").and_then(|x| x.as_array())))
+        .cloned()
+        .or_else(|| extract_first_array(&v).cloned())
+        .unwrap_or_default();
+
+    if arr.is_empty() {
+        let status = v.get("status").and_then(|x| x.as_i64()).unwrap_or(-1);
+        let errcode = v.get("errcode").and_then(|x| x.as_i64()).unwrap_or(-1);
+        log_file!(
+            "[Playlist][KG] 歌单详情解析为空: specialid={}, status={}, errcode={}",
+            playlist_id,
+            status,
+            errcode
+        );
+    }
+
+    arr.iter()
+        .filter_map(|x| parse_playlist_song_item(x, "kg", PlaylistSource::Kugou))
+        .collect::<Vec<_>>()
+}
+
+
+fn decode_js_escaped_string(input: &str) -> String {
+    let mut out = String::new();
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            out.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('u') => {
+                let h1 = chars.next();
+                let h2 = chars.next();
+                let h3 = chars.next();
+                let h4 = chars.next();
+                if let (Some(a), Some(b), Some(c), Some(d)) = (h1, h2, h3, h4) {
+                    let hex = format!("{}{}{}{}", a, b, c, d);
+                    if let Ok(v) = u32::from_str_radix(&hex, 16) {
+                        if let Some(u) = char::from_u32(v) {
+                            out.push(u);
+                            continue;
+                        }
+                    }
+                    out.push('\\');
+                    out.push('u');
+                    out.push(a);
+                    out.push(b);
+                    out.push(c);
+                    out.push(d);
+                } else {
+                    out.push('\\');
+                    out.push('u');
+                }
+            }
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some('"') => out.push('"'),
+            Some('\\') => out.push('\\'),
+            Some('/') => out.push('/'),
+            Some(other) => {
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+fn pick_js_quoted_field(src: &str, key: &str) -> Option<String> {
+    let marker = format!("{}:\"", key);
+    let pos = src.find(&marker)?;
+    let s = &src[pos + marker.len()..];
+
+    let mut escaped = false;
+    let mut end = 0usize;
+    for (i, ch) in s.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch == '"' {
+            end = i;
+            break;
+        }
+    }
+    if end == 0 && !s.starts_with('"') && !s.is_empty() {
+        return None;
+    }
+    Some(decode_js_escaped_string(&s[..end]))
+}
+
+fn pick_js_number_field(src: &str, key: &str) -> Option<i64> {
+    let marker = format!("{}:", key);
+    let pos = src.find(&marker)?;
+    let s = &src[pos + marker.len()..];
+    let mut buf = String::new();
+    for ch in s.chars() {
+        if ch.is_ascii_digit() || (buf.is_empty() && ch == '-') {
+            buf.push(ch);
+        } else {
+            break;
+        }
+    }
+    buf.parse::<i64>().ok()
+}
+
+fn fetch_kuwo_playlist_songs_legacy_api(client: &reqwest::blocking::Client, playlist_id: &str) -> Vec<OnlineSong> {
+    let rn = 100usize;
+    let mut pn = 0usize;
+    let mut total: Option<usize> = None;
+    let mut songs = Vec::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+
+    while pn < 20 {
+        let url = format!(
+            "http://nplserver.kuwo.cn/pl.svc?op=getlistinfo&pid={}&pn={}&rn={}&encode=utf8&keyset=pl2012&vipver=MUSIC_8.7.5.0_W4",
+            playlist_id, pn, rn
+        );
+        log_file!("[Playlist][KW][LegacyAPI] 详情URL: {}", url);
+
+        let text = match client
+            .get(&url)
+            .header("Referer", "http://www.kuwo.cn/")
+            .send()
+            .and_then(|r| r.text())
+        {
+            Ok(t) => t,
+            Err(e) => {
+                log_file!("[Playlist][KW][LegacyAPI] 请求失败(pn={}): {}", pn, e);
+                break;
+            }
+        };
+
+        let v: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(e) => {
+                log_file!("[Playlist][KW][LegacyAPI] JSON解析失败(pn={}): {}", pn, e);
+                break;
+            }
+        };
+
+        if total.is_none() {
+            total = pick_usize_field(&v, &["total", "validtotal", "TOTAL"]);
+        }
+
+        let arr = v
+            .get("musiclist")
+            .and_then(|x| x.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        log_file!(
+            "[Playlist][KW][LegacyAPI] pn={} 返回 {} 首，total={}",
+            pn,
+            arr.len(),
+            total.unwrap_or(0)
+        );
+
+        if arr.is_empty() {
+            break;
+        }
+
+        for item in arr {
+            if let Some(song) = parse_playlist_song_item(&item, "kw", PlaylistSource::Kuwo) {
+                if seen.insert(song.juhe_song_id.clone()) {
+                    songs.push(song);
+                }
+            }
+        }
+
+        if let Some(t) = total {
+            if songs.len() >= t {
+                break;
+            }
+        }
+        pn += 1;
+    }
+
+    log_file!("[Playlist][KW][LegacyAPI] 汇总 {} 首", songs.len());
+    songs
+}
+
+fn fetch_kuwo_playlist_songs_from_page(client: &reqwest::blocking::Client, playlist_id: &str) -> Vec<OnlineSong> {
+    let url = format!("https://www.kuwo.cn/playlist_detail/{}", playlist_id);
+    log_file!("[Playlist][KW][PageFallback] 页面URL: {}", url);
+
+    let html = match client
+        .get(&url)
+        .header("Referer", "https://www.kuwo.cn/")
+        .send()
+        .and_then(|r| r.text())
+    {
+        Ok(t) => t,
+        Err(e) => {
+            log_file!("[Playlist][KW][PageFallback] 请求失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    log_file!("[Playlist][KW][PageFallback] 页面长度: {}", html.len());
+
+    let mut songs = Vec::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+    let marker = "musicrid:\"MUSIC_";
+    let mut cursor = 0usize;
+
+    while let Some(rel) = html[cursor..].find(marker) {
+        let start = cursor + rel;
+        let rest = &html[start..];
+        let frag_owned: String = rest.chars().take(2600).collect();
+        let frag = frag_owned.as_str();
+
+        let musicrid = pick_js_quoted_field(frag, "musicrid").unwrap_or_default();
+        let rid_text = musicrid.trim_start_matches("MUSIC_").to_string();
+        if rid_text.is_empty() {
+            cursor = start + marker.len();
+            continue;
+        }
+
+        let name = pick_js_quoted_field(frag, "name").unwrap_or_default();
+        if name.trim().is_empty() {
+            cursor = start + marker.len();
+            continue;
+        }
+
+        if !seen.insert(rid_text.clone()) {
+            cursor = start + marker.len();
+            continue;
+        }
+
+        let artist = pick_js_quoted_field(frag, "artist").unwrap_or_default();
+        let duration_ms = pick_js_number_field(frag, "duration").map(|secs| secs * 1000);
+
+        songs.push(OnlineSong {
+            name,
+            artist,
+            id: 0,
+            hash: String::new(),
+            duration_ms,
+            source: MusicSource::Juhe,
+            juhe_platform: "kw".to_string(),
+            juhe_song_id: rid_text,
+        });
+
+        cursor = start + marker.len();
+    }
+
+    log_file!("[Playlist][KW][PageFallback] 解析到 {} 首歌曲", songs.len());
+    songs
+}
+
+/// 加载酷我歌单歌曲
+fn fetch_kuwo_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &str) -> Vec<OnlineSong> {
+    let url = format!(
+        "https://www.kuwo.cn/api/www/playlist/playListInfo?pid={}&pn=1&rn=200&httpsStatus=1",
+        playlist_id
+    );
+    log_file!("[Playlist][KW] 歌单详情URL: {}", url);
+
+    let (cookie, csrf) = kuwo_auth_cookie_and_csrf(client);
+    let referer = format!("https://www.kuwo.cn/playlist_detail/{}", playlist_id);
+    let text = match client
+        .get(&url)
+        .header("Referer", referer)
+        .header("Cookie", cookie)
+        .header("csrf", csrf)
+        .send()
+        .and_then(|r| r.text())
+    {
+
+        Ok(t) => t,
+        Err(e) => {
+            log_file!("[Playlist][KW] 歌单详情请求失败: {}", e);
+            let legacy = fetch_kuwo_playlist_songs_legacy_api(client, playlist_id);
+            if !legacy.is_empty() {
+                return legacy;
+            }
+            return fetch_kuwo_playlist_songs_from_page(client, playlist_id);
+        }
+    };
+
+    log_file!("[Playlist][KW] 歌单详情响应(前200): {}", &text[..text.len().min(200)]);
+
+    let v: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            log_file!("[Playlist][KW] 歌单详情JSON解析失败: {}", e);
+            return fetch_kuwo_playlist_songs_from_page(client, playlist_id);
+        }
+    };
+
+    let songs = v.get("data")
+        .and_then(|d| d.get("musicList"))
+        .and_then(|x| x.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| parse_playlist_song_item(x, "kw", PlaylistSource::Kuwo))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    if songs.is_empty() {
+        let legacy = fetch_kuwo_playlist_songs_legacy_api(client, playlist_id);
+        if !legacy.is_empty() {
+            return legacy;
+        }
+
+        let fallback = fetch_kuwo_playlist_songs_from_page(client, playlist_id);
+        log_file!("[Playlist][KW] 页面兜底返回 {} 首", fallback.len());
+        return fallback;
+    }
+
+    songs
+}
+
+
+/// 网易：按 trackIds 批量拉取歌曲详情（避免 playlist.tracks 仅返回 10 首）
+fn fetch_netease_song_detail_batch(client: &reqwest::blocking::Client, ids: &[i64]) -> Vec<OnlineSong> {
+    if ids.is_empty() {
+        return Vec::new();
+    }
+
+    let c = format!(
+        "[{}]",
+        ids.iter()
+            .map(|id| format!("{{\"id\":{}}}", id))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    let url = format!(
+        "https://music.163.com/api/v3/song/detail?c={}",
+        urlencoding::encode(&c)
+    );
+
+    let text = match client
+        .get(&url)
+        .header("Referer", "https://music.163.com/")
+        .header("Cookie", "MUSIC_U=; appver=2.0.2;")
+        .send()
+        .and_then(|r| r.text())
+    {
+        Ok(t) => t,
+        Err(e) => {
+            log_file!("[Playlist][WY] 批量详情请求失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let v: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            log_file!("[Playlist][WY] 批量详情JSON解析失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    v.get("songs")
+        .and_then(|x| x.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| parse_playlist_song_item(x, "wy", PlaylistSource::NetEase))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+/// 加载网易歌单歌曲
+fn fetch_netease_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &str) -> Vec<OnlineSong> {
+    let url = format!(
+        "https://music.163.com/api/v6/playlist/detail?id={}&n=1000",
+        playlist_id
+    );
+    log_file!("[Playlist][WY] 歌单详情URL: {}", url);
+
+    let text = match client
+        .get(&url)
+        .header("Referer", "https://music.163.com/")
+        .header("Cookie", "MUSIC_U=; appver=2.0.2;")
+        .send()
+        .and_then(|r| r.text())
+    {
+        Ok(t) => t,
+        Err(e) => {
+            log_file!("[Playlist][WY] 歌单详情请求失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let v: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            log_file!("[Playlist][WY] 歌单详情JSON解析失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let tracks = v
+        .get("playlist")
+        .and_then(|p| p.get("tracks"))
+        .and_then(|x| x.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| parse_playlist_song_item(x, "wy", PlaylistSource::NetEase))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    let track_ids: Vec<i64> = v
+        .get("playlist")
+        .and_then(|p| p.get("trackIds"))
+        .and_then(|x| x.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.get("id").and_then(|id| id.as_i64()))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    if track_ids.len() <= tracks.len() {
+        return tracks;
+    }
+
+    let mut song_map = std::collections::HashMap::<String, OnlineSong>::new();
+    for s in tracks {
+        song_map.insert(s.juhe_song_id.clone(), s);
+    }
+
+    let mut missing = Vec::new();
+    let mut seen = std::collections::HashSet::<i64>::new();
+    for id in &track_ids {
+        if !song_map.contains_key(&id.to_string()) && seen.insert(*id) {
+            missing.push(*id);
+        }
+    }
+
+    for chunk in missing.chunks(200) {
+        for s in fetch_netease_song_detail_batch(client, chunk) {
+            song_map.insert(s.juhe_song_id.clone(), s);
+        }
+    }
+
+    let mut ordered = Vec::new();
+    for id in track_ids {
+        if let Some(song) = song_map.remove(&id.to_string()) {
+            ordered.push(song);
+        }
+    }
+
+    if ordered.is_empty() {
+        song_map.into_values().collect()
+    } else {
+        ordered
+    }
+}
+
+
+
+
+/// 加载歌单歌曲
+fn fetch_playlist_songs(playlist: &OnlinePlaylist) -> Vec<OnlineSong> {
+    let client = match create_search_client() {
+        Some(c) => c,
+        None => return Vec::new(),
+    };
+
+    log_file!(
+        "[Playlist] 加载歌单歌曲: source={:?}, playlist_id={}, name={}",
+        playlist.source, playlist.playlist_id, playlist.name
+    );
+
+    let songs = match playlist.source {
+        PlaylistSource::Kugou => fetch_kugou_playlist_songs(&client, &playlist.playlist_id),
+        PlaylistSource::Kuwo => fetch_kuwo_playlist_songs(&client, &playlist.playlist_id),
+        PlaylistSource::NetEase => fetch_netease_playlist_songs(&client, &playlist.playlist_id),
+    };
+
+    log_file!("[Playlist] 歌单歌曲加载完成，共 {} 首", songs.len());
+    songs
 }
 
 // ============================================================
@@ -1046,35 +2304,8 @@ where
         Ok(_) => {
             on_progress(100);
 
-            // 下载歌词并保存为 .lrc 文件
-            let lrc_filename = save_path.file_stem()
-                .and_then(|s| s.to_str())
-                .map(|s| format!("{}.lrc", s));
-            let lrc_path = lrc_filename.as_ref()
-                .and_then(|name| save_path.parent().map(|p| p.join(name)));
+            // 歌词不在下载阶段处理；统一在播放阶段按“常规API优先、聚合兜底”自动下载
 
-            if let Some(ref lrc_path) = lrc_path {
-                let lyric_content = match song.source {
-                    MusicSource::Juhe => get_juhe_lyrics(&client, song),
-                    MusicSource::Kugou => {
-                        // 酷狗歌曲也通过Juhe API获取歌词
-                        let juhe_song = OnlineSong {
-                            juhe_platform: "kg".to_string(),
-                            juhe_song_id: song.hash.clone(),
-                            ..song.clone()
-                        };
-                        get_juhe_lyrics(&client, &juhe_song)
-                    }
-                    _ => None,
-                };
-
-                if let Some(content) = lyric_content {
-                    log_file!("[Download] 获取到歌词，保存到: {:?}", lrc_path);
-                    let _ = std::fs::write(lrc_path, &content);
-                } else {
-                    log_file!("[Download] 未获取到歌词");
-                }
-            }
 
             DownloadResult {
                 song: song.clone(),
@@ -1754,10 +2985,16 @@ fn create_github_discussion(
 // 聚合搜索 API
 // ============================================================
 
-/// 聚合搜索 API 基地址
+/// 聚合搜索 API 主地址
 const JUHE_API_BASE: &str = "https://88.lxmusic.xn--fiqs8s";
+/// lerd 聚合备用域名
+const JUHE_LERD_API_BASE: &str = "https://api.music.lerd.dpdns.org";
+/// huibq 聚合备用域名
+const JUHE_HUIBQ_API_BASE: &str = "https://lxmusicapi.onrender.com";
 /// 聚合搜索 API 密钥
 const JUHE_API_KEY: &str = "lxmusic";
+/// Huibq 接口密钥（仅 huibq 兜底接口使用）
+const HUIBQ_API_KEY: &str = "share-v3";
 /// 聚合搜索 API 路径前缀
 const JUHE_API_PREFIX: &str = "/v4";
 
@@ -1851,17 +3088,63 @@ fn search_juhe(query: &str, page: usize) -> SearchDownloadResult {
     }
 }
 
-/// 获取聚合搜索下载链接
-/// API 格式: GET /v4/url/{platform}/{songId}/{quality}?key=xxx
-/// 成功响应: {"code":0,"msg":"success","data":"https://...mp3"}  ← data 直接是 URL 字符串
-/// 或:      {"code":0,"msg":"success","data":{"url":"https://..."}}  ← data 是对象
-fn get_juhe_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+/// 判断接口响应 code 是否表示成功
+fn is_api_success(value: &serde_json::Value) -> bool {
+    match value.get("code") {
+        Some(c) if c.as_i64() == Some(0) || c.as_i64() == Some(200) => true,
+        Some(c) if c.as_str() == Some("0") || c.as_str() == Some("200") => true,
+        _ => false,
+    }
+}
+
+/// 从响应 JSON 中提取下载 URL
+fn extract_juhe_url(value: &serde_json::Value) -> Option<String> {
+    if !is_api_success(value) {
+        return None;
+    }
+
+    if let Some(url_str) = value.get("data").and_then(|d| d.as_str()) {
+        if !url_str.trim().is_empty() && url_str.starts_with("http") {
+            return Some(url_str.to_string());
+        }
+    }
+
+    if let Some(url_str) = value
+        .get("data")
+        .and_then(|d| d.get("url"))
+        .and_then(|u| u.as_str())
+    {
+        if !url_str.trim().is_empty() && url_str.starts_with("http") {
+            return Some(url_str.to_string());
+        }
+    }
+
+    if let Some(url_str) = value.get("url").and_then(|u| u.as_str()) {
+        if !url_str.trim().is_empty() && url_str.starts_with("http") {
+            return Some(url_str.to_string());
+        }
+    }
+
+    let alt_fields = ["playUrl", "src", "mp3Url", "play_url"];
+    for field in &alt_fields {
+        if let Some(url_str) = value
+            .get("data")
+            .and_then(|d| d.get(*field))
+            .and_then(|u| u.as_str())
+        {
+            if !url_str.trim().is_empty() && url_str.starts_with("http") {
+                return Some(url_str.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+/// 主域名下载接口：GET /v4/url/{platform}/{songId}/{quality}?key=xxx
+fn get_primary_juhe_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
     let platform = &song.juhe_platform;
     let song_id = &song.juhe_song_id;
-
-    log_file!("[JuheURL] 获取下载链接: platform={}, song_id={}", platform, song_id);
-
-    // 尝试多种音质，从低到高
     let qualities = ["128k", "320k", "192kmp3", "128kmp3", "flac"];
 
     for quality in &qualities {
@@ -1869,8 +3152,7 @@ fn get_juhe_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) 
             "{}{}/url/{}/{}/{}?key={}",
             JUHE_API_BASE, JUHE_API_PREFIX, platform, song_id, quality, JUHE_API_KEY
         );
-
-        log_file!("[JuheURL] 请求: {}", url);
+        log_file!("[JuheURL-main] 请求: {}", url);
 
         if let Ok(response) = client
             .get(&url)
@@ -1879,51 +3161,10 @@ fn get_juhe_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) 
             .send()
         {
             if let Ok(text) = response.text() {
-                log_file!("[JuheURL] 响应(前200): {}", &text[..text.len().min(200)]);
+                log_file!("[JuheURL-main] 响应(前200): {}", &text[..text.len().min(200)]);
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
-                    // 检查 code: 0 表示成功
-                    let code = value.get("code").and_then(|c| c.as_i64()).unwrap_or(-1);
-                    if code != 0 {
-                        continue; // 尝试下一个音质
-                    }
-
-                    // 方式1: data 直接是 URL 字符串（常见格式）
-                    if let Some(url_str) = value.get("data").and_then(|d| d.as_str()) {
-                        if !url_str.is_empty() && url_str.starts_with("http") {
-                            return Some(url_str.to_string());
-                        }
-                    }
-
-                    // 方式2: data 是对象，包含 url 字段
-                    if let Some(url_str) = value
-                        .get("data")
-                        .and_then(|d| d.get("url"))
-                        .and_then(|u| u.as_str())
-                    {
-                        if !url_str.is_empty() {
-                            return Some(url_str.to_string());
-                        }
-                    }
-
-                    // 方式3: 直接从顶层 url 字段获取
-                    if let Some(url_str) = value.get("url").and_then(|u| u.as_str()) {
-                        if !url_str.is_empty() {
-                            return Some(url_str.to_string());
-                        }
-                    }
-
-                    // 方式4: data 对象中其他可能的 URL 字段
-                    let alt_fields = ["playUrl", "src", "mp3Url", "play_url"];
-                    for field in &alt_fields {
-                        if let Some(url_str) = value
-                            .get("data")
-                            .and_then(|d| d.get(*field))
-                            .and_then(|u| u.as_str())
-                        {
-                            if !url_str.is_empty() && url_str.starts_with("http") {
-                                return Some(url_str.to_string());
-                            }
-                        }
+                    if let Some(url) = extract_juhe_url(&value) {
+                        return Some(url);
                     }
                 }
             }
@@ -1933,49 +3174,39 @@ fn get_juhe_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) 
     None
 }
 
-/// 获取聚合搜索歌词
-/// API 格式: GET /v4/lyric/{platform}/{songId}?key=xxx
-/// 成功响应: {"code":0,"msg":"success","data":{"lyric":"[ti:...]..."}}
-fn get_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+/// lerd 兜底下载接口（独立方法）
+/// 按 lx-juhe.js 协议：POST /{platform}，body 中 type 为音质，musicInfo.source 必填
+fn get_lerd_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
     let platform = &song.juhe_platform;
     let song_id = &song.juhe_song_id;
+    let qualities = ["128k", "320k", "flac", "flac24bit"];
 
-    let url = format!(
-        "{}{}/lyric/{}/{}?key={}",
-        JUHE_API_BASE, JUHE_API_PREFIX, platform, song_id, JUHE_API_KEY
-    );
+    for quality in &qualities {
+        let endpoint = format!("{}/{}", JUHE_LERD_API_BASE, platform);
+        let body = json!({
+            "type": quality,
+            "musicInfo": {
+                "id": song_id,
+                "songmid": song_id,
+                "hash": song_id,
+                "source": platform,
+            }
+        });
 
-    if let Ok(response) = client
-        .get(&url)
-        .header("User-Agent", "lx-music-desktop/2.12.1")
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-    {
-        if let Ok(text) = response.text() {
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
-                // 检查 code: 0 表示成功
-                let code = value.get("code").and_then(|c| c.as_i64()).unwrap_or(-1);
-                if code != 0 {
-                    return None;
-                }
-
-                // 尝试多种路径获取歌词
-                let lyric_candidates = [
-                    // data.lyric
-                    value.get("data").and_then(|d| d.get("lyric")).and_then(|l| l.as_str()),
-                    // data.lrc.lyric
-                    value.get("data").and_then(|d| d.get("lrc")).and_then(|l| l.get("lyric")).and_then(|l| l.as_str()),
-                    // data.lrc
-                    value.get("data").and_then(|d| d.get("lrc")).and_then(|l| l.as_str()),
-                    // 直接 lyric
-                    value.get("lyric").and_then(|l| l.as_str()),
-                ];
-
-                for lyric_opt in &lyric_candidates {
-                    if let Some(lyric) = lyric_opt {
-                        if !lyric.is_empty() {
-                            return Some(lyric.to_string());
-                        }
+        log_file!("[JuheURL-lerd] 请求(post): {}, body={}", endpoint, body);
+        if let Ok(response) = client
+            .post(&endpoint)
+            .header("Content-Type", "application/json")
+            .header("User-Agent", "lx-music-desktop/2.12.1")
+            .body(body.to_string())
+            .timeout(std::time::Duration::from_secs(12))
+            .send()
+        {
+            if let Ok(text) = response.text() {
+                log_file!("[JuheURL-lerd] 响应(post,前200): {}", &text[..text.len().min(200)]);
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(url) = extract_juhe_url(&value) {
+                        return Some(url);
                     }
                 }
             }
@@ -1983,6 +3214,134 @@ fn get_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong) -> Opt
     }
 
     None
+}
+
+/// huibq 兜底下载接口（独立方法）：GET /url/{platform}/{songId}/{quality}
+fn get_huibq_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+    let platform = &song.juhe_platform;
+    let song_id = &song.juhe_song_id;
+    // 按 lx-huibq.js：仅声明 128k / 320k
+    let qualities = ["128k", "320k"];
+
+    for quality in &qualities {
+        let url = format!("{}/url/{}/{}/{}", JUHE_HUIBQ_API_BASE, platform, song_id, quality);
+        log_file!("[JuheURL-huibq] 请求: {}", url);
+
+        if let Ok(response) = client
+            .get(&url)
+            .header("User-Agent", "lx-music-desktop/2.12.1")
+            .header("X-Request-Key", HUIBQ_API_KEY)
+            .timeout(std::time::Duration::from_secs(12))
+            .send()
+        {
+            if let Ok(text) = response.text() {
+                log_file!("[JuheURL-huibq] 响应(前200): {}", &text[..text.len().min(200)]);
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(url) = extract_juhe_url(&value) {
+                        return Some(url);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// 获取聚合搜索下载链接（按主域名 -> lerd -> huibq 兜底）
+fn get_juhe_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+    log_file!(
+        "[JuheURL] 获取下载链接: platform={}, song_id={}",
+        song.juhe_platform,
+        song.juhe_song_id
+    );
+
+    get_primary_juhe_download_url(client, song)
+        .or_else(|| get_lerd_download_url(client, song))
+        .or_else(|| get_huibq_download_url(client, song))
+}
+
+/// 尝试从不同响应格式中提取歌词文本
+fn extract_juhe_lyric(value: &serde_json::Value) -> Option<String> {
+    if !is_api_success(value) {
+        return None;
+    }
+
+    let lyric_candidates = [
+        value.get("data").and_then(|d| d.get("lyric")).and_then(|l| l.as_str()),
+        value.get("data").and_then(|d| d.get("lrc")).and_then(|l| l.get("lyric")).and_then(|l| l.as_str()),
+        value.get("data").and_then(|d| d.get("lrc")).and_then(|l| l.as_str()),
+        value.get("data").and_then(|d| d.as_str()),
+        value.get("lyric").and_then(|l| l.as_str()),
+        value.get("data").and_then(|d| d.get("klyric")).and_then(|l| l.as_str()),
+        value.get("data").and_then(|d| d.get("krc")).and_then(|l| l.as_str()),
+    ];
+
+    for lyric_opt in &lyric_candidates {
+        if let Some(lyric) = lyric_opt {
+            if !lyric.trim().is_empty() {
+                return Some(lyric.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+/// 主域名歌词接口（独立方法）
+fn get_primary_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+    let url = format!(
+        "{}{}/lyric/{}/{}?key={}",
+        JUHE_API_BASE, JUHE_API_PREFIX, song.juhe_platform, song.juhe_song_id, JUHE_API_KEY
+    );
+
+    log_file!("[JuheLyric-main] 请求: {}", url);
+    if let Ok(response) = client
+        .get(&url)
+        .header("User-Agent", "lx-music-desktop/2.12.1")
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+    {
+        if let Ok(text) = response.text() {
+            log_file!("[JuheLyric-main] 响应(前200): {}", &text[..text.len().min(200)]);
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                return extract_juhe_lyric(&value);
+            }
+        }
+    }
+
+    None
+}
+
+/// lerd 兜底歌词接口（独立方法）
+/// 按 lx-juhe.js 与 init.conf，当前仅支持 musicUrl，不提供歌词 action
+fn get_lerd_lyrics(_client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+    log_file!(
+        "[JuheLyric-lerd] 跳过: {} {}，lerd 脚本未暴露歌词端点",
+        song.juhe_platform,
+        song.juhe_song_id
+    );
+    None
+}
+
+/// huibq 兜底歌词接口（独立方法）
+/// 按 lx-huibq.js，actions 仅有 musicUrl，不支持歌词
+fn get_huibq_lyrics(_client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+    log_file!(
+        "[JuheLyric-huibq] 跳过: {} {}，huibq 脚本仅支持 musicUrl",
+        song.juhe_platform,
+        song.juhe_song_id
+    );
+    None
+}
+
+
+
+/// 获取聚合搜索歌词（仅主域名；其余域名脚本未暴露歌词 action）
+fn get_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+    get_primary_juhe_lyrics(client, song)
+        .or_else(|| get_lerd_lyrics(client, song))
+        .or_else(|| get_huibq_lyrics(client, song))
 }
 
 /// 通过歌名和歌手名搜索并获取聚合歌词（用于本地歌曲回退歌词下载）
@@ -2114,42 +3473,4 @@ pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, _mus
     rx
 }
 
-/// 在后台线程中下载聚合搜索歌词
-pub fn get_juhe_lyrics_background(song: OnlineSong) -> mpsc::Receiver<JuheLyricsResult> {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let client = match reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .user_agent("lx-music-desktop/2.12.1")
-            .build()
-        {
-            Ok(c) => c,
-            Err(e) => {
-                let _ = tx.send(JuheLyricsResult {
-                    song: song.clone(),
-                    lyrics: None,
-                    error: Some(format!("创建HTTP客户端失败: {}", e)),
-                });
-                return;
-            }
-        };
 
-        match get_juhe_lyrics(&client, &song) {
-            Some(lyrics) => {
-                let _ = tx.send(JuheLyricsResult {
-                    song,
-                    lyrics: Some(lyrics),
-                    error: None,
-                });
-            }
-            None => {
-                let _ = tx.send(JuheLyricsResult {
-                    song,
-                    lyrics: None,
-                    error: Some("无法获取歌词".to_string()),
-                });
-            }
-        }
-    });
-    rx
-}

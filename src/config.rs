@@ -4,6 +4,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 
 use crate::defs::PlayMode;
@@ -30,6 +31,48 @@ fn default_api_model() -> String {
 
 fn default_github_token() -> String {
     String::new()
+}
+
+/// 获取用户配置目录（可写）
+pub fn get_app_config_dir() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = env::var("APPDATA") {
+            return PathBuf::from(appdata).join("ter-music-rust");
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(xdg) = env::var("XDG_CONFIG_HOME") {
+            if !xdg.trim().is_empty() {
+                return PathBuf::from(xdg).join("ter-music-rust");
+            }
+        }
+        if let Ok(home) = env::var("HOME") {
+            return PathBuf::from(home).join(".config").join("ter-music-rust");
+        }
+    }
+
+    // 环境变量不可用时，回退到旧路径
+    let exe_path = env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
+    let exe_dir = exe_path.parent().unwrap_or(Path::new("."));
+    exe_dir.to_path_buf()
+}
+
+/// 获取当天日志文件路径（用户配置目录/logs/YYYY-MM-DD.log）
+pub fn get_daily_log_path() -> PathBuf {
+    let filename = format!("{}.log", Local::now().format("%Y-%m-%d"));
+    let logs_dir = get_app_config_dir().join("logs");
+
+    if fs::create_dir_all(&logs_dir).is_ok() {
+        return logs_dir.join(filename);
+    }
+
+    // 配置目录不可写时回退到临时目录，避免日志写入导致功能异常
+    let fallback = env::temp_dir().join("ter-music-rust").join("logs");
+    let _ = fs::create_dir_all(&fallback);
+    fallback.join(filename)
 }
 
 /// 应用配置
@@ -187,30 +230,7 @@ impl Config {
 
     /// 获取用户可写配置文件路径
     fn get_config_path() -> PathBuf {
-        #[cfg(target_os = "windows")]
-        {
-            if let Ok(appdata) = env::var("APPDATA") {
-                return PathBuf::from(appdata).join("ter-music-rust").join("config.json");
-            }
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            if let Ok(xdg) = env::var("XDG_CONFIG_HOME") {
-                if !xdg.trim().is_empty() {
-                    return PathBuf::from(xdg).join("ter-music-rust").join("config.json");
-                }
-            }
-            if let Ok(home) = env::var("HOME") {
-                return PathBuf::from(home)
-                    .join(".config")
-                    .join("ter-music-rust")
-                    .join("config.json");
-            }
-        }
-
-        // 环境变量不可用时，回退到旧路径
-        Self::get_legacy_config_path()
+        get_app_config_dir().join("config.json")
     }
 
     /// 从文件加载配置

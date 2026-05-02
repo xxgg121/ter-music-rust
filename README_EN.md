@@ -8,10 +8,6 @@
 
 A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems.
 
-
-
-![preview](preview.png)
-
 ![preview1](preview1.png)
 
 ![preview2](preview2.png)
@@ -21,6 +17,8 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 ![preview4](preview4.png)
 
 ![preview5](preview5.png)
+
+![preview6](preview6.png)
 
 ## ✨ Features
 
@@ -51,6 +49,7 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 - **Local search**: press `s` to search songs in current music directory
 - **Online search**: press `n` to search online songs by keyword
 - **Juhe Search**: Press `j` to enter. Search for juhe songs based on keyword matching.
+- **Playlist Search**: Press `p` to enter. Search for online playlists based on the keyword matching.
 - **Paging**: `PgUp` / `PgDn` for more results
 - **Online download**: press `Enter` on selected online result to download into current music directory (with progress display)
 
@@ -208,6 +207,7 @@ cargo run --release -- -o d:\Music
 | `s` | Search local songs |
 | `n` | Search online songs |
 | `j` | Search Juhe songs |
+| `p` | Search online playlists |
 | `i` | song info query |
 | `f` | Favorite/Unfavorite |
 | `v` | View favorites |
@@ -229,7 +229,8 @@ cargo run --release -- -o d:\Music
 | `Enter` | Search/Play/Download |
 | `↑/↓` | Select result |
 | `PgUp/PgDn` | Page up/down (online search) |
-| `s/n` | Switch local/online search |
+| `s/n/j` | Switch local/online/juhe search |
+
 | `Esc` | Exit search |
 
 ### Favorites View
@@ -267,7 +268,19 @@ cargo run --release -- -o d:\Music
 | `i` | Re-query song info |
 | `Esc` | Back to lyrics view |
 
+### Playlist Search View
+
+| Key | Action |
+|------|------|
+| Character input | Enter playlist keyword |
+| `Backspace` | Delete character |
+| `Enter` | Search/Enter playlist/Play & download |
+| `↑/↓` | Select playlist or song |
+| `PgUp/PgDn` | Page up/down |
+| `Esc` | Back to previous level / Exit search |
+
 ### Help View
+
 
 | Key | Action |
 |------|------|
@@ -653,16 +666,47 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604281254083505_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604281254169808_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260428125427848_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604281254393938_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605021019495232_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605021020046637_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605021020217133_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605021020411180_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Changelog
 
+## Version 1.5.0 (2026-04-30)
+
+### 🎉 New Features
+
+#### Online Playlist Search
+- ✨ **Playlist search entry**: press `p` to search online playlists directly
+- ✨ **Playlist content browsing**: after entering a playlist, you can browse songs and play quickly
+- ✨ **Cache-hit playback**: in online search / juhe search / playlist search, if the song already exists locally or hits downloaded cache, skip duplicate download and play directly
+- ✨ **Lyrics de-dup download**: in online search / juhe search / playlist search, if the song already exists locally or hits downloaded cache, lyric files are not downloaded repeatedly
+
+### 🔧 Improvements
+
+- 🎵 **Lyrics strategy optimization**: during playback, lyrics now use "Juhe first, regular fallback" to improve match accuracy
+- 🎯 **Search focus optimization**: pressing `s/n/j/p` now focuses the search input by default, so you can type immediately
+- 🎯 **Search-to-list interaction optimization**: after pressing Enter or clicking a song to start playback, focus switches to the list so keyboard shortcuts no longer go into the search box
+- 🎯 **Online list style consistency**: in online/juhe/playlist search views, selected cursor and playback marker are separated and spacing is aligned with the local playlist style
+- 🎲 **Online shuffle consistency optimization**: in Shuffle mode, online search and juhe search results now support random auto-next behavior consistent with playlist playback
+- 🛡️ **Online auto-next protection**: added rate limiting for online auto-skip; if 5 consecutive auto-skips occur within 3 seconds, playback stops automatically to avoid uncontrolled skipping on unplayable tracks
+
+### 🐞 Bug Fixes
+
+- 🛠️ **Lyrics priority fix**: fixed incorrect lyrics download priority order in online search / juhe search / playlist search flows
+- 🛠️ **Online autoplay index fix**: fixed an issue where moving the cursor during playback could make auto-next continue from cursor position instead of the actually playing song
+- 🛠️ **Space key input fix in search**: fixed an issue where Space was written into the search box in list-focus state and unexpectedly changed/cleared results
+- 🛠️ **Network search initial focus fix**: fixed missing initial input focus when entering network search with `n`
+- 🛠️ **Online shuffle missing behavior fix**: fixed an issue where Shuffle mode did not take effect in online search / juhe search result lists
+- 🛠️ **Online auto-next premature stop fix**: fixed an issue where playback could stop too early when the first online track was unplayable by counting only real auto-next attempts and resetting the window after successful playback
+
+---
+
 ## Version 1.4.0 (2026-04-28)
+
 
 ### 🎉 New Features
 

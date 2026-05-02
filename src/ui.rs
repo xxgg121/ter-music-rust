@@ -1,9 +1,11 @@
 // 用户界面模块
 
+use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use chrono::Local;
 use crossterm::{
     cursor,
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind},
@@ -14,9 +16,9 @@ use crossterm::{
 use crate::audio::AudioPlayer;
 use crate::defs::{PlayMode, PlayState, Playlist};
 use crate::lyrics::{Lyrics, LyricsDownloadResult};
-use crate::search::{OnlineSong, SearchDownloadResult, DownloadProgress, SongCommentItem, SongCommentsResult, GitHubDiscussionResult};
+use crate::search::{OnlineSong, OnlinePlaylist, SearchDownloadResult, PlaylistSearchResult, PlaylistSongsResult, DownloadProgress, SongCommentItem, SongCommentsResult, GitHubDiscussionResult};
 
-const DEFAULT_GITHUB_TOKEN: &str = "github_xxxxxx";
+const DEFAULT_GITHUB_TOKEN: &str = "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";
 
 // 主题色定义（使用显式 RGB，避免不同系统终端默认色表差异）
 #[derive(Debug, Clone, Copy)]
@@ -285,6 +287,8 @@ pub struct UserInterface {
     lyrics_download_rx: Option<std::sync::mpsc::Receiver<LyricsDownloadResult>>,
     /// 是否正在下载歌词
     lyrics_downloading: bool,
+    /// 当前歌曲是否跳过自动歌词下载（在线缓存/本地命中直播放时为 true）
+    skip_auto_lyrics_download_for_current_song: bool,
     /// 播放列表布局信息（用于鼠标交互）
     playlist_layout: Option<PlaylistLayout>,
     /// 歌词区域布局信息（用于鼠标拖动跳转）
@@ -369,6 +373,8 @@ pub struct UserInterface {
     search_mode: bool,
     /// 搜索输入关键字
     search_query: String,
+    /// 搜索输入框是否拥有焦点（true=键盘输入写入搜索框，false=键盘作用于列表/全局快捷键）
+    search_input_focused: bool,
     /// 搜索结果：匹配的歌曲在原始播放列表中的索引
     search_results: Vec<usize>,
     /// 搜索结果列表中的选中索引
@@ -413,8 +419,24 @@ pub struct UserInterface {
     online_download_rx: Option<std::sync::mpsc::Receiver<DownloadProgress>>,
     /// 下载进度百分比（0-100）
     online_download_percent: u8,
+    /// 正在下载的在线结果索引（用于UI绑定进度）
+    online_downloading_index: Option<usize>,
+    /// 在线歌曲下载命中缓存（归一化歌曲键 -> 本地文件路径）
+    downloaded_online_song_cache: std::collections::HashMap<String, std::path::PathBuf>,
     /// 是否处于聚合搜索搜索模式
     juhe_search_mode: bool,
+    /// 是否处于歌单搜索模式
+    playlist_search_mode: bool,
+    /// 歌单搜索结果
+    playlist_search_results: Vec<OnlinePlaylist>,
+    /// 当前进入的歌单（None=歌单列表；Some=歌单歌曲列表）
+    current_playlist: Option<OnlinePlaylist>,
+    /// 进入歌单前在歌单列表中的选中索引（用于 Esc 返回时恢复）
+    playlist_list_selected_index: usize,
+    /// 歌单搜索结果接收器
+    playlist_search_rx: Option<std::sync::mpsc::Receiver<PlaylistSearchResult>>,
+    /// 歌单歌曲加载接收器
+    playlist_songs_rx: Option<std::sync::mpsc::Receiver<PlaylistSongsResult>>,
     /// 聚合搜索歌词接收器
     juhe_lyrics_rx: Option<std::sync::mpsc::Receiver<crate::search::JuheLyricsResult>>,
     /// 聚合搜索歌词下载中
@@ -425,6 +447,8 @@ pub struct UserInterface {
     theme_colors: ThemeColors,
     /// 当前界面语言
     language: UiLanguage,
+    /// 在线搜索自动切歌节流窗口（记录自动切歌时间点）
+    online_auto_skip_times: VecDeque<Instant>,
 }
 
 impl UserInterface {
@@ -451,6 +475,7 @@ impl UserInterface {
             volume_bar_layout: None,
             lyrics_download_rx: None,
             lyrics_downloading: false,
+            skip_auto_lyrics_download_for_current_song: false,
             playlist_layout: None,
             lyrics_area_layout: None,
             lyrics_dragging: false,
@@ -493,6 +518,7 @@ impl UserInterface {
             github_token_input_value: String::new(),
             search_mode: false,
             search_query: String::new(),
+            search_input_focused: false,
             search_results: Vec::new(),
             search_selected_index: 0,
             search_scroll_offset: 0,
@@ -515,12 +541,21 @@ impl UserInterface {
             online_downloading: false,
             online_download_rx: None,
             online_download_percent: 0,
+            online_downloading_index: None,
+            downloaded_online_song_cache: std::collections::HashMap::new(),
             juhe_search_mode: false,
+            playlist_search_mode: false,
+            playlist_search_results: Vec::new(),
+            current_playlist: None,
+            playlist_list_selected_index: 0,
+            playlist_search_rx: None,
+            playlist_songs_rx: None,
             juhe_lyrics_rx: None,
             juhe_lyrics_loading: false,
             theme: UiTheme::Neon,
             theme_colors: UiTheme::Neon.colors(),
             language: UiLanguage::ZhCn,
+            online_auto_skip_times: VecDeque::new(),
         }
     }
 
@@ -536,6 +571,26 @@ impl UserInterface {
         } else if selected >= *scroll_offset + visible_count {
             *scroll_offset = selected - visible_count + 1;
         }
+    }
+
+    /// 同时钳制选中索引与滚动偏移，避免越界与残影
+    fn clamp_selected_and_scroll(selected: &mut usize, scroll_offset: &mut usize, total: usize, visible_count: usize) {
+        if total == 0 {
+            *selected = 0;
+            *scroll_offset = 0;
+            return;
+        }
+
+        if *selected >= total {
+            *selected = total - 1;
+        }
+
+        let max_offset = total.saturating_sub(visible_count);
+        if *scroll_offset > max_offset {
+            *scroll_offset = max_offset;
+        }
+
+        Self::adjust_scroll_offset(*selected, scroll_offset, visible_count);
     }
 
     fn i18n<'a>(&self, zh_cn: &'a str, zh_tw: &'a str, en: &'a str, ja: &'a str, ko: &'a str) -> &'a str {
@@ -614,6 +669,24 @@ impl UserInterface {
         self.i18n("正在播放: ", "正在播放: ", "Now Playing: ", "再生中: ", "재생 중: ")
     }
 
+    fn format_playlist_play_count(&self, count: Option<usize>) -> String {
+        let Some(n) = count else {
+            return "--".to_string();
+        };
+
+        if n > 10_000 {
+            let value = n as f64 / 10_000.0;
+            let mut text = format!("{:.1}", value);
+            if text.ends_with(".0") {
+                text.truncate(text.len() - 2);
+            }
+            let unit = self.i18n("万", "萬", "w", "万", "만");
+            format!("{}{}", text, unit)
+        } else {
+            n.to_string()
+        }
+    }
+
     fn is_now_playing_message(&self, message: &str) -> bool {
         const PREFIXES: [&str; 8] = [
             "正在播放: ",
@@ -630,7 +703,8 @@ impl UserInterface {
 
     pub fn update_now_playing_status(&mut self, song_name: &str) {
         let prefix = self.now_playing_prefix();
-        self.update_status(&format!("{}{}", prefix, song_name));
+        let safe_song_name = Self::sanitize_single_line_text(song_name);
+        self.update_status(&format!("{}{}", prefix, safe_song_name));
     }
 
     fn play_mode_text(&self, mode: PlayMode) -> &'static str {
@@ -651,10 +725,22 @@ impl UserInterface {
         }
     }
 
+    /// 将文本清理为单行可显示内容，移除会破坏终端布局的控制字符
+    fn sanitize_single_line_text(text: &str) -> String {
+        text.chars()
+            .map(|ch| match ch {
+                '\n' | '\r' | '\t' => ' ',
+                c if c.is_control() => ' ',
+                c => c,
+            })
+            .collect()
+    }
+
     /// 截断字符串到指定显示宽度，超出部分用 "..." 省略
     fn truncate_with_ellipsis(text: &str, max_width: usize) -> String {
-        if unicode_width::UnicodeWidthStr::width(text) <= max_width {
-            return text.to_string();
+        let text = Self::sanitize_single_line_text(text);
+        if unicode_width::UnicodeWidthStr::width(text.as_str()) <= max_width {
+            return text;
         }
 
         let mut truncated = String::new();
@@ -680,7 +766,7 @@ impl UserInterface {
         for row in used_rows..total_rows {
             queue!(
                 stdout,
-                cursor::MoveTo(1, start_row + row as u16),
+                cursor::MoveTo(0, start_row + row as u16),
                 terminal::Clear(ClearType::UntilNewLine),
             )?;
         }
@@ -1252,9 +1338,13 @@ impl UserInterface {
                 cursor::MoveTo(target_col, 4),
                 cursor::Show,
             )?;
-        } else if self.search_mode {
+        } else if self.search_mode
+            && self.search_input_focused
+            && !(self.playlist_search_mode && self.current_playlist.is_some()) {
             let prompt_text = if self.online_search_mode {
-                if self.juhe_search_mode {
+                if self.playlist_search_mode {
+                    self.i18n("歌单搜索: ", "歌單搜尋: ", "Playlist Search: ", "プレイリスト検索: ", "플레이리스트 검색: ")
+                } else if self.juhe_search_mode {
                     self.i18n("聚合搜索: ", "聚合搜索: ", "Juhe Search: ", "聚合検索: ", "폴리머 검색: ")
                 } else {
                     self.i18n("网络搜索: ", "網路搜尋: ", "Online Search: ", "オンライン検索: ", "온라인 검색: ")
@@ -1406,7 +1496,7 @@ impl UserInterface {
 
                 queue!(
                     stdout,
-                    cursor::MoveTo(1, (i - self.dir_history_scroll_offset + 6) as u16),
+                    cursor::MoveTo(0, (i - self.dir_history_scroll_offset + 6) as u16),
                     terminal::Clear(ClearType::UntilNewLine),
                 )?;
 
@@ -1531,11 +1621,12 @@ impl UserInterface {
                 let star = "★"; // 收藏列表中全部显示★
 
                 let max_width = left_width.saturating_sub(15) as usize;
-                let name = Self::truncate_with_ellipsis(song_name, max_width);
+                let safe_song_name = Self::sanitize_single_line_text(song_name);
+                let name = Self::truncate_with_ellipsis(&safe_song_name, max_width);
 
                 queue!(
                     stdout,
-                    cursor::MoveTo(1, (i - self.favorites_scroll_offset + 6) as u16),
+                    cursor::MoveTo(0, (i - self.favorites_scroll_offset + 6) as u16),
                     terminal::Clear(ClearType::UntilNewLine),
                 )?;
 
@@ -1573,8 +1664,27 @@ impl UserInterface {
             Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
         } else if self.search_mode {
             // 搜索模式：标题显示搜索栏
-            let search_prompt = if self.online_search_mode {
-                if self.juhe_search_mode {
+            let search_prompt = if self.playlist_search_mode && self.current_playlist.is_some() {
+                if let Some(ref pl) = self.current_playlist {
+                    let count = pl.song_count.map(|n| n.to_string()).unwrap_or_else(|| "?".to_string());
+                    let play_text = self.format_playlist_play_count(pl.play_count);
+                    format!(
+                        "{} [🎵{} 🎧{}]",
+                        pl.name,
+                        count,
+                        play_text,
+                    )
+                } else {
+                    self.search_query.clone()
+                }
+            } else if self.online_search_mode {
+                if self.playlist_search_mode {
+                    format!(
+                        "{}{}",
+                        self.i18n("歌单搜索: ", "歌單搜尋: ", "Playlist Search: ", "プレイリスト検索: ", "플레이리스트 검색: "),
+                        self.search_query
+                    )
+                } else if self.juhe_search_mode {
                     format!(
                         "{}{}",
                         self.i18n("聚合搜索: ", "聚合搜索: ", "Juhe Search: ", "聚合検索: ", "폴리머 검색: "),
@@ -1594,13 +1704,16 @@ impl UserInterface {
                     self.search_query
                 )
             };
-            let search_width = unicode_width::UnicodeWidthStr::width(search_prompt.as_str());
-            let padding = left_width as usize - search_width;
+            // 搜索栏标题统一做宽度裁剪，避免超长歌单名溢出到右侧歌词标题区域
+            let safe_search_prompt = Self::sanitize_single_line_text(&search_prompt);
+            let search_prompt_display = Self::truncate_with_ellipsis(&safe_search_prompt, left_width.saturating_sub(2) as usize);
+            let search_width = unicode_width::UnicodeWidthStr::width(search_prompt_display.as_str());
+            let padding = (left_width as usize).saturating_sub(search_width);
             queue!(
                 stdout,
                 cursor::MoveTo(0, 4),
                 style::SetForegroundColor(self.theme_colors.section_title),
-                style::Print(&search_prompt),
+                style::Print(&search_prompt_display),
                 style::Print(" ".repeat(padding)),
                 style::ResetColor,
             )?;
@@ -1622,127 +1735,231 @@ impl UserInterface {
             )?;
 
             if self.online_search_mode {
-                // 网络搜索结果列表
-                let total = self.online_search_results.len();
-                Self::adjust_scroll_offset(self.online_selected_index, &mut self.online_scroll_offset, visible_count);
+                if self.playlist_search_mode && self.current_playlist.is_none() {
+                    // 歌单搜索结果列表
+                    let total = self.playlist_search_results.len();
+                    Self::clamp_selected_and_scroll(
+                        &mut self.online_selected_index,
+                        &mut self.online_scroll_offset,
+                        total,
+                        visible_count,
+                    );
 
-                // 渲染搜索结果列表（搜索中也渲染旧结果）
-                for i in self.online_scroll_offset..std::cmp::min(self.online_scroll_offset + visible_count, total) {
-                    let song = &self.online_search_results[i];
-                    let is_selected = i == self.online_selected_index;
-                    let is_downloading = self.online_downloading && is_selected;
+                    for i in self.online_scroll_offset..std::cmp::min(self.online_scroll_offset + visible_count, total) {
+                        let pl = &self.playlist_search_results[i];
+                        let is_selected = i == self.online_selected_index;
+                        let count_text = pl.song_count.map(|n| n.to_string()).unwrap_or_else(|| "--".to_string());
+                        let play_text = self.format_playlist_play_count(pl.play_count);
 
-                    let duration_str = song.duration_ms
-                        .map(|ms| {
-                            let secs = ms / 1000;
-                            let mins = secs / 60;
-                            let secs = secs % 60;
-                            format!("{:02}:{:02}", mins, secs)
-                        })
-                        .unwrap_or_else(|| "--:--".to_string());
+                        let safe_playlist_name = Self::sanitize_single_line_text(&pl.name);
+                        let display = format!("{} [🎵{} 🎧{}]", safe_playlist_name, count_text, play_text);
+                        let name = Self::truncate_with_ellipsis(&display, left_width.saturating_sub(4) as usize);
 
-                    let display_name = if song.artist.is_empty() {
-                        song.name.clone()
-                    } else {
-                        format!("{} - {}", song.artist, song.name)
-                    };
-
-                    // 下载中时在时长后面追加进度百分比
-                    let progress_suffix = if is_downloading {
-                        format!(" [{}%]", self.online_download_percent)
-                    } else {
-                        String::new()
-                    };
-
-                    let max_width = left_width.saturating_sub(15) as usize;
-                    let full_display = display_name.clone();
-                    let name = Self::truncate_with_ellipsis(&full_display, max_width);
-
-                    queue!(
-                        stdout,
-                        cursor::MoveTo(1, (i - self.online_scroll_offset + 6) as u16),
-                        terminal::Clear(ClearType::UntilNewLine),
-                    )?;
-
-                    if is_selected {
-                        queue!(stdout, style::SetBackgroundColor(style::Color::DarkBlue))?;
-                    }
-
-                    if is_downloading {
-                        queue!(stdout, style::SetForegroundColor(self.theme_colors.section_title))?;
-                    } else {
-                        queue!(stdout, style::SetForegroundColor(self.theme_colors.song_normal))?;
-                    }
-
-                    queue!(
-                        stdout,
-                        style::Print(format!("  ↓ {} {}{}", name, duration_str, progress_suffix)),
-                        style::ResetColor,
-                    )?;
-                }
-
-                // 如果没有搜索结果
-                if total == 0 && !self.online_searching {
-                    let hint = if self.search_query.is_empty() {
-                        if self.juhe_search_mode {
-                            self.i18n(
-                                "输入歌曲名称后按 Enter 搜索聚合搜索",
-                                "輸入歌曲名稱後按 Enter 搜尋獨家音源",
-                                "Enter song name, then press Enter to search Juhe",
-                                "曲名を入力して Enter で独占音源検索",
-                                "곡명을 입력하고 Enter로 독점음원 검색",
-                            ).to_string()
-                        } else {
-                            self.i18n(
-                                "输入歌曲名称后按 Enter 搜索网络歌曲",
-                                "輸入歌曲名稱後按 Enter 搜尋網路歌曲",
-                                "Enter song name, then press Enter to search online",
-                                "曲名を入力して Enter でオンライン検索",
-                                "곡명을 입력하고 Enter로 온라인 검색",
-                            ).to_string()
-                        }
-                    } else if self.online_search_page > 1 {
-                        match self.language {
-                            UiLanguage::ZhCn => format!("第{}页无结果，PgUp翻上页", self.online_search_page),
-                            UiLanguage::ZhTw => format!("第{}頁無結果，PgUp 上一頁", self.online_search_page),
-                            UiLanguage::En => format!("No result on page {}, PgUp for previous page", self.online_search_page),
-                            UiLanguage::Ja => format!("{}ページに結果なし、PgUpで前ページ", self.online_search_page),
-                            UiLanguage::Ko => format!("{}페이지 결과 없음, PgUp 이전 페이지", self.online_search_page),
-                        }
-                    } else {
-                        self.i18n(
-                            "网络搜索无结果，修改关键字后按 Enter 重新搜索",
-                            "網路搜尋無結果，修改關鍵字後按 Enter 重新搜尋",
-                            "No online result. Update keyword and press Enter again",
-                            "結果なし。キーワードを変更して Enter で再検索",
-                            "결과 없음. 키워드 수정 후 Enter로 재검색",
-                        ).to_string()
-                    };
-                    queue!(
-                        stdout,
-                        cursor::MoveTo(1, 7),
-                        style::SetForegroundColor(self.theme_colors.info_text),
-                        style::Print(&hint),
-                        style::ResetColor,
-                    )?;
-                } else if total > 0 {
-                    // 在结果列表底部显示页码信息
-                    let page_info = format!("第{}页 | PgUp/PgDn翻页", self.online_search_page);
-                    let info_row = std::cmp::min(total, visible_count);
-                    if info_row < visible_count {
                         queue!(
                             stdout,
-                            cursor::MoveTo(1, (info_row + 6) as u16),
-                            style::SetForegroundColor(self.theme_colors.info_text),
-                            style::Print(&page_info),
+                            cursor::MoveTo(0, (i - self.online_scroll_offset + 6) as u16),
+                            terminal::Clear(ClearType::UntilNewLine),
+                        )?;
+                        if is_selected {
+                            queue!(stdout, style::SetBackgroundColor(style::Color::DarkBlue))?;
+                        }
+                        queue!(
+                            stdout,
+                            style::SetForegroundColor(self.theme_colors.song_normal),
+                            style::Print(format!("  {}", name)),
                             style::ResetColor,
                         )?;
                     }
-                }
 
-                // 清除下方残留行
-                let used_rows = std::cmp::min(total, visible_count);
-                Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
+                    if total == 0 {
+                        let hint = if self.search_query.is_empty() {
+                            self.i18n(
+                                "输入歌单名称后按 Enter 搜索歌单",
+                                "輸入歌單名稱後按 Enter 搜尋歌單",
+                                "Enter the playlist name and press Enter to search for the playlist",
+                                "プレイリスト名を入力してEnterキーを押すと、そのプレイリストが検索されます",
+                                "노래 목록 이름을 입력한 후 Enter를 누르면 노래 목록을 검색합니다",
+                            ).to_string()
+                        } else {
+                            self.i18n(
+                                "歌单搜索无结果，修改关键字后按 Enter 重新搜索",
+                                "歌單蒐索無結果，修改關鍵字後按Enter重新搜索",
+                                "No playlist results. Update keyword and press Enter again",
+                                "プレイリストの検索に結果が表示されません。キーワードを変更してEnterキーを押すと、再度検索できます",
+                                "노래 목록 검색 결과가 없어, 키워드를 수정한 후 Enter를 누르고 다시 검색하세요",
+                            ).to_string()
+                        };
+                        queue!(
+                            stdout,
+                            cursor::MoveTo(1, 7),
+                            style::SetForegroundColor(self.theme_colors.info_text),
+                            style::Print(hint),
+                            style::ResetColor,
+                        )?;
+                    }
+                    let used_rows = std::cmp::min(total, visible_count);
+                    Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
+                } else {
+                    // 网络歌曲结果列表（普通/聚合/歌单内歌曲）
+                    let total = self.online_search_results.len();
+                    Self::clamp_selected_and_scroll(
+                        &mut self.online_selected_index,
+                        &mut self.online_scroll_offset,
+                        total,
+                        visible_count,
+                    );
+
+                    // 渲染搜索结果列表
+                    for i in self.online_scroll_offset..std::cmp::min(self.online_scroll_offset + visible_count, total) {
+                        let song = &self.online_search_results[i];
+                        let is_selected = i == self.online_selected_index;
+                        let is_downloading = self.online_downloading && self.online_downloading_index == Some(i);
+
+                        let song_keys = Self::online_song_match_keys(song);
+                        let is_playing = current_file
+                            .as_ref()
+                            .map(|f| {
+                                let current_key = Self::normalize_song_key(&f.name);
+                                song_keys.iter().any(|k| {
+                                    *k == current_key
+                                        || self
+                                            .downloaded_online_song_cache
+                                            .get(k)
+                                            .map(|p| *p == f.path)
+                                            .unwrap_or(false)
+                                })
+                            })
+                            .unwrap_or(false)
+                            && play_state != PlayState::Stopped;
+
+                        let duration_str = song.duration_ms
+                            .map(|ms| {
+                                let secs = ms / 1000;
+                                let mins = secs / 60;
+                                let secs = secs % 60;
+                                format!("{:02}:{:02}", mins, secs)
+                            })
+                            .unwrap_or_else(|| "--:--".to_string());
+
+                        let display_name = if song.artist.is_empty() {
+                            song.name.clone()
+                        } else {
+                            format!("{} - {}", song.artist, song.name)
+                        };
+                        let display_name = Self::sanitize_single_line_text(&display_name);
+
+                        // 下载中时在时长后面追加进度百分比
+                        let progress_suffix = if is_downloading {
+                            format!(" [{}%]", self.online_download_percent)
+                        } else {
+                            String::new()
+                        };
+
+                        let max_width = left_width.saturating_sub(15) as usize;
+                        let full_display = display_name.clone();
+                        let name = Self::truncate_with_ellipsis(&full_display, max_width);
+
+                        queue!(
+                            stdout,
+                            cursor::MoveTo(0, (i - self.online_scroll_offset + 6) as u16),
+                            terminal::Clear(ClearType::UntilNewLine),
+                        )?;
+
+                        if is_selected {
+                            queue!(stdout, style::SetBackgroundColor(style::Color::DarkBlue))?;
+                        }
+
+                        if is_playing {
+                            queue!(stdout, style::SetForegroundColor(self.theme_colors.song_playing))?;
+                        } else if is_downloading {
+                            queue!(stdout, style::SetForegroundColor(self.theme_colors.section_title))?;
+                        } else {
+                            queue!(stdout, style::SetForegroundColor(self.theme_colors.song_normal))?;
+                        }
+
+                        // 与本地播放列表保持一致：selector + star + prefix + name + duration
+                        let prefix = if is_playing {
+                            match play_state {
+                                PlayState::Playing => "▶ ",
+                                PlayState::Paused => "■ ",
+                                PlayState::Stopped => "❚❚",
+                            }
+                        } else {
+                            "  "
+                        };
+                        let selector = if is_selected { "►" } else { " " };
+                        let star = " ";
+
+                        queue!(
+                            stdout,
+                            style::Print(format!("{} {} {} {} {}{}", selector, star, prefix, name, duration_str, progress_suffix)),
+                            style::ResetColor,
+                        )?;
+                    }
+
+                    // 如果没有搜索结果
+                    if total == 0 {
+                        let hint = if self.search_query.is_empty() {
+                            if self.juhe_search_mode {
+                                self.i18n(
+                                    "输入歌曲名称后按 Enter 搜索聚合搜索",
+                                    "輸入歌曲名稱後按 Enter 搜尋獨家音源",
+                                    "Enter song name, then press Enter to search Juhe",
+                                    "曲名を入力して Enter で独占音源検索",
+                                    "곡명을 입력하고 Enter로 독점음원 검색",
+                                ).to_string()
+                            } else {
+                                self.i18n(
+                                    "输入歌曲名称后按 Enter 搜索网络歌曲",
+                                    "輸入歌曲名稱後按 Enter 搜尋網路歌曲",
+                                    "Enter song name, then press Enter to search online",
+                                    "曲名を入力して Enter でオンライン検索",
+                                    "곡명을 입력하고 Enter로 온라인 검색",
+                                ).to_string()
+                            }
+                        } else if self.online_search_page > 1 {
+                            match self.language {
+                                UiLanguage::ZhCn => format!("第{}页无结果，PgUp翻上页", self.online_search_page),
+                                UiLanguage::ZhTw => format!("第{}頁無結果，PgUp 上一頁", self.online_search_page),
+                                UiLanguage::En => format!("No result on page {}, PgUp for previous page", self.online_search_page),
+                                UiLanguage::Ja => format!("{}ページに結果なし、PgUpで前ページ", self.online_search_page),
+                                UiLanguage::Ko => format!("{}페이지 결과 없음, PgUp 이전 페이지", self.online_search_page),
+                            }
+                        } else {
+                            self.i18n(
+                                "网络搜索无结果，修改关键字后按 Enter 重新搜索",
+                                "網路搜尋無結果，修改關鍵字後按 Enter 重新搜尋",
+                                "No online result. Update keyword and press Enter again",
+                                "結果なし。キーワードを変更して Enter で再検索",
+                                "결과 없음. 키워드 수정 후 Enter로 재검색",
+                            ).to_string()
+                        };
+                        queue!(
+                            stdout,
+                            cursor::MoveTo(1, 7),
+                            style::SetForegroundColor(self.theme_colors.info_text),
+                            style::Print(&hint),
+                            style::ResetColor,
+                        )?;
+                    } else if total > 0 {
+                        // 在结果列表底部显示页码信息
+                        let page_info = format!("第{}页 | PgUp/PgDn翻页", self.online_search_page);
+                        let info_row = std::cmp::min(total, visible_count);
+                        if info_row < visible_count {
+                            queue!(
+                                stdout,
+                                cursor::MoveTo(1, (info_row + 6) as u16),
+                                style::SetForegroundColor(self.theme_colors.info_text),
+                                style::Print(&page_info),
+                                style::ResetColor,
+                            )?;
+                        }
+                    }
+
+                    // 清除下方残留行
+                    let used_rows = std::cmp::min(total, visible_count);
+                    Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
+                }
             } else {
                 // 本地搜索结果列表
                 let total = self.search_results.len();
@@ -1774,7 +1991,8 @@ impl UserInterface {
 
                         let duration_str = file.format_duration();
                         let max_width = left_width.saturating_sub(15) as usize;
-                        let name = Self::truncate_with_ellipsis(&file.name, max_width);
+                        let safe_file_name = Self::sanitize_single_line_text(&file.name);
+                        let name = Self::truncate_with_ellipsis(&safe_file_name, max_width);
 
                         queue!(
                             stdout,
@@ -1856,7 +2074,7 @@ impl UserInterface {
                 UiLanguage::Ko => format!("재생목록 {} (총 {}곡)", range_info, playlist.len()),
             };
             let title_width = unicode_width::UnicodeWidthStr::width(title_text.as_str());
-            let title_padding = left_width as usize - title_width;
+            let title_padding = (left_width as usize).saturating_sub(title_width);
             queue!(
                 stdout,
                 cursor::MoveTo(0, 4),
@@ -1902,11 +2120,12 @@ impl UserInterface {
                     // 调整宽度为左侧栏宽度减去边距
                     let duration_str = file.format_duration();
                     let max_width = left_width.saturating_sub(15) as usize; // 减去选择器、播放状态、收藏星号、时长等
-                    let name = Self::truncate_with_ellipsis(&file.name, max_width);
+                    let safe_file_name = Self::sanitize_single_line_text(&file.name);
+                    let name = Self::truncate_with_ellipsis(&safe_file_name, max_width);
 
                     queue!(
                         stdout,
-                        cursor::MoveTo(1, (i - self.scroll_offset + 6) as u16),
+                        cursor::MoveTo(0, (i - self.scroll_offset + 6) as u16),
                         terminal::Clear(ClearType::UntilNewLine),
                     )?;
 
@@ -2017,7 +2236,7 @@ impl UserInterface {
             format!(
                 "{}{}",
                 self.i18n("歌曲歌词 ", "歌曲歌詞 ", "Song Lyrics ", "楽曲歌詞 ", "곡 가사 "),
-                file.name
+                Self::sanitize_single_line_text(&file.name)
             )
         } else {
             self.i18n("歌曲歌词", "歌曲歌詞", "Song Lyrics", "楽曲歌詞", "곡 가사").to_string()
@@ -2128,13 +2347,40 @@ impl UserInterface {
                         style::ResetColor,
                     )?;
                 } else {
-                    // 普通文本行
-                    queue!(
-                        stdout,
-                        style::SetForegroundColor(self.theme_colors.song_normal),
-                        style::Print(truncate_to_width(line, width as usize)),
-                        style::ResetColor,
-                    )?;
+                    // 普通文本行（URL 使用 OSC 8 超链接，参考 Discussion 状态行）
+                    if let Some(url_start) = line.find("http://").or_else(|| line.find("https://")) {
+                        let prefix = &line[..url_start];
+                        let url = line[url_start..].trim_end();
+
+                        let max_width = width as usize;
+                        let prefix_text = truncate_to_width(prefix, max_width);
+                        let prefix_width = unicode_width::UnicodeWidthStr::width(prefix_text.as_str());
+
+                        queue!(
+                            stdout,
+                            style::SetForegroundColor(self.theme_colors.song_normal),
+                            style::Print(&prefix_text),
+                        )?;
+
+                        if prefix_width < max_width && !url.is_empty() {
+                            let remain_width = max_width - prefix_width;
+                            let url_text = truncate_to_width(url, remain_width);
+                            let hyperlink = format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", url, url_text);
+                            queue!(
+                                stdout,
+                                style::Print(&hyperlink),
+                            )?;
+                        }
+
+                        queue!(stdout, style::ResetColor)?;
+                    } else {
+                        queue!(
+                            stdout,
+                            style::SetForegroundColor(self.theme_colors.song_normal),
+                            style::Print(truncate_to_width(line, width as usize)),
+                            style::ResetColor,
+                        )?;
+                    }
                 }
             }
         }
@@ -2162,6 +2408,7 @@ impl UserInterface {
                 "→ s           搜索本地歌曲".to_string(),
                 "→ n           搜索网络歌曲".to_string(),
                 "→ j           搜索聚合歌曲".to_string(),
+                "→ p           搜索在线歌单".to_string(),
                 "→ i           查看歌曲信息".to_string(),
                 "→ f           添加到收藏夹".to_string(),
                 "→ v           查看收藏列表".to_string(),
@@ -2214,6 +2461,7 @@ impl UserInterface {
                 "→ s           搜尋本地歌曲".to_string(),
                 "→ n           搜尋網路歌曲".to_string(),
                 "→ j           搜尋聚合歌曲".to_string(),
+                "→ p           搜索在線歌單".to_string(),
                 "→ i           查看歌曲資訊".to_string(),
                 "→ f           新增到收藏夾".to_string(),
                 "→ v           查看收藏列表".to_string(),
@@ -2266,6 +2514,7 @@ impl UserInterface {
                 "→ s           Search local songs".to_string(),
                 "→ n           Search online songs".to_string(),
                 "→ j           Search Juhe songs".to_string(),
+                "→ p           Search online playlists".to_string(),
                 "→ i           Song info".to_string(),
                 "→ f           Add to favorites".to_string(),
                 "→ v           View favorites".to_string(),
@@ -2318,6 +2567,7 @@ impl UserInterface {
                 "→ s           ローカル曲を検索".to_string(),
                 "→ n           ネット曲を検索".to_string(),
                 "→ j           アグリゲート検索".to_string(),
+                "→ p           プレイリスト検索".to_string(),
                 "→ i           楽曲情報".to_string(),
                 "→ f           お気に入りに追加".to_string(),
                 "→ v           お気に入り一覧".to_string(),
@@ -2370,6 +2620,7 @@ impl UserInterface {
                 "→ s           로컬 곡 검색".to_string(),
                 "→ n           온라인 곡 검색".to_string(),
                 "→ j           폴리머 검색".to_string(),
+                "→ p           플레이리스트 검색".to_string(),
                 "→ i           곡 정보".to_string(),
                 "→ f           즐겨찾기 추가".to_string(),
                 "→ v           즐겨찾기 목록".to_string(),
@@ -2425,7 +2676,7 @@ impl UserInterface {
         // 每帧重建歌词区域布局（用于鼠标拖动跳转）
         self.lyrics_area_layout = None;
 
-        // 检查后台歌词下载结果
+        // 检查常规歌词后台下载结果（作为聚合失败后的兜底）
         if let Some(ref rx) = self.lyrics_download_rx {
             if let Ok(result) = rx.try_recv() {
                 // 确认下载结果对应的歌曲仍是当前歌曲
@@ -2433,24 +2684,8 @@ impl UserInterface {
                     .as_ref()
                     .map(|f| f.path == result.music_path)
                     .unwrap_or(false);
-                if is_current {
-                    if result.lyrics.is_some() {
-                        self.current_lyrics = result.lyrics;
-                    } else {
-                        // 常规下载失败，尝试通过聚合搜索获取歌词
-                        let music_path = std::path::Path::new(&result.music_path);
-                        let file_stem = music_path.file_stem()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or("");
-                        let (artist, title) = crate::lyrics::Lyrics::parse_artist_title(file_stem)
-                            .unwrap_or_else(|| ("".to_string(), file_stem.to_string()));
-                        self.juhe_lyrics_loading = true;
-                        self.juhe_lyrics_rx = Some(
-                            crate::search::search_and_get_juhe_lyrics_background(
-                                artist, title, result.music_path.clone()
-                            )
-                        );
-                    }
+                if is_current && result.lyrics.is_some() {
+                    self.current_lyrics = result.lyrics;
                 }
                 self.lyrics_download_rx = None;
                 self.lyrics_downloading = false;
@@ -2475,10 +2710,23 @@ impl UserInterface {
                 // 先尝试从本地加载（不阻塞）
                 if let Some(lyrics) = Lyrics::from_local_lrc(&file.path) {
                     self.current_lyrics = Some(lyrics);
-                } else if !self.lyrics_downloading {
-                    // 本地没有，启动后台下载
-                    self.lyrics_download_rx = Some(Lyrics::download_lyrics_background(&file.path));
-                    self.lyrics_downloading = true;
+                } else if lrc_path.exists() {
+                    // 本地已存在歌词文件（即使解析失败）也不再触发网络下载
+                    self.current_lyrics = None;
+                } else if !self.juhe_lyrics_loading && !self.lyrics_downloading {
+                    // 本地不存在歌词文件：先走聚合搜索歌词，常规下载作为兜底
+                    let file_stem = file.path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("");
+                    let (artist, title) = crate::lyrics::Lyrics::parse_artist_title(file_stem)
+                        .unwrap_or_else(|| ("".to_string(), file_stem.to_string()));
+                    self.juhe_lyrics_loading = true;
+                    self.juhe_lyrics_rx = Some(
+                        crate::search::search_and_get_juhe_lyrics_background(
+                            artist, title, file.path.clone()
+                        )
+                    );
                     // 暂时清空歌词，显示下载提示
                     self.current_lyrics = None;
                 }
@@ -2503,7 +2751,8 @@ impl UserInterface {
                     let is_highlight = highlight_idx.map(|h| h == i).unwrap_or(false);
 
                     // 截断过长的歌词
-                    let text = truncate_to_width(&line.text, width.saturating_sub(2) as usize);
+                    let safe_line = Self::sanitize_single_line_text(&line.text);
+                    let text = truncate_to_width(&safe_line, width.saturating_sub(2) as usize);
 
                     queue!(
                         stdout,
@@ -2932,22 +3181,44 @@ impl UserInterface {
             let tip_line = self.terminal_height.saturating_sub(5);
             let help_text = if self.search_mode {
                 if self.online_search_mode {
-                    let search_label = if self.juhe_search_mode {
+                    let search_label = if self.playlist_search_mode {
+                        self.i18n("歌单搜索", "歌單搜尋", "Playlist", "プレイリスト検索", "플레이리스트 검색")
+                    } else if self.juhe_search_mode {
                         self.i18n("聚合搜索", "聚合搜索", "Juhe", "聚合検索", "폴리머 검색")
                     } else {
                         self.i18n("网络搜索", "網路搜尋", "Online", "オンライン", "온라인")
                     };
                     if self.terminal_width >= 80 {
-                        format!("{}: 输入歌名Enter搜索 | ↑↓选择 | Enter下载 | PgUp/PgDn翻页 | Esc退出", search_label)
+                        format!(
+                            "{}: {}",
+                            search_label,
+                            self.i18n(
+                                "↑↓上下移动 | Up/Down上下滚动 | Enter播放 | PgUp/PgDn翻页 | Esc返回",
+                                "↑↓上下移動 | Up/Down上下滾動 | Enter播放 | PgUp/PgDn翻頁 | Esc返回",
+                                "↑↓ Move | Up/Down Scroll | Enter Play | PgUp/PgDn Page | Esc Back",
+                                "↑↓移動 | Up/Downスクロール | Enter再生 | PgUp/PgDnページ | Esc戻る",
+                                "↑↓ 이동 | Up/Down 스크롤 | Enter 재생 | PgUp/PgDn 페이지 | Esc 뒤로",
+                            )
+                        )
                     } else if self.terminal_width >= 60 {
-                        format!("{}: Enter搜索|↑↓选择|Enter下载|PgUp/PgDn翻页|Esc退出", search_label)
+                        format!(
+                            "{}: {}",
+                            search_label,
+                            self.i18n(
+                                "Enter搜索|↑↓选择|Enter播放|PgUp/PgDn翻页|Esc返回",
+                                "Enter搜尋|↑↓選擇|Enter播放|PgUp/PgDn翻頁|Esc返回",
+                                "Enter Search|↑↓ Select|Enter Play|PgUp/PgDn Page|Esc",
+                                "Enter検索|↑↓選択|Enter再生|PgUp/PgDnページ|Esc",
+                                "Enter 검색|↑↓ 선택|Enter 재생|PgUp/PgDn 페이지|Esc",
+                            )
+                        )
                     } else {
                         format!("{}: Enter|↑↓|DL|PgUp/Dn|Esc", search_label)
                     }
                 } else if self.terminal_width >= 60 {
                     self.i18n(
                         "本地搜索: 输入关键字Enter搜索 | ↑↓选择 | Enter播放 | Esc退出",
-                        "本地搜尋: 輸入關鍵字 Enter 搜尋 | ↑↓選擇 | Enter 播放 | Esc 退出",
+                        "本地搜尋: 輸入關鍵字Enter 搜尋 | ↑↓選擇 | Enter播放 | Esc 退出",
                         "Local Search: keyword + Enter | ↑↓ Select | Enter Play | Esc",
                         "ローカル検索: キーワード+Enter | ↑↓選択 | Enter再生 | Esc",
                         "로컬 검색: 키워드+Enter | ↑↓ 선택 | Enter 재생 | Esc",
@@ -3341,22 +3612,56 @@ impl UserInterface {
 
         // 搜索模式下的键盘处理（本地搜索和网络搜索共用此逻辑）
         if self.search_mode {
+            let in_playlist_detail = self.online_search_mode && self.playlist_search_mode && self.current_playlist.is_some();
+            let online_input_focused = self.online_search_mode && !in_playlist_detail && self.search_input_focused;
+            let mut handled_in_search = true;
             match code {
                 KeyCode::Esc => {
-                    // 退出搜索模式
-                    self.search_mode = false;
-                    self.online_search_mode = false;
-                    self.juhe_search_mode = false;
-                    self.search_query.clear();
-                    self.search_results.clear();
-                    self.search_selected_index = 0;
-                    self.search_scroll_offset = 0;
-                    self.online_search_results.clear();
-                    self.online_selected_index = 0;
-                    self.online_scroll_offset = 0;
-                    self.online_searching = false;
-                    self.online_search_page = 1;
-                    self.online_search_rx = None;
+                    // 优先关闭右侧视图层（评论/歌曲信息/帮助），避免误退到歌单搜索列表
+                    if self.comments_mode {
+                        self.comments_mode = false;
+                        self.comments_detail_mode = false;
+                    } else if self.song_info_mode {
+                        self.song_info_mode = false;
+                    } else if self.help_mode {
+                        self.help_mode = false;
+                    } else if self.playlist_search_mode && self.current_playlist.is_some() {
+                        // 歌单歌曲页返回歌单搜索结果页
+                        self.search_input_focused = false;
+                        self.current_playlist = None;
+                        self.online_search_results.clear();
+                        self.online_selected_index = self.playlist_list_selected_index;
+                        self.online_scroll_offset = self.online_selected_index.saturating_sub(2);
+                        let total = self.playlist_search_results.len();
+                        Self::clamp_selected_and_scroll(
+                            &mut self.online_selected_index,
+                            &mut self.online_scroll_offset,
+                            total,
+                            (self.terminal_height as usize).saturating_sub(12).max(5),
+                        );
+                        self.online_searching = false;
+                        self.playlist_songs_rx = None;
+                    } else {
+                        // 退出搜索模式
+                        self.search_mode = false;
+                        self.online_search_mode = false;
+                        self.juhe_search_mode = false;
+                        self.playlist_search_mode = false;
+                        self.search_query.clear();
+                        self.search_results.clear();
+                        self.search_selected_index = 0;
+                        self.search_scroll_offset = 0;
+                        self.online_search_results.clear();
+                        self.online_selected_index = 0;
+                        self.online_scroll_offset = 0;
+                        self.online_searching = false;
+                        self.online_search_page = 1;
+                        self.online_search_rx = None;
+                        self.playlist_search_rx = None;
+                        self.playlist_songs_rx = None;
+                        self.playlist_search_results.clear();
+                        self.current_playlist = None;
+                    }
                 }
                 KeyCode::Enter => {
                     if self.online_search_mode {
@@ -3364,13 +3669,33 @@ impl UserInterface {
                             // 正在搜索中，忽略
                         } else if self.online_downloading {
                             // 正在下载中，忽略
-                        } else if !self.online_search_results.is_empty() {
-                            // 有搜索结果：下载选中的歌曲
-                            if let Some(song) = self.online_search_results.get(self.online_selected_index).cloned() {
-                                self.start_download_song(song);
+                        } else if self.playlist_search_mode && self.current_playlist.is_none() {
+                            if !self.playlist_search_results.is_empty() {
+                                if let Some(pl) = self.playlist_search_results.get(self.online_selected_index).cloned() {
+                                    self.playlist_list_selected_index = self.online_selected_index;
+                                    self.online_searching = true;
+                                    self.online_search_results.clear();
+                                    self.online_selected_index = 0;
+                                    self.online_scroll_offset = 0;
+                                    self.current_playlist = Some(pl.clone());
+                                    self.playlist_songs_rx = Some(crate::search::fetch_playlist_songs_background(pl));
+                                    // 进入列表操作态：按键默认作用于列表/全局快捷键
+                                    self.search_input_focused = false;
+                                }
+                            } else if online_input_focused && !self.search_query.is_empty() {
+                                self.online_search_page = 1;
+                                self.start_online_search();
                             }
-                        } else if !self.search_query.is_empty() {
-                            // 无搜索结果且有输入：触发网络搜索（从第1页开始）
+                        } else if !self.online_search_results.is_empty() {
+                            // 有搜索结果：下载选中的歌曲，并切到列表操作态
+                            if let Some(song) = self.online_search_results.get(self.online_selected_index).cloned() {
+                                // 用户主动点播在线歌曲，开始新一轮播放尝试，重置自动切歌节流窗口
+                                self.online_auto_skip_times.clear();
+                                self.start_download_song(song);
+                                self.search_input_focused = false;
+                            }
+                        } else if online_input_focused && !self.search_query.is_empty() {
+                            // 无搜索结果且输入框有焦点：触发网络搜索（从第1页开始）
                             self.online_search_page = 1;
                             self.start_online_search();
                         }
@@ -3379,6 +3704,7 @@ impl UserInterface {
                         if let Some(&orig_idx) = self.search_results.get(self.search_selected_index) {
                             self.selected_index = orig_idx;
                             self.search_mode = false;
+                            self.search_input_focused = false;
                             self.search_query.clear();
                             self.search_results.clear();
                             self.search_scroll_offset = 0;
@@ -3400,7 +3726,12 @@ impl UserInterface {
                 }
                 KeyCode::Down => {
                     if self.online_search_mode {
-                        if !self.online_search_results.is_empty() && self.online_selected_index < self.online_search_results.len() - 1 {
+                        let total = if self.playlist_search_mode && self.current_playlist.is_none() {
+                            self.playlist_search_results.len()
+                        } else {
+                            self.online_search_results.len()
+                        };
+                        if total > 0 && self.online_selected_index < total - 1 {
                             self.online_selected_index += 1;
                         }
                     } else if !self.search_results.is_empty() && self.search_selected_index < self.search_results.len() - 1 {
@@ -3409,16 +3740,18 @@ impl UserInterface {
                 }
                 KeyCode::Backspace => {
                     if self.online_search_mode {
-                        // 网络搜索模式：如果有搜索关键字则删除字符，否则退出
-                        if !self.search_query.is_empty() {
+                        // 在线搜索列表焦点态：Backspace 不再编辑搜索框，交给全局按键分支
+                        if !online_input_focused {
+                            handled_in_search = false;
+                        } else if !self.search_query.is_empty() {
                             self.search_query.pop();
                             // 关键字变化时清空旧搜索结果
                             self.online_search_results.clear();
+                            self.playlist_search_results.clear();
+                            self.current_playlist = None;
                             self.online_selected_index = 0;
                             self.online_scroll_offset = 0;
                             self.online_search_page = 1;
-                        } else {
-                            // 关键字为空时不退出，与本地搜索模式一致，按ESC才退出
                         }
                     } else {
                         // 本地搜索：删除最后一个字符，清空旧结果以便按回车重新搜索
@@ -3429,40 +3762,108 @@ impl UserInterface {
                     }
                 }
                 KeyCode::Char(c) => {
-                    // 输入搜索关键字
-                    self.search_query.push(c);
-                    if self.online_search_mode {
-                        // 网络搜索模式：关键字变化时清空旧搜索结果，以便按 Enter 触发新搜索
-                        if !self.online_search_results.is_empty() {
-                            self.online_search_results.clear();
-                            self.online_selected_index = 0;
-                            self.online_scroll_offset = 0;
-                            self.online_search_page = 1;
+                    // 进入歌单详情后，不再把键盘输入写入搜索框；空格改为播放/暂停
+                    if in_playlist_detail {
+                        if c == ' ' {
+                            let mut audio_player = self.audio_player.lock().unwrap();
+                            match audio_player.get_state() {
+                                PlayState::Playing => audio_player.pause(),
+                                PlayState::Paused => audio_player.resume(),
+                                _ => {}
+                            }
+                        } else {
+                            // 其余字符按键交给下方全局快捷键分支处理
+                            handled_in_search = false;
                         }
+                    } else if self.online_search_mode && !online_input_focused {
+                        // 在线搜索列表焦点态：字符键不写入搜索框，交给全局快捷键分支
+                        handled_in_search = false;
                     } else {
-                        // 本地搜索：关键字变化时清空旧结果，按 Enter 重新搜索
-                        self.search_results.clear();
-                        self.search_selected_index = 0;
-                        self.search_scroll_offset = 0;
+                        // 输入搜索关键字
+                        self.search_query.push(c);
+                        if self.online_search_mode {
+                            // 网络搜索模式：关键字变化时清空旧搜索结果，以便按 Enter 触发新搜索
+                            if !self.online_search_results.is_empty() || !self.playlist_search_results.is_empty() || self.current_playlist.is_some() {
+                                self.online_search_results.clear();
+                                self.playlist_search_results.clear();
+                                self.current_playlist = None;
+                                self.online_selected_index = 0;
+                                self.online_scroll_offset = 0;
+                                self.online_search_page = 1;
+                            }
+                        } else {
+                            // 本地搜索：关键字变化时清空旧结果，按 Enter 重新搜索
+                            self.search_results.clear();
+                            self.search_selected_index = 0;
+                            self.search_scroll_offset = 0;
+                        }
                     }
                 }
                 KeyCode::PageUp => {
-                    // 网络搜索翻上一页
-                    if self.online_search_mode && !self.online_searching && self.online_search_page > 1 {
+                    if self.playlist_search_mode && self.current_playlist.is_some() {
+                        // 歌单详情页：翻到上一“页”（每页20首）
+                        let page_size = 20usize;
+                        let total = self.online_search_results.len();
+                        if total > 0 {
+                            let cur_page = self.online_selected_index / page_size;
+                            let prev_page = cur_page.saturating_sub(1);
+                            self.online_selected_index = prev_page * page_size;
+                            self.online_scroll_offset = self.online_selected_index;
+                            Self::clamp_selected_and_scroll(
+                                &mut self.online_selected_index,
+                                &mut self.online_scroll_offset,
+                                total,
+                                (self.terminal_height as usize).saturating_sub(12).max(5),
+                            );
+                        }
+                    } else if self.online_search_mode && !self.online_searching && self.online_search_page > 1 {
+                        // 网络搜索翻上一页
                         self.online_search_page -= 1;
                         self.start_online_search();
                     }
                 }
                 KeyCode::PageDown => {
-                    // 网络搜索翻下一页
-                    if self.online_search_mode && !self.online_searching && !self.online_search_results.is_empty() {
-                        self.online_search_page += 1;
-                        self.start_online_search();
+                    if self.playlist_search_mode && self.current_playlist.is_some() {
+                        // 歌单详情页：翻到下一“页”（每页20首）
+                        let page_size = 20usize;
+                        let total = self.online_search_results.len();
+                        if total > 0 {
+                            let cur_page = self.online_selected_index / page_size;
+                            let next_index = (cur_page + 1) * page_size;
+                            if next_index < total {
+                                self.online_selected_index = next_index;
+                                self.online_scroll_offset = self.online_selected_index;
+                                Self::clamp_selected_and_scroll(
+                                    &mut self.online_selected_index,
+                                    &mut self.online_scroll_offset,
+                                    total,
+                                    (self.terminal_height as usize).saturating_sub(12).max(5),
+                                );
+                            }
+                        }
+                    } else if self.online_search_mode && !self.online_searching {
+                        // 网络搜索翻下一页
+                        let has_results = if self.playlist_search_mode && self.current_playlist.is_none() {
+                            !self.playlist_search_results.is_empty()
+                        } else {
+                            !self.online_search_results.is_empty()
+                        };
+                        if has_results {
+                            self.online_search_page += 1;
+                            self.start_online_search();
+                        }
                     }
                 }
-                _ => {}
+                _ => {
+                    if in_playlist_detail {
+                        // 歌单详情中未在搜索分支处理的按键，继续走全局快捷键
+                        handled_in_search = false;
+                    }
+                }
             }
-            return Ok(());
+            if handled_in_search {
+                return Ok(());
+            }
         }
 
         // 正常模式下的键盘处理
@@ -3643,42 +4044,82 @@ impl UserInterface {
                 self.open_folder();
             }
             KeyCode::Char('s') | KeyCode::Char('S') => {
-                // 进入本地搜索模式（搜索音乐目录）
-                self.search_mode = true;
-                self.help_mode = false;
-                self.online_search_mode = false;
-                self.search_query.clear();
-                self.search_results.clear();
-                self.search_selected_index = 0;
-                self.search_scroll_offset = 0;
+                // 歌单详情页中禁用 s，避免误切换到搜索模式
+                if self.search_mode && self.online_search_mode && self.playlist_search_mode && self.current_playlist.is_some() {
+                    // ignore
+                } else {
+                    // 进入本地搜索模式（搜索音乐目录）
+                    self.search_mode = true;
+                    self.search_input_focused = true;
+                    self.help_mode = false;
+                    self.online_search_mode = false;
+                    self.search_query.clear();
+                    self.search_results.clear();
+                    self.search_selected_index = 0;
+                    self.search_scroll_offset = 0;
+                }
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
-                // 进入网络搜索模式（搜索网络歌曲并下载）
+                // 歌单详情页中禁用 n，避免误切换到搜索模式
+                if self.search_mode && self.online_search_mode && self.playlist_search_mode && self.current_playlist.is_some() {
+                    // ignore
+                } else {
+                    // 进入网络搜索模式（搜索网络歌曲并下载）
+                    self.search_mode = true;
+                    self.search_input_focused = true;
+                    self.help_mode = false;
+                    self.online_search_mode = true;
+                    self.juhe_search_mode = false;
+                    self.playlist_search_mode = false;
+                    self.search_query.clear();
+                    self.online_search_results.clear();
+                    self.online_selected_index = 0;
+                    self.online_scroll_offset = 0;
+                    self.online_searching = false;
+                    self.online_search_page = 1;
+                    self.online_search_rx = None;
+                }
+            }
+            KeyCode::Char('j') | KeyCode::Char('J') => {
+                // 歌单详情页中禁用 j，避免误切换到搜索模式
+                if self.search_mode && self.online_search_mode && self.playlist_search_mode && self.current_playlist.is_some() {
+                    // ignore
+                } else {
+                    // 进入聚合搜索搜索模式（通过独家API获取播放链接和歌词）
+                    self.search_mode = true;
+                    self.search_input_focused = true;
+                    self.help_mode = false;
+                    self.online_search_mode = true;
+                    self.juhe_search_mode = true;
+                    self.playlist_search_mode = false;
+                    self.search_query.clear();
+                    self.online_search_results.clear();
+                    self.online_selected_index = 0;
+                    self.online_scroll_offset = 0;
+                    self.online_searching = false;
+                    self.online_search_page = 1;
+                    self.online_search_rx = None;
+                }
+            }
+            KeyCode::Char('p') | KeyCode::Char('P') => {
+                // 进入歌单搜索模式（先显示歌单，Enter进入歌单歌曲）
                 self.search_mode = true;
+                self.search_input_focused = true;
                 self.help_mode = false;
                 self.online_search_mode = true;
                 self.juhe_search_mode = false;
+                self.playlist_search_mode = true;
                 self.search_query.clear();
                 self.online_search_results.clear();
+                self.playlist_search_results.clear();
+                self.current_playlist = None;
                 self.online_selected_index = 0;
                 self.online_scroll_offset = 0;
                 self.online_searching = false;
                 self.online_search_page = 1;
                 self.online_search_rx = None;
-            }
-            KeyCode::Char('j') | KeyCode::Char('J') => {
-                // 进入聚合搜索搜索模式（通过独家API获取播放链接和歌词）
-                self.search_mode = true;
-                self.help_mode = false;
-                self.online_search_mode = true;
-                self.juhe_search_mode = true;
-                self.search_query.clear();
-                self.online_search_results.clear();
-                self.online_selected_index = 0;
-                self.online_scroll_offset = 0;
-                self.online_searching = false;
-                self.online_search_page = 1;
-                self.online_search_rx = None;
+                self.playlist_search_rx = None;
+                self.playlist_songs_rx = None;
             }
             KeyCode::Char('c') | KeyCode::Char('C') => {
                 // 切换到评论视图，并从第1页开始加载
@@ -3763,21 +4204,26 @@ impl UserInterface {
                 }
             }
             KeyCode::Char('f') | KeyCode::Char('F') => {
-                // 切换当前选中歌曲的收藏状态（已收藏则移除，未收藏则添加）
-                let file = {
-                    let playlist = self.playlist.lock().unwrap();
-                    playlist.files.get(self.selected_index).cloned()
-                };
-                if let Some(file) = file {
-                    let path_str = file.path.to_string_lossy().to_string();
-                    if let Some(pos) = self.favorites.iter().position(|p| *p == path_str) {
-                        self.favorites.remove(pos);
-                        //self.update_status(&format!("已从收藏移除: {}", file.name));
-                    } else {
-                        self.favorites.push(path_str);
-                        //self.update_status(&format!("已添加到收藏: {}", file.name));
+                // 在在线搜索模式（网络/聚合/歌单）下屏蔽 f 收藏，避免误操作到本地播放列表
+                if self.search_mode && self.online_search_mode && self.playlist_search_mode{
+                    // ignore
+                } else {
+                    // 切换当前选中歌曲的收藏状态（已收藏则移除，未收藏则添加）
+                    let file = {
+                        let playlist = self.playlist.lock().unwrap();
+                        playlist.files.get(self.selected_index).cloned()
+                    };
+                    if let Some(file) = file {
+                        let path_str = file.path.to_string_lossy().to_string();
+                        if let Some(pos) = self.favorites.iter().position(|p| *p == path_str) {
+                            self.favorites.remove(pos);
+                            //self.update_status(&format!("已从收藏移除: {}", file.name));
+                        } else {
+                            self.favorites.push(path_str);
+                            //self.update_status(&format!("已添加到收藏: {}", file.name));
+                        }
+                        self.save_config_now();
                     }
-                    self.save_config_now();
                 }
             }
             KeyCode::Char('v') | KeyCode::Char('V') => {
@@ -3851,33 +4297,108 @@ impl UserInterface {
         }
         self.online_search_mode = true;
         self.online_searching = true;
-        // 翻页时保留旧结果直到新结果返回，避免界面闪烁
-        // 非翻页（第1页新搜索）时清空
-        if self.online_search_page == 1 {
-            self.online_search_results.clear();
-        }
+        // 翻页也先清空旧结果，避免旧页内容短暂可见
+        self.online_search_results.clear();
+        self.playlist_search_results.clear();
         self.online_selected_index = 0;
         self.online_scroll_offset = 0;
 
         let query = self.search_query.clone();
         let page = self.online_search_page;
-        let rx = if self.juhe_search_mode {
-            crate::search::search_juhe_background(query, page)
+        if self.playlist_search_mode {
+            let rx = crate::search::search_playlist_background(query, page);
+            self.playlist_search_rx = Some(rx);
+            self.online_search_rx = None;
         } else {
-            crate::search::search_online_background(query, page)
-        };
-        self.online_search_rx = Some(rx);
+            let rx = if self.juhe_search_mode {
+                crate::search::search_juhe_background(query, page)
+            } else {
+                crate::search::search_online_background(query, page)
+            };
+            self.online_search_rx = Some(rx);
+            self.playlist_search_rx = None;
+        }
     }
 
     /// 检查网络搜索结果
     fn check_online_search_result(&mut self) {
         if let Some(ref rx) = self.online_search_rx {
-            if let Ok(result) = rx.try_recv() {
-                self.online_searching = false;
-                self.online_search_rx = None;
-                self.online_search_results = result.songs;
-                self.online_selected_index = 0;
-                self.online_scroll_offset = 0;
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.online_searching = false;
+                    self.online_search_rx = None;
+                    self.online_search_results = result.songs;
+                    self.online_selected_index = 0;
+                    self.online_scroll_offset = 0;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.online_searching = false;
+                    self.online_search_rx = None;
+                    self.update_status(self.i18n(
+                        "网络搜索失败：后台任务已断开",
+                        "網路搜尋失敗：背景任務已中斷",
+                        "Online search failed: background task disconnected",
+                        "オンライン検索失敗：バックグラウンド処理が切断されました",
+                        "온라인 검색 실패: 백그라운드 작업 연결이 끊어졌습니다",
+                    ));
+                }
+            }
+        }
+        if let Some(ref rx) = self.playlist_search_rx {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.online_searching = false;
+                    self.playlist_search_rx = None;
+                    self.playlist_search_results = result.playlists;
+                    self.online_selected_index = 0;
+                    self.online_scroll_offset = 0;
+                    if self.playlist_search_results.is_empty() {
+                        self.update_status(self.i18n(
+                            "未搜索到歌单结果",
+                            "未搜尋到歌單結果",
+                            "No playlist results found",
+                            "プレイリスト検索結果がありません",
+                            "플레이리스트 검색 결과가 없습니다",
+                        ));
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.online_searching = false;
+                    self.playlist_search_rx = None;
+                    self.update_status(self.i18n(
+                        "歌单搜索失败：后台任务已断开",
+                        "歌單搜尋失敗：背景任務已中斷",
+                        "Playlist search failed: background task disconnected",
+                        "プレイリスト検索失敗：バックグラウンド処理が切断されました",
+                        "플레이리스트 검색 실패: 백그라운드 작업 연결이 끊어졌습니다",
+                    ));
+                }
+            }
+        }
+        if let Some(ref rx) = self.playlist_songs_rx {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.online_searching = false;
+                    self.playlist_songs_rx = None;
+                    self.current_playlist = Some(result.playlist);
+                    self.online_search_results = result.songs;
+                    self.online_selected_index = 0;
+                    self.online_scroll_offset = 0;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.online_searching = false;
+                    self.playlist_songs_rx = None;
+                    self.update_status(self.i18n(
+                        "歌单歌曲加载失败：后台任务已断开",
+                        "歌單歌曲載入失敗：背景任務已中斷",
+                        "Playlist songs load failed: background task disconnected",
+                        "プレイリスト曲の読み込み失敗：バックグラウンド処理が切断されました",
+                        "플레이리스트 곡 로드 실패: 백그라운드 작업 연결이 끊어졌습니다",
+                    ));
+                }
             }
         }
     }
@@ -3886,13 +4407,76 @@ impl UserInterface {
     fn start_download_song(&mut self, song: OnlineSong) {
         // 写入日志文件
         {
-            let log_msg = format!("[UI] start_download_song: {} - {}, source={:?}, juhe_platform={}, juhe_song_id={}",
+            let log_msg = format!("开始下载: {} - {}, source={:?}, juhe_platform={}, juhe_song_id={}",
                 song.artist, song.name, song.source, song.juhe_platform, song.juhe_song_id);
+            let timestamp = Local::now().format("%H:%M:%S%.3f");
+            let line = format!("[{}] {}\n", timestamp, log_msg);
             let _ = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open("ter-music-debug.log")
-                .and_then(|mut f| std::io::Write::write_all(&mut f, format!("{}\n", log_msg).as_bytes()));
+                .open(crate::config::get_daily_log_path())
+                .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+        }
+
+        // 若正在下载中，统一阻塞并提示
+        if self.online_downloading {
+            return;
+        }
+
+        // 在线歌曲统一缓存命中：若本地已存在（缓存路径/当前目录同名同歌手），则直接播放，不再重复下载
+        if let Some(path) = self.find_cached_local_path_for_online(&song) {
+            let play_file = crate::defs::MusicFile::new(path.clone());
+            let play_result = {
+                let mut audio_player = self.audio_player.lock().unwrap();
+                audio_player.play(&play_file)
+            };
+            if play_result.is_ok() {
+                self.update_now_playing_status(&play_file.name);
+                let log_msg = format!(
+                    "之前已下载命中缓存，跳过下载直接播放: {} - {}, path={}",
+                    song.artist,
+                    song.name,
+                    path.display()
+                );
+                let timestamp = Local::now().format("%H:%M:%S%.3f");
+                let line = format!("[{}] {}\n", timestamp, log_msg);
+                let _ = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(crate::config::get_daily_log_path())
+                    .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+            } else if let Err(e) = play_result {
+                if self.online_auto_skip_times.is_empty() {
+                    self.update_status(&format!(
+                        "{}{}",
+                        self.i18n("播放失败: ", "播放失敗: ", "Play failed: ", "再生失敗: ", "재생 실패: "),
+                        e
+                    ));
+                } else {
+                    // 自动切歌链路下，缓存命中但播放失败时继续尝试下一首，不弹提示
+                    self.play_next_with_flag(false);
+                }
+            }
+            return;
+        }
+
+        if let Some(local_idx) = self.find_local_song_index_for_online(&song) {
+            self.play_song_by_index(local_idx);
+            self.skip_auto_lyrics_download_for_current_song = true;
+            let log_msg = format!(
+                "本地已存在该歌曲，跳过下载直接播放: {} - {}, local_idx={}",
+                song.artist,
+                song.name,
+                local_idx
+            );
+            let timestamp = Local::now().format("%H:%M:%S%.3f");
+            let line = format!("[{}] {}\n", timestamp, log_msg);
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(crate::config::get_daily_log_path())
+                .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+            return;
         }
 
         let save_dir = {
@@ -3904,6 +4488,7 @@ impl UserInterface {
                 .unwrap_or_else(|| std::path::PathBuf::from("."))
         };
 
+        self.online_downloading_index = Some(self.online_selected_index);
         self.online_downloading = true;
         self.online_download_percent = 0;
         let _display_name = if song.artist.is_empty() {
@@ -3912,11 +4497,6 @@ impl UserInterface {
             format!("{} - {}", song.artist, song.name)
         };
 
-        // 聚合搜索：同时启动歌词下载
-        if song.source == crate::search::MusicSource::Juhe {
-            self.juhe_lyrics_loading = true;
-            self.juhe_lyrics_rx = Some(crate::search::get_juhe_lyrics_background(song.clone()));
-        }
 
         let rx = crate::search::download_song_background(song, save_dir);
         self.online_download_rx = Some(rx);
@@ -3939,27 +4519,58 @@ impl UserInterface {
 
                         // 写入日志
                         {
-                            let log_msg = format!("[UI] 下载完成: path={:?}, error={:?}",
+                            let log_msg = format!("下载完成: path={:?}, error={:?}",
                                 result.local_path, result.error);
+                            let timestamp = Local::now().format("%H:%M:%S%.3f");
+                            let line = format!("[{}] {}\n", timestamp, log_msg);
                             let _ = std::fs::OpenOptions::new()
                                 .create(true)
                                 .append(true)
-                                .open("ter-music-debug.log")
-                                .and_then(|mut f| std::io::Write::write_all(&mut f, format!("{}\n", log_msg).as_bytes()));
+                                .open(crate::config::get_daily_log_path())
+                                .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
                         }
 
+                        let downloaded_song = result.song.clone();
                         match result.local_path {
                             Some(path) => {
-                                // 重新扫描目录并播放下载的歌曲，但不退出搜索模式
-                                let path_str = path.to_string_lossy().to_string();
-                                if let Some(dir) = {
-                                    let playlist = self.playlist.lock().unwrap();
-                                    playlist.directory.clone()
-                                } {
-                                    // 重新加载目录并播放下载的歌曲（保持在搜索模式）
-                                    self.load_directory_and_play(&dir, &path_str);
+                                self.skip_auto_lyrics_download_for_current_song = false;
+                                self.remember_downloaded_online_song(&downloaded_song, &path);
+                                // 歌单内歌曲：只播放下载完成的歌曲，不改写本地播放列表，避免串到本地下一首
+                                if self.search_mode
+                                    && self.online_search_mode
+                                    && self.playlist_search_mode
+                                    && self.current_playlist.is_some()
+                                {
+                                    let play_file = crate::defs::MusicFile::new(path.clone());
+                                    let play_result = {
+                                        let mut audio_player = self.audio_player.lock().unwrap();
+                                        audio_player.play(&play_file)
+                                    };
+                                    if play_result.is_ok() {
+                                        self.update_now_playing_status(&play_file.name);
+                                    } else if let Err(e) = play_result {
+                                        if self.online_auto_skip_times.is_empty() {
+                                            self.update_status(&format!(
+                                                "{}{}",
+                                                self.i18n("播放失败: ", "播放失敗: ", "Play failed: ", "再生失敗: ", "재생 실패: "),
+                                                e
+                                            ));
+                                        } else {
+                                            // 自动切歌链路下，当前首播放失败时继续尝试下一首，不弹提示
+                                            self.play_next_with_flag(false);
+                                        }
+                                    }
                                 } else {
-                                    // 下载完成但无法确定目录
+                                    // 普通网络/聚合：沿用原逻辑，重扫目录并播放
+                                    let path_str = path.to_string_lossy().to_string();
+                                    if let Some(dir) = {
+                                        let playlist = self.playlist.lock().unwrap();
+                                        playlist.directory.clone()
+                                    } {
+                                        self.load_directory_and_play(&dir, &path_str);
+                                    } else {
+                                        // 下载完成但无法确定目录
+                                    }
                                 }
                             }
                             None => {
@@ -4006,6 +4617,20 @@ impl UserInterface {
                             self.current_lyrics = Some(lyrics);
                         }
                     }
+                } else if !self.lyrics_downloading {
+                    // 聚合歌词失败：回退到常规歌词下载
+                    let current_path = {
+                        let playlist = self.playlist.lock().unwrap();
+                        playlist
+                            .current_index
+                            .and_then(|idx| playlist.files.get(idx))
+                            .map(|f| f.path.clone())
+                    };
+
+                    if let Some(path) = current_path {
+                        self.lyrics_download_rx = Some(Lyrics::download_lyrics_background(&path));
+                        self.lyrics_downloading = true;
+                    }
                 }
             }
         }
@@ -4020,8 +4645,84 @@ impl UserInterface {
             .map(|(i, _)| i)
     }
 
+    /// 归一化歌曲匹配键（用于在线歌曲与本地文件名匹配）
+    fn normalize_song_key(input: &str) -> String {
+        input
+            .to_lowercase()
+            .chars()
+            .filter(|c| !c.is_whitespace() && !matches!(c, '-' | '_' | '·' | '•' | ',' | '，' | '.' | '。' | '(' | ')' | '（' | '）' | '[' | ']' | '【' | '】'))
+            .collect()
+    }
+
+    fn online_song_match_keys(song: &OnlineSong) -> Vec<String> {
+        let name = song.name.trim();
+        if name.is_empty() {
+            return Vec::new();
+        }
+
+        let artist = song.artist.trim();
+        let full = if artist.is_empty() {
+            name.to_string()
+        } else {
+            format!("{} - {}", artist, name)
+        };
+
+        let full_key = Self::normalize_song_key(&full);
+        let name_key = Self::normalize_song_key(name);
+        if full_key == name_key {
+            vec![name_key]
+        } else {
+            vec![full_key, name_key]
+        }
+    }
+
+    fn remember_downloaded_online_song(&mut self, song: &OnlineSong, path: &std::path::Path) {
+        for key in Self::online_song_match_keys(song) {
+            self.downloaded_online_song_cache.insert(key, path.to_path_buf());
+        }
+    }
+
+    fn find_cached_local_path_for_online(&mut self, song: &OnlineSong) -> Option<std::path::PathBuf> {
+        for key in Self::online_song_match_keys(song) {
+            if let Some(path) = self.downloaded_online_song_cache.get(&key).cloned() {
+                if path.exists() {
+                    return Some(path);
+                }
+                self.downloaded_online_song_cache.remove(&key);
+            }
+        }
+        None
+    }
+
+    /// 在本地播放列表中查找与在线歌曲匹配的条目索引
+    fn find_local_song_index_for_online(&self, song: &OnlineSong) -> Option<usize> {
+        let keys = Self::online_song_match_keys(song);
+        if keys.is_empty() {
+            return None;
+        }
+
+        let full_key = keys.first().cloned().unwrap_or_default();
+        let name_key = keys.last().cloned().unwrap_or_default();
+        let artist_key = Self::normalize_song_key(song.artist.trim());
+
+        let playlist = self.playlist.lock().unwrap();
+        playlist.files.iter().enumerate().find_map(|(idx, f)| {
+            let local_key = Self::normalize_song_key(&f.name);
+            if local_key == full_key || local_key == name_key {
+                return Some(idx);
+            }
+            if !artist_key.is_empty() && !name_key.is_empty() && local_key.contains(&artist_key) && local_key.contains(&name_key) {
+                return Some(idx);
+            }
+            None
+        })
+    }
+
     /// 根据索引播放歌曲（内部辅助方法，消除重复代码）
     fn play_song_by_index(&mut self, index: usize) {
+        // 常规切歌默认允许自动歌词下载（缓存命中直播放会在调用后重新置为 true）
+        self.skip_auto_lyrics_download_for_current_song = false;
+
         let file = {
             let playlist = self.playlist.lock().unwrap();
             playlist.files.get(index).cloned()
@@ -4088,6 +4789,10 @@ impl UserInterface {
     fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> io::Result<()> {
         let col = mouse_event.column as usize;
         let row = mouse_event.row;
+        let in_playlist_detail = self.search_mode
+            && self.online_search_mode
+            && self.playlist_search_mode
+            && self.current_playlist.is_some();
 
         match mouse_event.kind {
             MouseEventKind::Down(button) => {
@@ -4142,19 +4847,49 @@ impl UserInterface {
 
                 // 搜索模式：鼠标点击选择/播放搜索结果
                 if self.search_mode {
+                    // 点击搜索栏（第4行左侧）时，切回输入框焦点
+                    let left_width = (self.terminal_width as f32 * 0.50) as usize;
+                    let in_playlist_detail = self.online_search_mode
+                        && self.playlist_search_mode
+                        && self.current_playlist.is_some();
+                    if self.online_search_mode && !in_playlist_detail && row == 4 && col < left_width {
+                        self.search_input_focused = true;
+                        return Ok(());
+                    }
+
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize && row >= layout.start_row {
                             let click_row = (row - layout.start_row) as usize;
                             if click_row < layout.visible_count {
                                 if self.online_search_mode {
-                                    // 网络搜索结果：点击选择
-                                    let clicked_index = self.online_scroll_offset + click_row;
-                                    if clicked_index < self.online_search_results.len() {
-                                        self.online_selected_index = clicked_index;
-                                        // 下载选中的歌曲
-                                        if let Some(song) = self.online_search_results.get(clicked_index).cloned() {
-                                            if !self.online_downloading {
-                                                self.start_download_song(song);
+                                    // 点击在线搜索列表后，键盘默认作用于列表/全局快捷键
+                                    self.search_input_focused = false;
+                                    if self.playlist_search_mode && self.current_playlist.is_none() {
+                                        // 歌单搜索结果：点击进入歌单
+                                        let clicked_index = self.online_scroll_offset + click_row;
+                                        if clicked_index < self.playlist_search_results.len() {
+                                            self.online_selected_index = clicked_index;
+                                            self.playlist_list_selected_index = clicked_index;
+                                            if let Some(pl) = self.playlist_search_results.get(clicked_index).cloned() {
+                                                self.online_searching = true;
+                                                self.online_search_results.clear();
+                                                self.online_selected_index = 0;
+                                                self.online_scroll_offset = 0;
+                                                self.current_playlist = Some(pl.clone());
+                                                self.playlist_songs_rx = Some(crate::search::fetch_playlist_songs_background(pl));
+                                            }
+                                        }
+                                    } else {
+                                        // 网络歌曲结果：点击选择并下载
+                                        let clicked_index = self.online_scroll_offset + click_row;
+                                        if clicked_index < self.online_search_results.len() {
+                                            self.online_selected_index = clicked_index;
+                                            if let Some(song) = self.online_search_results.get(clicked_index).cloned() {
+                                                if !self.online_downloading {
+                                                    // 用户鼠标主动点播在线歌曲，重置自动切歌节流窗口
+                                                    self.online_auto_skip_times.clear();
+                                                    self.start_download_song(song);
+                                                }
                                             }
                                         }
                                     }
@@ -4165,6 +4900,7 @@ impl UserInterface {
                                         if let Some(&orig_idx) = self.search_results.get(clicked_index) {
                                             self.selected_index = orig_idx;
                                             self.search_mode = false;
+                                            self.search_input_focused = false;
                                             self.search_query.clear();
                                             self.search_results.clear();
                                             self.search_scroll_offset = 0;
@@ -4325,8 +5061,18 @@ impl UserInterface {
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize {
                             if self.online_search_mode {
-                                if self.online_scroll_offset > 0 {
-                                    self.online_scroll_offset -= 1;
+                                let total = if self.playlist_search_mode && self.current_playlist.is_none() {
+                                    self.playlist_search_results.len()
+                                } else {
+                                    self.online_search_results.len()
+                                };
+                                if total > 0 {
+                                    self.online_selected_index = self.online_selected_index.saturating_sub(1);
+                                    Self::adjust_scroll_offset(
+                                        self.online_selected_index,
+                                        &mut self.online_scroll_offset,
+                                        layout.visible_count.max(1),
+                                    );
                                 }
                             } else {
                                 if self.search_scroll_offset > 0 {
@@ -4381,7 +5127,8 @@ impl UserInterface {
             }
             MouseEventKind::ScrollDown => {
                 // 所有模式：歌词区域滚轮向下 -> 跳转到下一句歌词
-                if self.lyric_time_at_position(col, row).is_some() {
+                // 歌单详情页优先用于歌单滚动，不触发歌词滚轮跳转
+                if !in_playlist_detail && self.lyric_time_at_position(col, row).is_some() {
                     self.seek_by_lyric_wheel(1);
                     return Ok(());
                 }
@@ -4424,11 +5171,22 @@ impl UserInterface {
                 } else if self.search_mode {
                     // 搜索模式：滚轮向下
                     if let Some(layout) = self.playlist_layout {
-                        if col < layout.left_width as usize {
+                        let allow_scroll = in_playlist_detail || col < layout.left_width as usize;
+                        if allow_scroll {
                             if self.online_search_mode {
-                                let max_offset = self.online_search_results.len().saturating_sub(layout.visible_count);
-                                if self.online_scroll_offset < max_offset {
-                                    self.online_scroll_offset += 1;
+                                let total = if self.playlist_search_mode && self.current_playlist.is_none() {
+                                    self.playlist_search_results.len()
+                                } else {
+                                    self.online_search_results.len()
+                                };
+                                if total > 0 {
+                                    let max_idx = total.saturating_sub(1);
+                                    self.online_selected_index = (self.online_selected_index + 1).min(max_idx);
+                                    Self::adjust_scroll_offset(
+                                        self.online_selected_index,
+                                        &mut self.online_scroll_offset,
+                                        layout.visible_count.max(1),
+                                    );
                                 }
                             } else {
                                 let max_offset = self.search_results.len().saturating_sub(layout.visible_count);
@@ -4524,8 +5282,143 @@ impl UserInterface {
         }
     }
 
+    /// 获取当前“正在播放”的在线结果索引（与光标选中项分离）
+    fn current_online_playing_index(&self) -> Option<usize> {
+        let (current_file, play_state) = {
+            let audio_player = self.audio_player.lock().unwrap();
+            (audio_player.get_current_file(), audio_player.get_state())
+        };
+
+        if play_state == PlayState::Stopped {
+            return None;
+        }
+
+        let current_file = current_file?;
+        let current_key = Self::normalize_song_key(&current_file.name);
+
+        self.online_search_results
+            .iter()
+            .enumerate()
+            .find_map(|(idx, song)| {
+                let song_keys = Self::online_song_match_keys(song);
+                let matched = song_keys.iter().any(|k| {
+                    *k == current_key
+                        || self
+                            .downloaded_online_song_cache
+                            .get(k)
+                            .map(|p| *p == current_file.path)
+                            .unwrap_or(false)
+                });
+                if matched { Some(idx) } else { None }
+            })
+    }
+
     /// 播放下一曲（manual: 是否为用户手动切换）
     fn play_next_with_flag(&mut self, manual: bool) {
+        // 在线搜索结果视图（网络/聚合/歌单歌曲）统一按在线结果模拟 1~5 播放模式
+        if self.search_mode
+            && self.online_search_mode
+            && !self.online_search_results.is_empty()
+        {
+            // 手动切歌不计入节流窗口，并清空历史
+            if manual {
+                self.online_auto_skip_times.clear();
+            }
+
+            // 正在下载下一首时，禁止回落到本地播放列表继续播
+            // 同时避免自动切歌节流被重复计数（否则会出现“第一首就停”）
+            if self.online_downloading {
+                return;
+            }
+
+            let mode = self.audio_player.lock().unwrap().get_play_mode();
+            let len = self.online_search_results.len();
+            let selected_cur = self.online_selected_index.min(len.saturating_sub(1));
+            let mut cur = self
+                .current_online_playing_index()
+                .unwrap_or(selected_cur)
+                .min(len.saturating_sub(1));
+
+            // 自动切歌连续失败时，播放器里的“当前文件”可能仍停留在上一首，
+            // 顺序/列表循环应以“上一次已尝试的在线索引”为基准继续往后推进，避免反复重试同一首。
+            if !manual
+                && !self.online_auto_skip_times.is_empty()
+                && matches!(mode, PlayMode::Sequence | PlayMode::LoopAll)
+            {
+                cur = selected_cur;
+            }
+
+            let next_idx = match mode {
+                PlayMode::Single => {
+                    if manual { Some((cur + 1).min(len - 1)) } else { None }
+                }
+                PlayMode::RepeatOne => Some(cur),
+                PlayMode::Sequence => {
+                    if cur + 1 < len { Some(cur + 1) } else { None }
+                }
+                PlayMode::LoopAll => Some((cur + 1) % len),
+                PlayMode::Random => {
+                    // 随机播放：随机选择一首（排除当前播放项）
+                    use rand::Rng;
+                    let mut rng = rand::thread_rng();
+                    if len <= 1 {
+                        Some(cur)
+                    } else {
+                        let mut next = rng.gen_range(0..len - 1);
+                        if next >= cur {
+                            next += 1;
+                        }
+                        Some(next)
+                    }
+                }
+            };
+
+            if let Some(i) = next_idx {
+                // 自动切歌节流：网络/聚合/歌单歌曲统一生效；3秒内自动切歌>=5次则直接停止（不提示）
+                if !manual {
+                    let now = Instant::now();
+
+                    // 若与上一次自动切歌间隔已超过窗口，视为新一轮尝试，清空历史计数
+                    if let Some(&last) = self.online_auto_skip_times.back() {
+                        if now.duration_since(last) > Duration::from_secs(3) {
+                            self.online_auto_skip_times.clear();
+                        }
+                    }
+
+                    while let Some(&front) = self.online_auto_skip_times.front() {
+                        if now.duration_since(front) > Duration::from_secs(3) {
+                            self.online_auto_skip_times.pop_front();
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // 仅在真正准备发起“下一首”时计数，避免空转重复计数
+                    self.online_auto_skip_times.push_back(now);
+
+                    if self.online_auto_skip_times.len() >= 5 {
+                        self.audio_player.lock().unwrap().stop();
+                        self.online_auto_skip_times.clear();
+                        return;
+                    }
+                }
+
+                self.online_selected_index = i;
+                Self::adjust_scroll_offset(
+                    self.online_selected_index,
+                    &mut self.online_scroll_offset,
+                    (self.terminal_height as usize).saturating_sub(12).max(5),
+                );
+                if let Some(song) = self.online_search_results.get(i).cloned() {
+                    self.start_download_song(song);
+                }
+            } else if !manual {
+                self.audio_player.lock().unwrap().stop();
+                self.update_status(self.i18n("播放完成", "播放完成", "Playback finished", "再生完了", "재생 완료"));
+            }
+            return;
+        }
+
         let mode = self.audio_player.lock().unwrap().get_play_mode();
         let next_index = {
             let playlist = self.playlist.lock().unwrap();
@@ -4548,6 +5441,50 @@ impl UserInterface {
 
     /// 播放上一曲
     fn play_prev(&mut self) {
+        // 在线搜索结果视图（网络/聚合/歌单歌曲）统一按在线结果切换上一首
+        if self.search_mode
+            && self.online_search_mode
+            && !self.online_search_results.is_empty()
+            && !self.online_downloading
+        {
+            let mode = self.audio_player.lock().unwrap().get_play_mode();
+            let len = self.online_search_results.len();
+            let cur = self
+                .current_online_playing_index()
+                .unwrap_or(self.online_selected_index)
+                .min(len.saturating_sub(1));
+            let prev_idx = match mode {
+                PlayMode::Random => {
+                    // 随机播放：随机选择一首（排除当前播放项）
+                    use rand::Rng;
+                    let mut rng = rand::thread_rng();
+                    if len <= 1 {
+                        cur
+                    } else {
+                        let mut prev = rng.gen_range(0..len - 1);
+                        if prev >= cur {
+                            prev += 1;
+                        }
+                        prev
+                    }
+                }
+                _ => cur.saturating_sub(1),
+            };
+
+            self.online_selected_index = prev_idx;
+            Self::adjust_scroll_offset(
+                self.online_selected_index,
+                &mut self.online_scroll_offset,
+                (self.terminal_height as usize).saturating_sub(12).max(5),
+            );
+            if let Some(song) = self.online_search_results.get(prev_idx).cloned() {
+                // 手动上一曲属于人工切换，重置自动切歌节流窗口
+                self.online_auto_skip_times.clear();
+                self.start_download_song(song);
+            }
+            return;
+        }
+
         let mode = self.audio_player.lock().unwrap().get_play_mode();
         let prev_index = {
             let playlist = self.playlist.lock().unwrap();
@@ -4943,14 +5880,24 @@ impl UserInterface {
 
 /// 截断字符串到指定显示宽度（不加省略号，用于歌词区域）
 fn truncate_to_width(text: &str, max_width: usize) -> String {
-    if unicode_width::UnicodeWidthStr::width(text) <= max_width {
-        return text.to_string();
+    // 全局兜底：避免任意来源文本中的控制字符（如 CR/ESC）破坏终端光标定位
+    let sanitized: String = text
+        .chars()
+        .map(|ch| match ch {
+            '\n' | '\r' | '\t' => ' ',
+            c if c.is_control() => ' ',
+            c => c,
+        })
+        .collect();
+
+    if unicode_width::UnicodeWidthStr::width(sanitized.as_str()) <= max_width {
+        return sanitized;
     }
 
     let mut result = String::new();
     let mut current_width = 0;
 
-    for ch in text.chars() {
+    for ch in sanitized.chars() {
         let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
         if current_width + ch_width > max_width {
             break;
@@ -4970,7 +5917,10 @@ fn wrap_text_to_width(text: &str, max_width: usize) -> Vec<String> {
 
     let mut out = Vec::new();
 
-    for raw_line in text.lines() {
+    // 保留换行语义，同时过滤会影响终端布局的控制字符
+    let normalized = text.replace('\r', "\n");
+
+    for raw_line in normalized.lines() {
         if raw_line.is_empty() {
             out.push(String::new());
             continue;
@@ -4979,6 +5929,7 @@ fn wrap_text_to_width(text: &str, max_width: usize) -> Vec<String> {
         let mut buf = String::new();
         let mut width = 0;
         for ch in raw_line.chars() {
+            let ch = if ch.is_control() { ' ' } else { ch };
             let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
             if width + ch_width > max_width && !buf.is_empty() {
                 out.push(buf);
@@ -5000,4 +5951,3 @@ fn wrap_text_to_width(text: &str, max_width: usize) -> Vec<String> {
 
     out
 }
-

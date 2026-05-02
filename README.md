@@ -9,8 +9,6 @@
 
 一个简洁实用的终端音乐播放器，使用 Rust 实现，支持本地/网络歌曲搜索下载、自动下载歌词显示、评论查看、多语言与主题切换等功能，支持Windows、Linux、MacOS系统。
 
-![preview](preview.png)
-
 ![preview1](preview1.png)
 
 ![preview2](preview2.png)
@@ -20,6 +18,8 @@
 ![preview4](preview4.png)
 
 ![preview5](preview5.png)
+
+![preview6](preview6.png)
 
 ## ✨ 功能特性
 
@@ -50,6 +50,7 @@
 - **本地搜索**：按 `s` 进入，根据关键字匹配音乐目录歌曲
 - **网络搜索**：按 `n` 进入，根据关键字匹配搜索网络歌曲
 - **聚合搜索**：按 `j` 进入，根据关键字匹配搜索聚合歌曲
+- **歌单搜索**：按 `p` 进入，根据关键字匹配搜索在线歌单
 - **翻页浏览**：`PgUp`/`PgDn` 翻页查看更多结果
 - **在线下载**：搜索结果选中后按 `Enter` 下载到当前音乐目录，显示下载进度
 
@@ -206,6 +207,7 @@ cargo run --release -- -o d:\Music
 | `s` | 搜索本地歌曲 |
 | `n` | 搜索网络歌曲 |
 | `j` | 搜索聚合歌曲 |
+| `p` | 搜索在线歌单 |
 | `i` | 查看歌曲信息 |
 | `f` | 收藏/取消收藏 |
 | `v` | 查看收藏列表 |
@@ -227,7 +229,8 @@ cargo run --release -- -o d:\Music
 | `Enter` | 搜索/播放/下载 |
 | `↑/↓` | 选择搜索结果 |
 | `PgUp/PgDn` | 翻页（网络搜索） |
-| `s/n` | 切换本地/网络搜索 |
+| `s/n/j` | 切换本地/网络/聚合搜索 |
+
 | `Esc` | 退出搜索 |
 
 ### 收藏列表按键
@@ -265,7 +268,19 @@ cargo run --release -- -o d:\Music
 | `i` | 重新查询歌曲信息 |
 | `Esc` | 返回歌词视图 |
 
+### 歌单搜索按键
+
+| 按键 | 功能 |
+|------|------|
+| 输入字符 | 输入歌单关键字 |
+| `Backspace` | 删除字符 |
+| `Enter` | 搜索/进入歌单/播放下载 |
+| `↑/↓` | 选择歌单或歌曲 |
+| `PgUp/PgDn` | 翻页 |
+| `Esc` | 返回上一层/退出搜索 |
+
 ### 帮助信息按键
+
 
 | 按键 | 功能 |
 |------|------|
@@ -650,14 +665,44 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202604281254083505_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202604281254169808_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260428125427848_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202604281254393938_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605021019495232_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605021020046637_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605021020217133_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605021020411180_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新日志
+
+## 版本 1.5.0 (2026-04-30)
+
+### 🎉 新功能
+
+#### 在线歌单搜索
+- ✨ **歌单检索入口**：按 `p` 可直接搜索网络歌单
+- ✨ **歌单内容浏览**：进入歌单后可查看歌曲列表并快速播放
+- ✨ **缓存命中播放**：网络搜索/聚合搜索/歌单搜索本地存在或者下载命中缓存时，跳过重复下载直接播放
+- ✨ **歌词去重下载**：网络搜索/聚合搜索/歌单搜索本地存在或者下载命中缓存时，歌词文件跳过重复下载
+
+### 🔧 功能改进
+
+- 🎵 **歌词策略优化**：播放时改为“聚合歌词优先，常规歌词兜底”，提升歌词命中准确率
+- 🎯 **在线搜索焦点优化**：按 `s/n/j/p` 进入搜索时默认聚焦输入栏，可直接输入关键词
+- 🎯 **搜索与列表交互优化**：回车或点击歌曲开始播放后自动切到列表焦点，键盘快捷键不再误写入搜索框
+- 🎯 **在线列表样式统一**：在线搜索/聚合搜索/歌单搜索中，选中箭头与播放标记分离显示，并与本地播放列表空格对齐一致
+- 🎲 **在线随机播放一致性优化**：随机播放模式下，网络搜索/聚合搜索结果现已支持随机切歌，行为与歌单场景保持一致
+- 🛡️ **在线自动切歌保护**：新增在线自动切歌限流保护，3 秒内连续自动跳过达 5 首时自动停止，避免不可播歌曲导致无控制连跳
+
+### 🐞 Bug 修复
+
+- 🛠️ **歌词下载优先级修复**：修正网络搜索/聚合搜索/歌单搜索场景下歌词下载顺序异常的问题
+- 🛠️ **在线续播索引修复**：修复播放过程中移动光标后，自动下一首从光标位置续播的问题，现按播放模式基于实际播放项切歌
+- 🛠️ **搜索空格误输入修复**：修复在线搜索列表焦点下空格被写入搜索框并影响搜索结果的问题
+- 🛠️ **网络搜索初始焦点修复**：修复按 `n` 进入网络搜索时输入焦点未落在搜索栏的问题
+- 🛠️ **在线随机播放缺失修复**：修复随机播放模式在网络搜索/聚合搜索结果中未生效的问题
+- 🛠️ **在线自动切歌误停修复**：修复在线场景下遇到首个不可播歌曲时可能提前停止的问题，改为仅在真实自动切歌时计数并在成功播放后重置计数窗口
+
+---
 
 ## 版本 1.4.0 (2026-04-28)
 
@@ -672,6 +717,8 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - ✨ **自定义 GitHub Token**：按 `g` 输入自己的 GitHub Token，保存到配置文件
 - ✨ **默认兜底**：未配置 Token 时自动使用默认 Token
 - ✨ **身份识别**：使用自己的 Token 提交歌曲信息 Discussion 时显示为自己的 GitHub 身份
+
+
 
 ### 🔧 功能改进
 
