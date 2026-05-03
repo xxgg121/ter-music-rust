@@ -2677,20 +2677,7 @@ impl UserInterface {
         self.lyrics_area_layout = None;
 
         // 检查常规歌词后台下载结果（作为聚合失败后的兜底）
-        if let Some(ref rx) = self.lyrics_download_rx {
-            if let Ok(result) = rx.try_recv() {
-                // 确认下载结果对应的歌曲仍是当前歌曲
-                let is_current = current_file
-                    .as_ref()
-                    .map(|f| f.path == result.music_path)
-                    .unwrap_or(false);
-                if is_current && result.lyrics.is_some() {
-                    self.current_lyrics = result.lyrics;
-                }
-                self.lyrics_download_rx = None;
-                self.lyrics_downloading = false;
-            }
-        }
+        self.check_lyrics_download_result();
 
         // 检查是否需要更新歌词
         let needs_update = match (&current_file, &self.lyrics_file_path) {
@@ -4502,6 +4489,38 @@ impl UserInterface {
         self.online_download_rx = Some(rx);
     }
 
+    /// 检查本地歌词后台下载结果（常规下载兜底）
+    fn check_lyrics_download_result(&mut self) {
+        let current_file = {
+            let audio_player = self.audio_player.lock().unwrap();
+            audio_player.get_current_file()
+        };
+
+        if let Some(ref rx) = self.lyrics_download_rx {
+            if let Ok(result) = rx.try_recv() {
+                // 仅当结果仍对应当前歌曲时才更新歌词，避免切歌后串写
+                let is_current = current_file
+                    .as_ref()
+                    .map(|f| f.path == result.music_path)
+                    .unwrap_or(false);
+
+                if is_current {
+                    if let Some(lyrics) = result.lyrics {
+                        self.append_runtime_log("[LyricsFallback] 兜底歌词下载成功，已更新当前歌词");
+                        self.current_lyrics = Some(lyrics);
+                    } else {
+                        self.append_runtime_log("[LyricsFallback] 兜底歌词下载失败（未返回歌词）");
+                    }
+                } else {
+                    self.append_runtime_log("[LyricsFallback] 忽略旧任务结果（已切歌）");
+                }
+
+                self.lyrics_download_rx = None;
+                self.lyrics_downloading = false;
+            }
+        }
+    }
+
     /// 检查歌词高亮行是否变化（用于判断是否需要重绘歌词区域）
     /// 检查下载进度/结果
     fn check_download_result(&mut self) {
@@ -4592,45 +4611,52 @@ impl UserInterface {
                 self.juhe_lyrics_loading = false;
                 self.juhe_lyrics_rx = None;
 
+                let target_music_path = result.music_path.clone();
+                let current_music_path = {
+                    let audio_player = self.audio_player.lock().unwrap();
+                    audio_player.get_current_file().map(|f| f.path)
+                };
+                let is_current = current_music_path
+                    .as_ref()
+                    .map(|p| p == &target_music_path)
+                    .unwrap_or(false);
+
+                // 切歌后收到旧任务结果：直接丢弃，避免写错歌和 UI 串位
+                if !is_current {
+                    return;
+                }
+
                 if let Some(lyrics_content) = result.lyrics {
-                    // 将歌词保存到与音乐文件同目录的 .lrc 文件
+                    // 聚合歌词成功后，明确关闭兜底状态（若有残留）
+                    self.lyrics_download_rx = None;
+                    self.lyrics_downloading = false;
+
+                    // 将歌词保存到对应歌曲同目录的 .lrc 文件
                     let mut saved_lrc_path: Option<std::path::PathBuf> = None;
-                    {
-                        let playlist = self.playlist.lock().unwrap();
-                        if let Some(current_file) = playlist.current_index.and_then(|idx| playlist.files.get(idx)) {
-                            let music_path = std::path::Path::new(&current_file.path);
-                            let clean_name = music_path
-                                .file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("unknown");
-                            if let Some(parent) = music_path.parent() {
-                                let lrc_path = parent.join(format!("{}.lrc", clean_name));
-                                let _ = std::fs::write(&lrc_path, &lyrics_content);
-                                saved_lrc_path = Some(lrc_path);
-                            }
-                        }
+                    let music_path = std::path::Path::new(&target_music_path);
+                    let clean_name = music_path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("unknown");
+                    if let Some(parent) = music_path.parent() {
+                        let lrc_path = parent.join(format!("{}.lrc", clean_name));
+                        let _ = std::fs::write(&lrc_path, &lyrics_content);
+                        saved_lrc_path = Some(lrc_path);
                     }
 
                     // 解析歌词并更新显示
                     if let Some(lrc_path) = saved_lrc_path {
-                        if let Some(lyrics) = crate::lyrics::Lyrics::from_local_lrc(&lrc_path) {
-                            self.current_lyrics = Some(lyrics);
-                        }
+                        self.lyrics_file_path = Some(lrc_path.clone());
+                        self.current_lyrics = crate::lyrics::Lyrics::from_local_lrc(&lrc_path);
                     }
-                } else if !self.lyrics_downloading {
-                    // 聚合歌词失败：回退到常规歌词下载
-                    let current_path = {
-                        let playlist = self.playlist.lock().unwrap();
-                        playlist
-                            .current_index
-                            .and_then(|idx| playlist.files.get(idx))
-                            .map(|f| f.path.clone())
-                    };
-
-                    if let Some(path) = current_path {
-                        self.lyrics_download_rx = Some(Lyrics::download_lyrics_background(&path));
-                        self.lyrics_downloading = true;
-                    }
+                } else if !self.lyrics_downloading && self.current_lyrics.is_none() {
+                    // 仅当聚合失败且当前还没有歌词时，才回退到常规歌词下载
+                    self.append_runtime_log("[JuheLyrics] 聚合歌词失败，开始兜底歌词下载");
+                    self.current_lyrics = None;
+                    self.lyrics_download_rx = Some(Lyrics::download_lyrics_background(&target_music_path));
+                    self.lyrics_downloading = true;
+                } else {
+                    self.append_runtime_log("[JuheLyrics] 聚合歌词失败，但当前已有歌词，跳过兜底");
                 }
             }
         }
@@ -5627,6 +5653,17 @@ impl UserInterface {
                 ));
             }
         }
+    }
+
+    /// 写入运行日志
+    fn append_runtime_log(&self, message: &str) {
+        let timestamp = Local::now().format("%H:%M:%S%.3f");
+        let line = format!("[{}] {}\n", timestamp, message);
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(crate::config::get_daily_log_path())
+            .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
     }
 
     /// 更新状态消息

@@ -23,6 +23,11 @@ macro_rules! log_file {
     }};
 }
 
+fn preview_for_log(text: &str, max_chars: usize) -> String {
+    text.chars().take(max_chars).collect()
+}
+
+
 /// 网络搜索结果
 #[derive(Debug, Clone)]
 pub struct OnlineSong {
@@ -820,7 +825,7 @@ fn search_kugou(client: &reqwest::blocking::Client, query: &str, page: usize) ->
         }
     };
     log_file!("[Kugou] 响应长度: {} 字节", text.len());
-    log_file!("[Kugou] 响应前200字符: {}", &text[..text.len().min(200)]);
+    log_file!("[Kugou] 响应前200字符: {}", preview_for_log(&text, 200));
 
     let search_result: KugouSearchResult = match serde_json::from_str(&text) {
         Ok(r) => r,
@@ -3000,6 +3005,8 @@ const JUHE_API_PREFIX: &str = "/v4";
 
 /// 聚合搜索歌词下载结果
 pub struct JuheLyricsResult {
+    /// 触发本次歌词下载的音乐文件路径
+    pub music_path: std::path::PathBuf,
     /// 歌曲信息
     #[allow(dead_code)]
     pub song: OnlineSong,
@@ -3303,7 +3310,7 @@ fn get_primary_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong
         .send()
     {
         if let Ok(text) = response.text() {
-            log_file!("[JuheLyric-main] 响应(前200): {}", &text[..text.len().min(200)]);
+            log_file!("[JuheLyric-main] 响应(前200): {}", preview_for_log(&text, 200));
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                 return extract_juhe_lyric(&value);
             }
@@ -3346,7 +3353,7 @@ fn get_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong) -> Opt
 
 /// 通过歌名和歌手名搜索并获取聚合歌词（用于本地歌曲回退歌词下载）
 /// 先搜索匹配歌曲，取第一个结果，再通过其 platform/song_id 获取歌词
-pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, _music_path: std::path::PathBuf) -> mpsc::Receiver<JuheLyricsResult> {
+pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, music_path: std::path::PathBuf) -> mpsc::Receiver<JuheLyricsResult> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let query = if artist.is_empty() {
@@ -3365,6 +3372,7 @@ pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, _mus
             Ok(c) => c,
             Err(e) => {
                 let _ = tx.send(JuheLyricsResult {
+                    music_path: music_path.clone(),
                     song: OnlineSong {
                         name: title,
                         artist,
@@ -3433,6 +3441,7 @@ pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, _mus
             None => {
                 log_file!("[JuheLyrics] 搜索无结果: {}", query);
                 let _ = tx.send(JuheLyricsResult {
+                    music_path: music_path.clone(),
                     song: OnlineSong {
                         name: title,
                         artist,
@@ -3455,6 +3464,7 @@ pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, _mus
             Some(lyrics) => {
                 log_file!("[JuheLyrics] 歌词获取成功，长度={}", lyrics.len());
                 let _ = tx.send(JuheLyricsResult {
+                    music_path: music_path.clone(),
                     song,
                     lyrics: Some(lyrics),
                     error: None,
@@ -3463,6 +3473,7 @@ pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, _mus
             None => {
                 log_file!("[JuheLyrics] 歌词获取失败");
                 let _ = tx.send(JuheLyricsResult {
+                    music_path,
                     song,
                     lyrics: None,
                     error: Some("无法获取歌词".to_string()),
