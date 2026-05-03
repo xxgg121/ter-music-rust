@@ -209,7 +209,7 @@ pub enum DownloadProgress {
     /// 下载进度更新（百分比 0-100）
     Progress(u8),
     /// 下载完成
-    Done(DownloadResult),
+    Done(Box<DownloadResult>),
 }
 
 // ============================================================
@@ -447,7 +447,7 @@ pub fn download_song_background(song: OnlineSong, save_dir: PathBuf) -> mpsc::Re
         let result = download_song_with_progress(&song, &save_dir, |percent| {
             let _ = tx.send(DownloadProgress::Progress(percent));
         });
-        let _ = tx.send(DownloadProgress::Done(result));
+        let _ = tx.send(DownloadProgress::Done(Box::new(result)));
     });
     rx
 }
@@ -514,7 +514,7 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
 
         let client = match reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(60))
-            .user_agent("TerMusicRust/1.3.0")
+            .user_agent("TerMusicRust/1.5.0")
             .build()
         {
             Ok(c) => c,
@@ -907,7 +907,7 @@ fn pick_usize_field(v: &serde_json::Value, keys: &[&str]) -> Option<usize> {
             }
         }
         if let Some(s) = v.get(*k).and_then(|x| x.as_str()) {
-            let normalized = s.trim().replace(',', "").replace('_', "");
+            let normalized = s.trim().replace([',', '_'], "");
             if let Ok(n) = normalized.parse::<usize>() {
                 return Some(n);
             }
@@ -960,7 +960,7 @@ fn parse_playlist_item(v: &serde_json::Value, source: PlaylistSource) -> Option<
 }
 
 /// 在任意 JSON 中提取数组（优先常见路径）
-fn extract_first_array<'a>(root: &'a serde_json::Value) -> Option<&'a Vec<serde_json::Value>> {
+fn extract_first_array(root: &serde_json::Value) -> Option<&Vec<serde_json::Value>> {
     let candidates = [
         vec!["data", "list"],
         vec!["data", "lists"],
@@ -2715,7 +2715,7 @@ fn create_github_discussion(
 
     let client = match reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
-        .user_agent("TerMusicRust/1.3.0")
+        .user_agent("TerMusicRust/1.5.0")
         .build()
     {
         Ok(c) => c,
@@ -3284,11 +3284,9 @@ fn extract_juhe_lyric(value: &serde_json::Value) -> Option<String> {
         value.get("data").and_then(|d| d.get("krc")).and_then(|l| l.as_str()),
     ];
 
-    for lyric_opt in &lyric_candidates {
-        if let Some(lyric) = lyric_opt {
-            if !lyric.trim().is_empty() {
-                return Some(lyric.to_string());
-            }
+    for lyric in lyric_candidates.iter().flatten() {
+        if !lyric.trim().is_empty() {
+            return Some(lyric.to_string());
         }
     }
 

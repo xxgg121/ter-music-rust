@@ -2166,54 +2166,51 @@ impl UserInterface {
 
         // 绘制右侧标题（歌词/评论/API 配置输入/GitHub Token 输入）
         let lyrics_title = if self.api_key_input_mode {
-            match self.api_input_step {
-                0 => format!(
-                    "{}{}",
-                    self.i18n(
-                        "输入接口地址: ",
-                        "輸入接口地址: ",
-                        "Input API URL: ",
-                        "API URLを入力: ",
-                        "API URL 입력: "
-                    ),
-                    self.api_key_input_value
-                ),
-                1 => format!(
-                    "{}{}",
-                    self.i18n(
-                        "输入API_KEY: ",
-                        "輸入API_KEY: ",
-                        "Input API_KEY: ",
-                        "API_KEYを入力: ",
-                        "API_KEY 입력: "
-                    ),
-                    self.api_key_input_value
-                ),
-                2 => format!(
-                    "{}{}",
-                    self.i18n(
-                        "输入模型名称: ",
-                        "輸入模型名稱: ",
-                        "Input model name: ",
-                        "モデル名を入力: ",
-                        "모델명 입력: "
-                    ),
-                    self.api_key_input_value
-                ),
-                _ => self.api_key_input_value.clone(),
-            }
+            let prompt = match self.api_input_step {
+                0 => self.i18n(
+                    "输入接口地址: ",
+                    "輸入接口地址: ",
+                    "Input API URL: ",
+                    "API URLを入力: ",
+                    "API URL 입력: "
+                )
+                .to_string(),
+                1 => self.i18n(
+                    "输入API_KEY: ",
+                    "輸入API_KEY: ",
+                    "Input API_KEY: ",
+                    "API_KEYを入力: ",
+                    "API_KEY 입력: "
+                )
+                .to_string(),
+                2 => self.i18n(
+                    "输入模型名称: ",
+                    "輸入模型名稱: ",
+                    "Input model name: ",
+                    "モデル名を入力: ",
+                    "모델명 입력: "
+                )
+                .to_string(),
+                _ => String::new(),
+            };
+            let prompt_width = unicode_width::UnicodeWidthStr::width(prompt.as_str());
+            let value_max_width = (right_width.saturating_sub(1) as usize).saturating_sub(prompt_width);
+            let visible_value = tail_to_width(self.api_key_input_value.as_str(), value_max_width);
+            format!("{}{}", prompt, visible_value)
         } else if self.github_token_input_mode {
-            format!(
-                "{}{}",
-                self.i18n(
+            let prompt = self
+                .i18n(
                     "输入GitHub_Token: ",
                     "輸入GitHub_Token: ",
                     "Input GitHub_Token: ",
                     "GitHub_Tokenを入力: ",
                     "GitHub_Token 입력: "
-                ),
-                self.github_token_input_value
-            )
+                )
+                .to_string();
+            let prompt_width = unicode_width::UnicodeWidthStr::width(prompt.as_str());
+            let value_max_width = (right_width.saturating_sub(1) as usize).saturating_sub(prompt_width);
+            let visible_value = tail_to_width(self.github_token_input_value.as_str(), value_max_width);
+            format!("{}{}", prompt, visible_value)
         } else if self.comments_mode {
             match self.language {
                 UiLanguage::ZhCn => format!("歌曲评论 共{}条（第{}页）", self.comments_total, self.comments_page),
@@ -2870,7 +2867,7 @@ impl UserInterface {
             // 语义顺序：有 beReplied 时，先显示被回复的原评论，再显示当前这条回复
             if let Some(reply) = &selected.reply {
                 lines.push(format!("{}：", reply.nickname));
-                let origin_comment_line = format!("{}", reply.content);
+                let origin_comment_line = reply.content.to_string();
                 lines.extend(wrap_text_to_width(
                     &origin_comment_line,
                     width.saturating_sub(1) as usize,
@@ -2882,7 +2879,7 @@ impl UserInterface {
 
                 lines.push(String::new());
                 lines.push(format!("{}：", selected.nickname));
-                let reply_comment_line = format!("{}", selected.content);
+                let reply_comment_line = selected.content.to_string();
                 lines.extend(wrap_text_to_width(
                     &reply_comment_line,
                     width.saturating_sub(1) as usize,
@@ -2890,13 +2887,13 @@ impl UserInterface {
             } else {
                 // 非回复场景：仅显示当前评论
                 lines.push(format!("{}：", selected.nickname));
-                let content_line = format!("{}", selected.content);
+                let content_line = selected.content.to_string();
                 lines.extend(wrap_text_to_width(
                     &content_line,
                     width.saturating_sub(1) as usize,
                 ));
                 if let Some(time_text) = &selected.time_text {
-                    lines.push(format!("{}", time_text));
+                    lines.push(time_text.to_string());
                 }
             }
 
@@ -5530,7 +5527,6 @@ impl UserInterface {
         if let Some(path) = open_folder_dialog() {
             let path_str = path.to_string_lossy().to_string();
             self.load_directory(&path_str);
-            return;
         }
 
         // 在 Linux 下若图形对话框不可用（无 zenity/kdialog/yad/qarma/python-tk），回退到终端输入
@@ -5758,13 +5754,9 @@ impl UserInterface {
         };
     }
 
-    /// 获取 GitHub Token（保存到配置，空字符串表示使用默认）
+    /// 获取 GitHub Token（保存到配置）
     pub fn get_github_token(&self) -> String {
-        if self.github_token == DEFAULT_GITHUB_TOKEN {
-            String::new() // 默认 token 保存为空，表示使用默认
-        } else {
-            self.github_token.clone()
-        }
+        self.github_token.clone()
     }
 
     /// 获取 API Key（保存到配置）
@@ -5875,19 +5867,15 @@ impl UserInterface {
                     Event::Key(key_event) => {
                         // 只处理按键按下事件，忽略释放事件
                         if key_event.kind == KeyEventKind::Press {
-                            // 处理修饰键
-                            match key_event.modifiers {
-                                KeyModifiers::NONE => {
-                                    self.handle_key_event(key_event.code)?;
-                                    self.draw()?;
+                            // 处理修饰键：Ctrl 保留为快捷键，其余（含 Shift）按普通输入处理
+                            if key_event.modifiers.contains(KeyModifiers::CONTROL) {
+                                // Ctrl+C 优雅退出
+                                if key_event.code == KeyCode::Char('c') {
+                                    *self.should_quit.lock().unwrap() = true;
                                 }
-                                KeyModifiers::CONTROL => {
-                                    // Ctrl+C 优雅退出
-                                    if key_event.code == KeyCode::Char('c') {
-                                        *self.should_quit.lock().unwrap() = true;
-                                    }
-                                }
-                                _ => {}
+                            } else {
+                                self.handle_key_event(key_event.code)?;
+                                self.draw()?;
                             }
                         }
                     }
@@ -5944,6 +5932,41 @@ fn truncate_to_width(text: &str, max_width: usize) -> String {
     }
 
     result
+}
+
+/// 取字符串在给定显示宽度下的“尾部可见部分”（用于超长输入框编辑）
+fn tail_to_width(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+
+    // 与 truncate_to_width 保持一致的控制字符清理策略
+    let sanitized: String = text
+        .chars()
+        .map(|ch| match ch {
+            '\n' | '\r' | '\t' => ' ',
+            c if c.is_control() => ' ',
+            c => c,
+        })
+        .collect();
+
+    if unicode_width::UnicodeWidthStr::width(sanitized.as_str()) <= max_width {
+        return sanitized;
+    }
+
+    let mut reversed: Vec<char> = Vec::new();
+    let mut current_width = 0;
+
+    for ch in sanitized.chars().rev() {
+        let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if current_width + ch_width > max_width {
+            break;
+        }
+        reversed.push(ch);
+        current_width += ch_width;
+    }
+
+    reversed.into_iter().rev().collect()
 }
 
 /// 按显示宽度自动换行，保留原始换行
