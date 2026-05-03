@@ -1,8 +1,8 @@
 <div align="center">
 
-[简体中文](README.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md)
+[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
 
-# 🎵 Ter-Music-Rust - ターミナル音楽プレーヤー
+# 🎵 Ter-Music-Rust - ターミナル音楽プレーヤー 🎵
 
 </div>
 

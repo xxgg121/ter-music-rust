@@ -1,11 +1,10 @@
 <div align="center">
 
-[简体中文](README.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md)
+[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
 
-# 🎵 Ter-Music-Rust - 终端音乐播放器
+# 🎵 Ter-Music-Rust - 终端音乐播放器 🎵
 
 </div>
-
 
 一个简洁实用的终端音乐播放器，使用 Rust 实现，支持本地/网络歌曲搜索下载、自动下载歌词显示、评论查看、多语言与主题切换等功能，支持Windows、Linux、MacOS系统。
 
