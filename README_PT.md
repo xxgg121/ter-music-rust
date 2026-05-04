@@ -672,10 +672,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 A primeira compilação baixa e compila todas as dependências; isso é esperado. Compilações subsequentes são muito mais rápidas.
 
 ### Baixar releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605030941394786_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605030941519730_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605041058546980_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605041059025049_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605041059164016_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605041059236181_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
