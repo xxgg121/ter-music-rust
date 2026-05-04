@@ -81,15 +81,21 @@ Um player de música para terminal, simples e prático, implementado em Rust. Su
 - **Excluir item do histórico**: pressione `d` na visualização do histórico
 
 ### 🌐 Interface multilíngue
-Suporta 5 idiomas de interface (alterne com `l`):
+Suporta 11 idiomas de interface (alterne com `l`):
 
 | Idioma | Valor de configuração |
 |------|--------|
-| Chinês simplificado | `zh-CN` |
-| Chinês tradicional | `zh-TW` |
+| Chinês simplificado | `sc` |
+| Chinês tradicional | `tc` |
 | Inglês | `en` |
 | Japonês | `ja` |
 | Coreano | `ko` |
+| Russo | `ru` |
+| Francês | `fr` |
+| Alemão | `de` |
+| Espanhol | `es` |
+| Italiano | `it` |
+| Português | `pt` |
 
 ### 🎨 Interface multitema
 Suporta 4 temas (alterne com `t`):
@@ -131,7 +137,7 @@ A configuração é armazenada em `USERPROFILE/ter-music-rust/config.json` no di
 | `api_model` | Nome do modelo de IA (padrão: `deepseek-v4-flash`) |
 | `github_token` | GitHub Token (usado para enviar discussões de informações da música; deixe vazio para usar o Token padrão) |
 | `theme` | Nome do tema |
-| `language` | Idioma da interface (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
+| `language` | Idioma da interface (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
 
 **Gatilhos de salvamento automático**: troca de faixa, troca de tema, troca de idioma, alteração de favoritos, a cada 30 segundos e ao sair (incluindo Ctrl+C)
 
@@ -674,6 +680,33 @@ A primeira compilação baixa e compila todas as dependências; isso é esperado
 ---
 
 ## 📝 Registro de alterações
+## Versão 1.6.0 (2026-05-04)
+
+### 🎉 Novas funcionalidades
+
+#### Expansão multilíngue e refactoring de internacionalização
+- ✨ **6 novos idiomas de interface adicionados**: russo (Русский), francês (Français), alemão (Deutsch), espanhol (Español), italiano (Italiano), português (Português) — agora suporta 11 idiomas no total
+- ✨ **Internacionalização completa dos módulos**: todos os textos voltados para o utilizador (interface UI, ajuda CLI, mensagens de erro, títulos de diálogos) foram internacionalizados, incluindo `ui.rs`, `main.rs`, `search.rs`, `audio.rs`, `config.rs`, `playlist.rs`
+- ✨ **Gestão centralizada do pacote de idiomas**: adicionado o módulo `langs.rs` para centralizar todos os textos de tradução num único ficheiro, incluindo a estrutura `LangTexts` e 11 instâncias estáticas de idiomas
+- ✨ **Acessor global de idioma**: fornecida a função `langs::global_texts()` para que os módulos não-UI (search.rs / audio.rs / config.rs / playlist.rs) possam obter de forma thread-safe os textos de tradução atuais
+- ✨ **Prompts AI multilíngues**: os prompts de consulta de informações de canções AI para cada idioma são gerados no idioma correspondente, assegurando que o idioma de resposta corresponda ao idioma da interface
+
+### 🔧 Melhorias
+
+- 🌐 **Internacionalização da ajuda CLI**: as informações de ajuda `-h` da linha de comandos agora seguem a definição de idioma da interface
+- 🌐 **Internacionalização das mensagens de erro**: os erros de áudio, pesquisa, configuração, diretório, etc. agora seguem o idioma da interface
+- 🌐 **Internacionalização dos títulos de diálogos**: os títulos dos diálogos de seleção de pasta do macOS / Linux agora seguem o idioma da interface
+- ♻️ **Desacoplamento do código**: os módulos já não contêm cadeias de texto codificadas; todos os textos são lidos através de `self.t()` ou `langs::global_texts()`
+
+### 🐞 Correções de bugs
+
+- 🛠️ **Correção do foco do teclado no modo de comentários**: corrigido um problema onde no modo de pesquisa online/Juhe/lista de reprodução, após premir `c` para ver comentários, as teclas cima/baixo controlavam a lista de músicas em vez da lista de comentários
+- 🛠️ **Correção do diálogo de seleção de pasta no Linux**: corrigido um problema onde premir `o` no Linux não mostrava o diálogo gráfico de seleção de pasta; tratamento correto do conflito entre o modo raw e o diálogo gráfico
+- 🛠️ **Correção de segurança do corte UTF-8 nos logs**: corrigido uma possível falha do programa devido ao corte por bytes de strings UTF-8 multibyte; alterado para truncamento seguro por caracteres
+- 🛠️ **Correção da formatação do ficheiro de configuração**: corrigido um problema de dupla substituição `replace("{}")` nas mensagens de erro de configuração, onde o segundo marcador de posição não era substituído corretamente
+
+---
+
 
 ## Versão 1.5.0 (2026-04-30)
 

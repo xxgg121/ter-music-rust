@@ -81,15 +81,21 @@ Un reproductor de música para terminal, simple y práctico, implementado en Rus
 - **Eliminar elemento del historial**: pulsa `d` en la vista de historial
 
 ### 🌐 Interfaz multilingüe
-Soporta 5 idiomas de interfaz (ciclar con `l`):
+Soporta 11 idiomas de interfaz (ciclar con `l`):
 
 | Idioma | Valor de configuración |
 |------|--------|
-| Chino simplificado | `zh-CN` |
-| Chino tradicional | `zh-TW` |
+| Chino simplificado | `sc` |
+| Chino tradicional | `tc` |
 | Inglés | `en` |
 | Japonés | `ja` |
 | Coreano | `ko` |
+| Ruso | `ru` |
+| Francés | `fr` |
+| Alemán | `de` |
+| Español | `es` |
+| Italiano | `it` |
+| Portugués | `pt` |
 
 ### 🎨 Interfaz multitema
 Soporta 4 temas (ciclar con `t`):
@@ -131,7 +137,7 @@ La configuración se almacena en `USERPROFILE/ter-music-rust/config.json` en el 
 | `api_model` | Nombre del modelo AI (predeterminado: `deepseek-v4-flash`) |
 | `github_token` | Token de GitHub (usado para enviar discusiones de información de canciones; dejar vacío para usar Token predeterminado) |
 | `theme` | Nombre del tema |
-| `language` | Idioma de la interfaz (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
+| `language` | Idioma de la interfaz (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
 
 **Disparadores de guardado automático**: cambio de pista, cambio de tema, cambio de idioma, cambio de favoritos, cada 30 segundos y al salir (incluyendo Ctrl+C)
 
@@ -670,6 +676,33 @@ La primera compilación descarga y compila todas las dependencias; esto es esper
 [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605030941519730_ter-music-rust-mac.zip "附件(Attached)")
 [ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
 [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## Versión 1.6.0 (2026-05-04)
+
+### 🎉 Nuevas características
+
+#### Expansión multilingüe y refactoring de internacionalización
+- ✨ **6 nuevos idiomas de interfaz añadidos**: ruso (Русский), francés (Français), alemán (Deutsch), español (Español), italiano (Italiano), portugués (Português) — ahora soporta 11 idiomas en total
+- ✨ **Internacionalización completa de módulos**: todos los textos orientados al usuario (interfaz UI, ayuda CLI, mensajes de error, títulos de diálogos) han sido internacionalizados, incluyendo `ui.rs`, `main.rs`, `search.rs`, `audio.rs`, `config.rs`, `playlist.rs`
+- ✨ **Gestión centralizada del paquete de idiomas**: añadido el módulo `langs.rs` para centralizar todos los textos de traducción en un solo archivo, incluyendo la estructura `LangTexts` y 11 instancias estáticas de idiomas
+- ✨ **Accesor global de idioma**: proporcionada la función `langs::global_texts()` para que los módulos no-UI (search.rs / audio.rs / config.rs / playlist.rs) puedan obtener de forma segura los textos de traducción actuales
+- ✨ **Prompts AI multilingües**: los prompts de consulta de información de canciones AI para cada idioma se generan en el idioma correspondiente, asegurando que el idioma de respuesta coincida con el idioma de la interfaz
+
+### 🔧 Mejoras
+
+- 🌐 **Internacionalización de la ayuda CLI**: la información de ayuda `-h` de la línea de comandos ahora sigue la configuración de idioma de la interfaz
+- 🌐 **Internacionalización de mensajes de error**: los errores de audio, búsqueda, configuración, directorio, etc. ahora siguen el idioma de la interfaz
+- 🌐 **Internacionalización de títulos de diálogos**: los títulos de los diálogos de selección de carpeta de macOS / Linux ahora siguen el idioma de la interfaz
+- ♻️ **Desacoplamiento de código**: los módulos ya no contienen cadenas de texto codificadas; todos los textos se leen a través de `self.t()` o `langs::global_texts()`
+
+### 🐞 Correcciones de errores
+
+- 🛠️ **Corrección del foco del teclado en modo comentarios**: corregido un problema donde en el modo de búsqueda en línea/Juhe/lista de reproducción, al pulsar `c` para ver comentarios, las teclas arriba/abajo controlaban la lista de canciones en lugar de la lista de comentarios
+- 🛠️ **Corrección del diálogo de selección de carpeta en Linux**: corregido un problema donde pulsar `o` en Linux no mostraba el diálogo gráfico de selección de carpeta; manejo correcto del conflicto entre el modo raw y el diálogo gráfico
+- 🛠️ **Corrección de seguridad de corte UTF-8 en logs**: corregido un posible fallo del programa debido al corte por bytes de cadenas UTF-8 multibyte; cambiado a truncamiento seguro por caracteres
+- 🛠️ **Corrección de formato del archivo de configuración**: corregido un problema de doble reemplazo `replace("{}")` en los mensajes de error de configuración, donde el segundo marcador de posición no se reemplazaba correctamente
 
 ---
 

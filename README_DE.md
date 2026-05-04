@@ -81,15 +81,21 @@ Ein schlanker und praktischer Terminal-Musikplayer in Rust mit lokaler/online Su
 - **Verlaufseintrag löschen**: `d` in der Verlaufsansicht drücken
 
 ### 🌐 Mehrsprachige Benutzeroberfläche
-Unterstützt 5 UI-Sprachen (Wechsel mit `l`):
+Unterstützt 11 UI-Sprachen (Wechsel mit `l`):
 
 | Sprache | Konfigurationswert |
 |------|--------|
-| Vereinfachtes Chinesisch | `zh-CN` |
-| Traditionelles Chinesisch | `zh-TW` |
+| Vereinfachtes Chinesisch | `sc` |
+| Traditionelles Chinesisch | `tc` |
 | Englisch | `en` |
 | Japanisch | `ja` |
 | Koreanisch | `ko` |
+| Russisch | `ru` |
+| Französisch | `fr` |
+| Deutsch | `de` |
+| Spanisch | `es` |
+| Italienisch | `it` |
+| Portugiesisch | `pt` |
 
 ### 🎨 Mehrthema-Benutzeroberfläche
 Unterstützt 4 Themen (Wechsel mit `t`):
@@ -131,7 +137,7 @@ Die Konfiguration wird in `USERPROFILE/ter-music-rust/config.json` im Programmve
 | `api_model` | AI-Modellname (Standard: `deepseek-v4-flash`) |
 | `github_token` | GitHub-Token (verwendet für Song-Info-Diskussionen; leer lassen für Standard-Token) |
 | `theme` | Themenname |
-| `language` | UI-Sprache (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
+| `language` | UI-Sprache (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
 
 **Auto-Speichern-Auslöser**: Titelwechsel, Themawechsel, Sprachwechsel, Favoritenänderung, alle 30 Sekunden und beim Beenden (einschließlich Strg+C)
 
@@ -670,6 +676,33 @@ Der erste Build lädt und kompiliert alle Abhängigkeiten herunter; dies ist erw
 [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605030941519730_ter-music-rust-mac.zip "附件(Attached)")
 [ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
 [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## Version 1.6.0 (2026-05-04)
+
+### 🎉 Neue Funktionen
+
+#### Mehrsprachige Erweiterung und Internationalisierungs-Refactoring
+- ✨ **6 neue UI-Sprachen hinzugefügt**: Russisch (Русский), Französisch (Français), Deutsch (Deutsch), Spanisch (Español), Italienisch (Italiano), Portugiesisch (Português) — nun insgesamt 11 Sprachen unterstützt
+- ✨ **Vollständige Modul-Internationalisierung**: Alle benutzerorientierten Texte (UI-Oberfläche, CLI-Hilfe, Fehlermeldungen, Dialogtitel) sind internationalisiert, einschließlich `ui.rs`, `main.rs`, `search.rs`, `audio.rs`, `config.rs`, `playlist.rs`
+- ✨ **Zentralisierte Sprachpaketverwaltung**: Modul `langs.rs` hinzugefügt, um alle Übersetzungstexte in einer Datei zentral zu verwalten, einschließlich `LangTexts`-Struktur und 11 statischer Sprachinstanzen
+- ✨ **Globaler Sprachaccessor**: Funktion `langs::global_texts()` bereitgestellt, damit Nicht-UI-Module (search.rs / audio.rs / config.rs / playlist.rs) threadsicher aktuelle Übersetzungstexte abrufen können
+- ✨ **Mehrsprachige AI-Prompts**: Die AI-Song-Info-Abfrage-Prompts für jede Sprache werden in der entsprechenden Sprache ausgegeben, um sicherzustellen, dass die Antwortsprache mit der UI-Sprache übereinstimmt
+
+### 🔧 Verbesserungen
+
+- 🌐 **CLI-Hilfe-Internationalisierung**: Kommandozeilen-Hilfe `-h` folgt nun der UI-Spracheinstellung
+- 🌐 **Fehlermeldungs-Internationalisierung**: Audio-Fehler, Suchfehler, Konfigurationsfehler, Verzeichnisfehler usw. folgen nun der UI-Sprache
+- 🌐 **Dialogtitel-Internationalisierung**: macOS / Linux Ordnerauswahl-Dialogtitel folgen der UI-Sprache
+- ♻️ **Code-Entkopplung**: Module enthalten keine hartcodierten Textzeichenfolgen mehr; alle Texte werden über `self.t()` oder `langs::global_texts()` gelesen
+
+### 🐞 Fehlerbehebungen
+
+- 🛠️ **Tastaturfokus im Kommentarmodus korrigiert**: Problem behoben, bei dem im Online-Suche/Aggregat-Suche/Playlist-Suche-Modus nach Drücken von `c` zum Anzeigen von Kommentaren die Auf/Ab-Tasten die Songliste statt der Kommentarliste steuerten
+- 🛠️ **Linux-Ordnerauswahl-Dialog korrigiert**: Problem behoben, bei dem Drücken von `o` unter Linux keinen grafischen Ordnerauswahl-Dialog anzeigte; korrekte Behandlung des Konflikts zwischen Raw-Modus und grafischem Dialog
+- 🛠️ **UTF-8-Log-Slicing-Sicherheit korrigiert**: Möglicher Programmabsturz durch bytebasiertes Slicing von Multi-Byte-UTF-8-Zeichenfolgen behoben; auf zeichenbasierte sichere Kürzung umgestellt
+- 🛠️ **Konfigurationsdatei-Formatierung korrigiert**: Problem der doppelten Ersetzung `replace("{}")` in Konfigurationsfehlermeldungen behoben, bei dem der zweite Platzhalter nicht korrekt ersetzt wurde
 
 ---
 

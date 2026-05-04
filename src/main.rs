@@ -4,6 +4,7 @@ mod audio;
 mod analyzer;
 mod config;
 mod defs;
+mod langs;
 mod lyrics;
 mod playlist;
 mod search;
@@ -32,51 +33,13 @@ fn setup_console() {
 fn setup_console() {}
 
 /// 显示帮助信息
-fn show_help() {
-    println!("Ter-Music-Rust - 终端音乐播放器\n");
-    println!("程序用法:");
-    println!(" ter-music-rust [选项]\n");
-    println!("参数选项:");
-    println!(" -o <目录> 打开音乐目录");
-    println!(" -h, --help 显示帮助信息\n");
-    println!("快捷按键:");
-    println!(" ↑/↓ 上下选择歌曲");
-    println!(" Enter 播放选中歌曲");
-    println!(" Space 播放/暂停歌曲");
-    println!(" Esc 停止播放歌曲");
-    println!(" ←/→ 上一曲/下一曲");
-    println!(" [/] 快退/快进5秒");
-    println!(" ,/. 快退/快进10秒");
-    println!(" +/- 音量大小加减");
-    println!(" 1-5 切换播放模式");
-    println!(" o 打开音乐目录");
-    println!(" s 搜索本地歌曲");
-    println!(" n 搜索网络歌曲");
-    println!(" j 搜索聚合歌曲");
-    println!(" p 搜索在线歌单");
-    println!(" i 查看歌曲信息");
-    println!(" f 添加到收藏夹");
-    println!(" v 查看收藏列表");
-    println!(" m 音乐目录历史");
-    println!(" h 显示帮助信息");
-    println!(" c 显示歌曲评论");
-    println!(" l 切换界面语言");
-    println!(" t 切换界面主题");
-    println!(" k 配置API 接口");
-    println!(" g 配置Github Token");
-    println!(" q 退出音乐程序\n");
-    println!("播放模式:");
-    println!(" 1 - 单曲播放（歌曲播放完停止）");
-    println!(" 2 - 单曲循环（循环播放当前歌曲）");
-    println!(" 3 - 顺序播放（顺序播放完后回到第一首）");
-    println!(" 4 - 列表循环（循环播放整个列表）");
-    println!(" 5 - 随机播放（随机选择播放歌曲）\n");
-    println!("支持格式:");
-    println!("MP3、WAV、FLAC、OGG、OGA、Opus、M4A、AAC、AIFF、APE\n");
-    println!("配置文件:");
-    println!(" 配置路径: 用户配置目录/ter-music-rust/config.json");
-    println!(" 自动保存: 音乐目录、播放模式、音量大小、收藏列表、当前歌曲、当前主题、当前语言、API接口、Github Token\n");
-    println!("Github仓库: https://github.com/xxgg121/ter-music-rust\n");
+fn show_help(lang: &str) {
+    let ui_lang = langs::UiLanguage::from_config_key(lang);
+    let texts = ui_lang.texts();
+    for line in texts.cli_help_lines {
+        println!("{}", line);
+    }
+    println!();
 }
 
 /// 主函数
@@ -84,12 +47,6 @@ fn show_help() {
 fn main() {
     setup_console();
     let mut config = Config::load();
-
-    if std::env::var("DEEPSEEK_API_KEY").map(|v| v.trim().is_empty()).unwrap_or(true)
-        && !config.api_key.trim().is_empty()
-    {
-        std::env::set_var("DEEPSEEK_API_KEY", config.api_key.trim());
-    }
 
     // 确保 api_base_url 和 api_model 有默认值（兼容旧配置文件）
     if config.api_base_url.trim().is_empty() {
@@ -99,6 +56,11 @@ fn main() {
         config.api_model = "deepseek-v4-flash".to_string();
     }
 
+    let lang = config.language.clone();
+    let ui_lang = langs::UiLanguage::from_config_key(&lang);
+    let texts = ui_lang.texts();
+    langs::set_global_language(ui_lang);
+
     // 解析命令行参数
     let args: Vec<String> = env::args().collect();
     let mut music_dir: Option<PathBuf> = None;
@@ -107,7 +69,7 @@ fn main() {
     while i < args.len() {
         match args[i].as_str() {
             "-h" | "--help" => {
-                show_help();
+                show_help(&lang);
                 return;
             }
             "-o" => {
@@ -115,13 +77,13 @@ fn main() {
                     music_dir = Some(PathBuf::from(&args[i + 1]));
                     i += 1;
                 } else {
-                    eprintln!("错误: -o 选项需要打开音乐目录");
+                    eprintln!("{}", texts.cli_error_option_o);
                     std::process::exit(1);
                 }
             }
             _ => {
-                eprintln!("错误: 未知选项 '{}'", args[i]);
-                eprintln!("使用 -h 或 --help 查看帮助信息");
+                eprintln!("{} '{}'", texts.cli_error_unknown_option, args[i]);
+                eprintln!("{}", texts.cli_use_help);
                 std::process::exit(1);
             }
         }
@@ -145,12 +107,13 @@ fn main() {
     while loaded_playlist.is_none() {
         let selected_dir = playlist::open_folder_dialog();
         match selected_dir {
-            Some(dir) => {
+            playlist::FolderDialogResult::Selected(dir) => {
                 loaded_playlist = playlist::scan_music_directory(&dir)
                     .ok()
                     .map(|pl| Arc::new(Mutex::new(pl)));
             }
-            None => break,
+            playlist::FolderDialogResult::Cancelled => break,
+            playlist::FolderDialogResult::NoDialogAvailable => break,
         }
     }
 
@@ -158,7 +121,7 @@ fn main() {
     let playlist = match loaded_playlist {
         Some(pl) => pl,
         None => {
-            eprintln!("未选择可用的音乐目录，已进入空列表模式，可按 o 打开音乐目录");
+            eprintln!("{}", texts.cli_no_dir_selected);
             Arc::new(Mutex::new(Playlist::new()))
         }
     };
@@ -188,7 +151,7 @@ fn main() {
         let should_quit = ui.get_should_quit();
         ctrlc::set_handler(move || {
             *should_quit.lock().unwrap() = true;
-        }).expect("无法设置 Ctrl+C 处理器");
+        }).expect(texts.cli_ctrlc_error);
     }
 
     // 从配置加载收藏列表
@@ -231,7 +194,7 @@ fn main() {
 
     // 运行主循环
     if let Err(e) = ui.run() {
-        eprintln!("播放错误: {}", e);
+        eprintln!("{}: {}", texts.cli_playback_error, e);
         std::process::exit(1);
     }
 

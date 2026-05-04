@@ -67,19 +67,19 @@ impl AudioPlayer {
 
         // 初始化音频输出流
         let (stream, stream_handle) =
-            OutputStream::try_default().map_err(|e| format!("无法初始化音频输出: {}", e))?;
+            OutputStream::try_default().map_err(|e| crate::langs::global_texts().fmt_audio_init_failed.replace("{}", &e.to_string()))?;
 
         // 创建播放控制器
         let sink =
-            Sink::try_new(&stream_handle).map_err(|e| format!("无法创建播放控制器: {}", e))?;
+            Sink::try_new(&stream_handle).map_err(|e| crate::langs::global_texts().fmt_audio_sink_failed.replace("{}", &e.to_string()))?;
 
         // 打开音频文件
         let audio_file = std::fs::File::open(&file.path)
-            .map_err(|e| format!("无法打开音频文件 {:?}: {}", file.path, e))?;
+            .map_err(|e| crate::langs::global_texts().fmt_audio_open_failed.replace("{:?}", &format!("{:?}", file.path)).replace("{}", &e.to_string()))?;
 
         // 创建音频解码器
         let source = Decoder::new(BufReader::new(audio_file))
-            .map_err(|e| format!("无法解码音频文件: {}", e))?;
+            .map_err(|e| crate::langs::global_texts().fmt_audio_decode_failed.replace("{}", &e.to_string()))?;
 
         // 获取总时长
         self.total_duration = source.total_duration();
@@ -267,7 +267,7 @@ impl AudioPlayer {
             if let Some(total) = self.total_duration {
                 let target_time = Duration::from_secs_f64(total.as_secs_f64() * ratio.clamp(0.0, 1.0));
                 sink.try_seek(target_time)
-                    .map_err(|e| format!("跳转失败: {}", e))?;
+                    .map_err(|e| crate::langs::global_texts().fmt_seek_failed.replace("{}", &e.to_string()))?;
 
                 // 更新时间追踪
                 self.accumulated_time = target_time;
@@ -279,10 +279,10 @@ impl AudioPlayer {
 
                 Ok(())
             } else {
-                Err("无法跳转：未知歌曲时长".to_string())
+                Err(crate::langs::global_texts().seek_error_unknown_duration.to_string())
             }
         } else {
-            Err("无法跳转：未在播放".to_string())
+            Err(crate::langs::global_texts().seek_error_not_playing.to_string())
         }
     }
 

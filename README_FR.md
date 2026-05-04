@@ -81,15 +81,21 @@ Un lecteur de musique en terminal, simple et pratique, développé en Rust. Il p
 - **Supprimer un élément de l'historique** : appuyez sur `d` dans la vue de l'historique
 
 ### 🌐 Interface multilingue
-Prend en charge 5 langues d'interface (cycle avec `l`) :
+Prend en charge 11 langues d'interface (cycle avec `l`) :
 
 | Langue | Valeur de configuration |
 |------|--------|
-| Chinois simplifié | `zh-CN` |
-| Chinois traditionnel | `zh-TW` |
+| Chinois simplifié | `sc` |
+| Chinois traditionnel | `tc` |
 | Anglais | `en` |
 | Japonais | `ja` |
 | Coréen | `ko` |
+| Russe | `ru` |
+| Français | `fr` |
+| Allemand | `de` |
+| Espagnol | `es` |
+| Italien | `it` |
+| Portugais | `pt` |
 
 ### 🎨 Interface multi-thème
 Prend en charge 4 thèmes (cycle avec `t`) :
@@ -131,7 +137,7 @@ La configuration est stockée dans `USERPROFILE/ter-music-rust/config.json` dans
 | `api_model` | Nom du modèle AI (par défaut : `deepseek-v4-flash`) |
 | `github_token` | Jeton GitHub (utilisé pour soumettre des discussions sur les chansons ; laisser vide pour utiliser le jeton par défaut) |
 | `theme` | Nom du thème |
-| `language` | Langue de l'interface (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
+| `language` | Langue de l'interface (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
 
 **Déclencheurs de sauvegarde automatique** : changement de piste, changement de thème, changement de langue, modification des favoris, toutes les 30 secondes, et à la sortie (y compris Ctrl+C)
 
@@ -671,6 +677,32 @@ La première compilation télécharge et compile toutes les dépendances ; c'est
 [ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
 [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
 
+---
+
+## Version 1.6.0 (2026-05-04)
+
+### 🎉 Nouvelles fonctionnalités
+
+#### Extension multilingue et refactoring d'internationalisation
+- ✨ **6 nouvelles langues d'interface ajoutées** : russe (Русский), français (Français), allemand (Deutsch), espagnol (Español), italien (Italiano), portugais (Português) — 11 langues désormais supportées
+- ✨ **Internationalisation complète des modules** : tous les textes orientés utilisateur (interface UI, aide CLI, messages d'erreur, titres de boîtes de dialogue) ont été internationalisés, y compris `ui.rs`, `main.rs`, `search.rs`, `audio.rs`, `config.rs`, `playlist.rs`
+- ✨ **Gestion centralisée du pack de langues** : ajout du module `langs.rs` pour centraliser tous les textes de traduction dans un seul fichier, incluant la structure `LangTexts` et 11 instances statiques de langues
+- ✨ **Accesseur de langue global** : fournit la fonction `langs::global_texts()` pour que les modules non-UI (search.rs / audio.rs / config.rs / playlist.rs) puissent récupérer de manière thread-safe les textes de traduction actuels
+- ✨ **Prompts AI multilingues** : les prompts de requête d'informations sur les chansons pour chaque langue sont générés dans la langue correspondante, garantissant que la langue de réponse correspond à la langue de l'interface
+
+### 🔧 Améliorations
+
+- 🌐 **Internationalisation de l'aide CLI** : l'information d'aide `-h` en ligne de commande suit désormais le paramètre de langue de l'interface
+- 🌐 **Internationalisation des messages d'erreur** : les erreurs audio, recherche, configuration, répertoire, etc. suivent désormais la langue de l'interface
+- 🌐 **Internationalisation des titres de boîtes de dialogue** : les titres des boîtes de dialogue de sélection de dossier macOS / Linux suivent la langue de l'interface
+- ♻️ **Découplage du code** : les modules ne contiennent plus de chaînes de texte en dur ; tous les textes sont lus via `self.t()` ou `langs::global_texts()`
+
+### 🐞 Corrections de bugs
+
+- 🛠️ **Correction du focus clavier en mode commentaires** : correction d'un problème où en mode recherche en ligne/Juhe/playlist, après avoir appuyé sur `c` pour voir les commentaires, les touches haut/bas contrôlaient la liste des chansons au lieu de la liste des commentaires
+- 🛠️ **Correction du dialogue de sélection de dossier Linux** : correction d'un problème où appuyer sur `o` sous Linux n'affichait pas le dialogue graphique de sélection de dossier ; gestion correcte du conflit entre le mode raw et le dialogue graphique
+- 🛠️ **Correction de sécurité du découpage UTF-8 des logs** : correction d'un crash possible du programme dû au découpage par octets des chaînes UTF-8 multi-octets ; passage à une troncature sécurisée par caractères
+- 🛠️ **Correction du formatage du fichier de configuration** : correction d'un problème de double remplacement `replace("{}")` dans les messages d'erreur de configuration, empêchant le second placeholder d'être correctement remplacé
 ---
 
 ## 📝 Journal des modifications

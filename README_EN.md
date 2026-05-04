@@ -81,15 +81,21 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 - **Delete history item**: press `d` in history view
 
 ### 🌐 Multi-language UI
-Supports 5 UI languages (cycle with `l`):
+Supports 11 UI languages (cycle with `l`):
 
 | Language | Config Value |
 |------|--------|
-| Simplified Chinese | `zh-CN` |
-| Traditional Chinese | `zh-TW` |
+| Simplified Chinese | `sc` |
+| Traditional Chinese | `tc` |
 | English | `en` |
 | Japanese | `ja` |
 | Korean | `ko` |
+| Русский | `ru` |
+| Français | `fr` |
+| Deutsch | `de` |
+| Español | `es` |
+| Italiano | `it` |
+| Português | `pt` |
 
 ### 🎨 Multi-theme UI
 Supports 4 themes (cycle with `t`):
@@ -131,7 +137,7 @@ Configuration is stored in `USERPROFILE/ter-music-rust/config.json` in the progr
 | `api_model` | AI model name (default: `deepseek-v4-flash`) |
 | `github_token` | GitHub Token (used for submitting song info discussions; leave empty to use default Token) |
 | `theme` | Theme name |
-| `language` | UI language (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
+| `language` | UI language (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
 
 **Auto-save triggers**: track change, theme change, language change, favorite change, every 30 seconds, and on exit (including Ctrl+C)
 
@@ -670,6 +676,33 @@ The first build downloads and compiles all dependencies; this is expected. Later
 [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605030941519730_ter-music-rust-mac.zip "附件(Attached)")
 [ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
 [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## Version 1.6.0 (2026-05-04)
+
+### 🎉 New Features
+
+#### Multi-language Expansion & Internationalization Refactoring
+- ✨ **6 new UI languages added**: Russian (Русский), French (Français), German (Deutsch), Spanish (Español), Italian (Italiano), Portuguese (Português) — now supporting 11 languages in total
+- ✨ **Full module internationalization**: All user-facing text (UI interface, CLI help, error messages, dialog titles) has been internationalized, including `ui.rs`, `main.rs`, `search.rs`, `audio.rs`, `config.rs`, `playlist.rs`
+- ✨ **Centralized language pack management**: Added `langs.rs` module to centralize all language translation texts in one file, including `LangTexts` struct and 11 language static instances
+- ✨ **Global language accessor**: Provided `langs::global_texts()` function for non-UI modules (search.rs / audio.rs / config.rs / playlist.rs) to thread-safely retrieve current language translation texts
+- ✨ **Multi-language AI prompts**: Each language's AI song info query prompt outputs in the corresponding language, ensuring response language matches the UI language
+
+### 🔧 Improvements
+
+- 🌐 **CLI help internationalization**: Command-line `-h` help information now follows the UI language setting
+- 🌐 **Error message internationalization**: Audio errors, search errors, config errors, directory errors, etc. now follow the UI language
+- 🌐 **Dialog title internationalization**: macOS / Linux folder selection dialog titles now follow the UI language
+- ♻️ **Code decoupling**: Modules no longer hardcode text strings; all text is read via `self.t()` or `langs::global_texts()`
+
+### 🐞 Bug Fixes
+
+- 🛠️ **Comments mode keyboard focus fix**: fixed an issue where Up/Down keys still controlled the song list instead of the comments list when viewing comments in online search / juhe search / playlist search
+- 🛠️ **Linux folder dialog fix**: fixed an issue where pressing `o` on Linux could not open a graphical folder selection dialog; now exits raw mode before calling the dialog and no longer falls back to terminal input when the dialog succeeds
+- 🛠️ **UTF-8 log slicing safety fix**: fixed a potential crash caused by byte-slicing multi-byte UTF-8 characters in log output
+- 🛠️ **Config file formatting fix**: fixed a bug where double `replace("{}")` in config error messages prevented the second placeholder from being replaced correctly
 
 ---
 

@@ -514,7 +514,7 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
 
         let client = match reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(60))
-            .user_agent("TerMusicRust/1.5.0")
+            .user_agent("TerMusicRust/1.6.0")
             .build()
         {
             Ok(c) => c,
@@ -522,7 +522,7 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
                 let _ = tx.send(SongInfoChunk {
                     delta: String::new(),
                     done: true,
-                    error: Some(format!("创建 HTTP 客户端失败: {}", e)),
+                    error: Some(crate::langs::global_texts().fmt_http_client_failed.replace("{}", &e.to_string())),
                 });
                 return;
             }
@@ -549,7 +549,7 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
                 let _ = tx.send(SongInfoChunk {
                     delta: String::new(),
                     done: true,
-                    error: Some(format!("请求API接口失败: {}", e)),
+                    error: Some(crate::langs::global_texts().fmt_api_request_failed.replace("{}", &e.to_string())),
                 });
                 return;
             }
@@ -567,7 +567,7 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
             let _ = tx.send(SongInfoChunk {
                 delta: String::new(),
                 done: true,
-                error: Some(format!("请求API接口错误: {}", msg)),
+                error: Some(crate::langs::global_texts().fmt_api_request_error.replace("{}", &msg)),
             });
             return;
         }
@@ -622,7 +622,7 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
                     let _ = tx.send(SongInfoChunk {
                         delta: String::new(),
                         done: true,
-                        error: Some("读取流式响应失败".to_string()),
+                        error: Some(crate::langs::global_texts().stream_read_failed.to_string()),
                     });
                     return;
                 }
@@ -1044,7 +1044,7 @@ fn search_kuwo_playlists_legacy(client: &reqwest::blocking::Client, query: &str,
         }
     };
 
-    log_file!("[Playlist][KW][Legacy] 响应(前200): {}", &text[..text.len().min(200)]);
+    log_file!("[Playlist][KW][Legacy] 响应(前200): {}", preview_for_log(&text, 200));
 
     let v = match parse_kuwo_legacy_value(&text) {
         Some(v) => v,
@@ -1179,7 +1179,7 @@ fn search_kuwo_playlists(client: &reqwest::blocking::Client, query: &str, page: 
                 continue;
             }
         };
-        log_file!("[Playlist][KW] 响应(前200): {}", &text[..text.len().min(200)]);
+        log_file!("[Playlist][KW] 响应(前200): {}", preview_for_log(&text, 200));
 
         let v: serde_json::Value = match serde_json::from_str(&text) {
             Ok(v) => v,
@@ -1782,7 +1782,7 @@ fn fetch_kuwo_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &s
         }
     };
 
-    log_file!("[Playlist][KW] 歌单详情响应(前200): {}", &text[..text.len().min(200)]);
+    log_file!("[Playlist][KW] 歌单详情响应(前200): {}", preview_for_log(&text, 200));
 
     let v: serde_json::Value = match serde_json::from_str(&text) {
         Ok(v) => v,
@@ -2165,7 +2165,7 @@ where
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some("创建HTTP客户端失败".to_string()),
+                error: Some(crate::langs::global_texts().fmt_http_client_failed.replace("{}", "").to_string()),
             }
         }
     };
@@ -2185,12 +2185,12 @@ where
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some("无法获取下载链接，该歌曲可能需要VIP或已下架".to_string()),
+                error: Some(crate::langs::global_texts().no_download_link_vip.to_string()),
             }
         }
     };
 
-    log_file!("[Download] 获取到URL: {}...", &mp3_url[..mp3_url.len().min(80)]);
+    log_file!("[Download] 获取到URL: {}...", preview_for_log(&mp3_url, 80));
     on_progress(5);
 
     // 下载音频文件（流式读取以支持进度）
@@ -2208,7 +2208,7 @@ where
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some(format!("下载请求失败: {}", e)),
+                error: Some(crate::langs::global_texts().fmt_download_request_failed.replace("{}", &e.to_string())),
             }
         }
     };
@@ -2224,7 +2224,7 @@ where
         return DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some("该歌曲无法下载（服务器返回了网页，可能需要VIP）".to_string()),
+            error: Some(crate::langs::global_texts().download_vip_required.to_string()),
         }
     }
 
@@ -2268,7 +2268,7 @@ where
                 return DownloadResult {
                     song: song.clone(),
                     local_path: None,
-                    error: Some(format!("读取响应数据失败: {}", e)),
+                    error: Some(crate::langs::global_texts().fmt_read_response_failed.replace("{}", &e.to_string())),
                 }
             }
         }
@@ -2290,7 +2290,7 @@ where
         return DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some(format!("创建目录失败: {}", e)),
+            error: Some(crate::langs::global_texts().fmt_mkdir_failed.replace("{}", &e.to_string())),
         }
     }
 
@@ -2321,7 +2321,7 @@ where
         Err(e) => DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some(format!("写入文件失败: {}", e)),
+            error: Some(crate::langs::global_texts().fmt_write_file_failed.replace("{}", &e.to_string())),
         }
     }
 }
@@ -2335,7 +2335,7 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some("创建HTTP客户端失败".to_string()),
+                error: Some(crate::langs::global_texts().fmt_http_client_failed.replace("{}", "").to_string()),
             }
         }
     };
@@ -2354,7 +2354,7 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some("无法获取下载链接，该歌曲可能需要VIP或已下架".to_string()),
+                error: Some(crate::langs::global_texts().no_download_link_vip.to_string()),
             }
         }
     };
@@ -2374,7 +2374,7 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some(format!("下载请求失败: {}", e)),
+                error: Some(crate::langs::global_texts().fmt_download_request_failed.replace("{}", &e.to_string())),
             }
         }
     };
@@ -2390,7 +2390,7 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
         return DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some("该歌曲无法下载（服务器返回了网页，可能需要VIP）".to_string()),
+            error: Some(crate::langs::global_texts().download_vip_required.to_string()),
         };
     }
 
@@ -2400,7 +2400,7 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some(format!("读取响应数据失败: {}", e)),
+                error: Some(crate::langs::global_texts().fmt_read_response_failed.replace("{}", &e.to_string())),
             }
         }
     };
@@ -2419,7 +2419,7 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
         return DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some(format!("创建目录失败: {}", e)),
+            error: Some(crate::langs::global_texts().fmt_mkdir_failed.replace("{}", &e.to_string())),
         };
     }
 
@@ -2441,7 +2441,7 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
         Err(e) => DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some(format!("写入文件失败: {}", e)),
+            error: Some(crate::langs::global_texts().fmt_write_file_failed.replace("{}", &e.to_string())),
         },
     }
 }
@@ -2624,7 +2624,7 @@ fn get_netease_download_url(client: &reqwest::blocking::Client, song_id: i64) ->
 /// 验证下载的数据是否为有效音频
 fn validate_audio_data(bytes: &[u8]) -> Result<(), String> {
     if bytes.len() < 4 {
-        return Err("下载数据过小，不是有效的音频文件".to_string());
+        return Err(crate::langs::global_texts().download_data_too_small.to_string());
     }
 
     let header = &bytes[0..4];
@@ -2648,7 +2648,7 @@ fn validate_audio_data(bytes: &[u8]) -> Result<(), String> {
         if lower.contains("<!doctype") || lower.contains("<html") || lower.contains("<head")
             || lower.contains("抱歉") || lower.contains("not found") || lower.contains("error")
         {
-            return Err("该歌曲无法下载（服务器返回了网页而非音频，可能需要VIP或已下架）".to_string());
+            return Err(crate::langs::global_texts().download_not_audio_vip.to_string());
         }
     }
 
@@ -2657,7 +2657,7 @@ fn validate_audio_data(bytes: &[u8]) -> Result<(), String> {
     if bytes.len() > 10240 {
         Ok(())
     } else {
-        Err("下载数据不是有效的音频文件".to_string())
+        Err(crate::langs::global_texts().download_data_not_audio.to_string())
     }
 }
 
@@ -2709,20 +2709,20 @@ fn create_github_discussion(
     if github_token.trim().is_empty() {
         return GitHubDiscussionResult {
             url: None,
-            error: Some("未配置 GitHub Token，无法创建 Discussion。请在配置文件中设置 github_token。".to_string()),
+            error: Some(crate::langs::global_texts().github_token_not_configured.to_string()),
         };
     }
 
     let client = match reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
-        .user_agent("TerMusicRust/1.5.0")
+        .user_agent("TerMusicRust/1.6.0")
         .build()
     {
         Ok(c) => c,
         Err(e) => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(format!("创建 HTTP 客户端失败: {}", e)),
+                error: Some(crate::langs::global_texts().fmt_http_client_failed.replace("{}", &e.to_string())),
             }
         }
     };
@@ -2732,7 +2732,7 @@ fn create_github_discussion(
     if parts.len() != 2 {
         return GitHubDiscussionResult {
             url: None,
-            error: Some(format!("GitHub 仓库格式错误，应为 owner/repo，实际: {}", github_repo)),
+            error: Some(crate::langs::global_texts().fmt_github_repo_format_error.replace("{}", github_repo)),
         };
     }
     let owner = parts[0];
@@ -2820,7 +2820,7 @@ fn create_github_discussion(
         Err(e) => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(format!("请求 GitHub API 失败: {}", e)),
+                error: Some(crate::langs::global_texts().fmt_github_api_request_failed.replace("{}", &e.to_string())),
             }
         }
     };
@@ -2830,7 +2830,7 @@ fn create_github_discussion(
         let text = response.text().unwrap_or_default();
         return GitHubDiscussionResult {
             url: None,
-            error: Some(format!("GitHub API 请求失败 (HTTP {}): {}", status.as_u16(), text.chars().take(200).collect::<String>())),
+            error: Some(crate::langs::global_texts().fmt_github_api_http_error.replace("{}", &status.as_u16().to_string()).replace("{}", &text.chars().take(200).collect::<String>())),
         };
     }
 
@@ -2839,7 +2839,7 @@ fn create_github_discussion(
         Err(e) => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(format!("解析 GitHub API 响应失败: {}", e)),
+                error: Some(crate::langs::global_texts().fmt_github_api_parse_failed.replace("{}", &e.to_string())),
             }
         }
     };
@@ -2851,10 +2851,10 @@ fn create_github_discussion(
             .and_then(|arr| arr.first())
             .and_then(|e| e.get("message"))
             .and_then(|m| m.as_str())
-            .unwrap_or("未知 GraphQL 错误");
+            .unwrap_or(crate::langs::global_texts().unknown_graphql_error);
         return GitHubDiscussionResult {
             url: None,
-            error: Some(format!("GitHub GraphQL 错误: {}", msg)),
+            error: Some(crate::langs::global_texts().fmt_github_graphql_error.replace("{}", msg)),
         };
     }
 
@@ -2866,7 +2866,7 @@ fn create_github_discussion(
         None => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some("未找到仓库，请检查 github_repo 配置。".to_string()),
+                error: Some(crate::langs::global_texts().github_repo_not_found.to_string()),
             }
         }
     };
@@ -2876,7 +2876,7 @@ fn create_github_discussion(
         None => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some("无法获取仓库 ID。".to_string()),
+                error: Some(crate::langs::global_texts().github_repo_id_failed.to_string()),
             }
         }
     };
@@ -2902,7 +2902,7 @@ fn create_github_discussion(
         None => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some("仓库中未找到 'show-and-tell' Discussion 类别。请先在 GitHub 仓库设置中启用 Discussions 并确认该类别存在。".to_string()),
+                error: Some(crate::langs::global_texts().github_discussion_category_not_found.to_string()),
             }
         }
     };
@@ -2934,7 +2934,7 @@ fn create_github_discussion(
         Err(e) => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(format!("创建 Discussion 请求失败: {}", e)),
+                error: Some(crate::langs::global_texts().fmt_discussion_request_failed.replace("{}", &e.to_string())),
             }
         }
     };
@@ -2944,7 +2944,7 @@ fn create_github_discussion(
         let text = response.text().unwrap_or_default();
         return GitHubDiscussionResult {
             url: None,
-            error: Some(format!("创建 Discussion 失败 (HTTP {}): {}", status.as_u16(), text.chars().take(200).collect::<String>())),
+            error: Some(crate::langs::global_texts().fmt_discussion_http_error.replace("{}", &status.as_u16().to_string()).replace("{}", &text.chars().take(200).collect::<String>())),
         };
     }
 
@@ -2953,7 +2953,7 @@ fn create_github_discussion(
         Err(e) => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(format!("解析创建 Discussion 响应失败: {}", e)),
+                error: Some(crate::langs::global_texts().fmt_discussion_parse_failed.replace("{}", &e.to_string())),
             }
         }
     };
@@ -2965,10 +2965,10 @@ fn create_github_discussion(
             .and_then(|arr| arr.first())
             .and_then(|e| e.get("message"))
             .and_then(|m| m.as_str())
-            .unwrap_or("未知 GraphQL 错误");
+            .unwrap_or(crate::langs::global_texts().unknown_graphql_error);
         return GitHubDiscussionResult {
             url: None,
-            error: Some(format!("创建 Discussion GraphQL 错误: {}", msg)),
+            error: Some(crate::langs::global_texts().fmt_discussion_graphql_error.replace("{}", msg)),
         };
     }
 
@@ -3168,7 +3168,7 @@ fn get_primary_juhe_download_url(client: &reqwest::blocking::Client, song: &Onli
             .send()
         {
             if let Ok(text) = response.text() {
-                log_file!("[JuheURL-main] 响应(前200): {}", &text[..text.len().min(200)]);
+                log_file!("[JuheURL-main] 响应(前200): {}", preview_for_log(&text, 200));
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                     if let Some(url) = extract_juhe_url(&value) {
                         return Some(url);
@@ -3210,7 +3210,7 @@ fn get_lerd_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) 
             .send()
         {
             if let Ok(text) = response.text() {
-                log_file!("[JuheURL-lerd] 响应(post,前200): {}", &text[..text.len().min(200)]);
+                log_file!("[JuheURL-lerd] 响应(post,前200): {}", preview_for_log(&text, 200));
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                     if let Some(url) = extract_juhe_url(&value) {
                         return Some(url);
@@ -3242,7 +3242,7 @@ fn get_huibq_download_url(client: &reqwest::blocking::Client, song: &OnlineSong)
             .send()
         {
             if let Ok(text) = response.text() {
-                log_file!("[JuheURL-huibq] 响应(前200): {}", &text[..text.len().min(200)]);
+                log_file!("[JuheURL-lerd] 响应(post,前200): {}", preview_for_log(&text, 200));
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                     if let Some(url) = extract_juhe_url(&value) {
                         return Some(url);
@@ -3382,7 +3382,7 @@ pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, musi
                         juhe_song_id: String::new(),
                     },
                     lyrics: None,
-                    error: Some(format!("创建HTTP客户端失败: {}", e)),
+                    error: Some(crate::langs::global_texts().fmt_http_client_failed.replace("{}", &e.to_string())),
                 });
                 return;
             }
@@ -3451,7 +3451,7 @@ pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, musi
                         juhe_song_id: String::new(),
                     },
                     lyrics: None,
-                    error: Some("搜索无结果".to_string()),
+                    error: Some(crate::langs::global_texts().search_no_result.to_string()),
                 });
                 return;
             }
@@ -3474,7 +3474,7 @@ pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, musi
                     music_path,
                     song,
                     lyrics: None,
-                    error: Some("无法获取歌词".to_string()),
+                    error: Some(crate::langs::global_texts().lyrics_fetch_failed.to_string()),
                 });
             }
         }

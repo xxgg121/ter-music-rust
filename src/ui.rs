@@ -15,6 +15,7 @@ use crossterm::{
 
 use crate::audio::AudioPlayer;
 use crate::defs::{PlayMode, PlayState, Playlist};
+use crate::langs::{UiLanguage, LangTexts};
 use crate::lyrics::{Lyrics, LyricsDownloadResult};
 use crate::search::{OnlineSong, OnlinePlaylist, SearchDownloadResult, PlaylistSearchResult, PlaylistSongsResult, DownloadProgress, SongCommentItem, SongCommentsResult, GitHubDiscussionResult};
 
@@ -125,64 +126,6 @@ impl UiTheme {
                 progress_text: style::Color::Rgb { r: 108, g: 188, b: 255 },
                 info_text: style::Color::Rgb { r: 120, g: 224, b: 255 },
             },
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum UiLanguage {
-    ZhCn,
-    ZhTw,
-    En,
-    Ja,
-    Ko,
-}
-
-impl UiLanguage {
-    fn next(self) -> Self {
-        match self {
-            UiLanguage::ZhCn => UiLanguage::ZhTw,
-            UiLanguage::ZhTw => UiLanguage::En,
-            UiLanguage::En => UiLanguage::Ja,
-            UiLanguage::Ja => UiLanguage::Ko,
-            UiLanguage::Ko => UiLanguage::ZhCn,
-        }
-    }
-
-    fn config_key(self) -> &'static str {
-        match self {
-            UiLanguage::ZhCn => "zh-CN",
-            UiLanguage::ZhTw => "zh-TW",
-            UiLanguage::En => "en",
-            UiLanguage::Ja => "ja",
-            UiLanguage::Ko => "ko",
-        }
-    }
-
-    fn from_config_key(s: &str) -> Self {
-        if s.eq_ignore_ascii_case("zh-cn") || s.eq_ignore_ascii_case("zh_hans") || s.eq_ignore_ascii_case("cn") || s == "简体" || s == "中文简体" {
-            UiLanguage::ZhCn
-        } else if s.eq_ignore_ascii_case("zh-tw") || s.eq_ignore_ascii_case("zh_hant") || s.eq_ignore_ascii_case("tw") || s == "繁体" || s == "中文繁体" {
-            UiLanguage::ZhTw
-        } else if s.eq_ignore_ascii_case("en") || s.eq_ignore_ascii_case("english") {
-            UiLanguage::En
-        } else if s.eq_ignore_ascii_case("ja") || s.eq_ignore_ascii_case("jp") || s.eq_ignore_ascii_case("japanese") {
-            UiLanguage::Ja
-        } else if s.eq_ignore_ascii_case("ko") || s.eq_ignore_ascii_case("kr") || s.eq_ignore_ascii_case("korean") {
-            UiLanguage::Ko
-        } else {
-            UiLanguage::ZhCn
-        }
-    }
-
-    #[allow(dead_code)]
-    fn display_name(self) -> &'static str {
-        match self {
-            UiLanguage::ZhCn => "中文简体",
-            UiLanguage::ZhTw => "中文繁體",
-            UiLanguage::En => "English",
-            UiLanguage::Ja => "日本語",
-            UiLanguage::Ko => "한국어",
         }
     }
 }
@@ -554,7 +497,7 @@ impl UserInterface {
             juhe_lyrics_loading: false,
             theme: UiTheme::Neon,
             theme_colors: UiTheme::Neon.colors(),
-            language: UiLanguage::ZhCn,
+            language: UiLanguage::Sc,
             online_auto_skip_times: VecDeque::new(),
         }
     }
@@ -593,14 +536,8 @@ impl UserInterface {
         Self::adjust_scroll_offset(*selected, scroll_offset, visible_count);
     }
 
-    fn i18n<'a>(&self, zh_cn: &'a str, zh_tw: &'a str, en: &'a str, ja: &'a str, ko: &'a str) -> &'a str {
-        match self.language {
-            UiLanguage::ZhCn => zh_cn,
-            UiLanguage::ZhTw => zh_tw,
-            UiLanguage::En => en,
-            UiLanguage::Ja => ja,
-            UiLanguage::Ko => ko,
-        }
+    fn t(&self) -> &'static LangTexts {
+        self.language.texts()
     }
 
     fn resolved_api_key(&self) -> Option<String> {
@@ -653,20 +590,12 @@ impl UserInterface {
             self.song_info_name = file.name.trim().to_string();
             self.start_fetch_song_info_for_current_song(&file.name);
         } else {
-            self.song_info_content = self
-                .i18n(
-                    "请选择歌曲播放后再查询。",
-                    "請先播放歌曲再查詢。",
-                    "Please play a song before querying.",
-                    "先に曲を再生してから取得してください。",
-                    "먼저 곡을 재생한 뒤 조회하세요."
-                )
-                .to_string();
+            self.song_info_content = self.t().please_select_song_query.to_string();
         }
     }
 
     fn now_playing_prefix(&self) -> &'static str {
-        self.i18n("正在播放: ", "正在播放: ", "Now Playing: ", "再生中: ", "재생 중: ")
+        self.t().now_playing_prefix
     }
 
     fn format_playlist_play_count(&self, count: Option<usize>) -> String {
@@ -680,7 +609,7 @@ impl UserInterface {
             if text.ends_with(".0") {
                 text.truncate(text.len() - 2);
             }
-            let unit = self.i18n("万", "萬", "w", "万", "만");
+            let unit = self.t().play_count_unit;
             format!("{}{}", text, unit)
         } else {
             n.to_string()
@@ -688,17 +617,7 @@ impl UserInterface {
     }
 
     fn is_now_playing_message(&self, message: &str) -> bool {
-        const PREFIXES: [&str; 8] = [
-            "正在播放: ",
-            "正在播放：",
-            "Now Playing: ",
-            "Now Playing：",
-            "再生中: ",
-            "再生中：",
-            "재생 중: ",
-            "재생 중：",
-        ];
-        PREFIXES.iter().any(|p| message.starts_with(p))
+        self.t().now_playing_prefixes.iter().any(|p| message.starts_with(p))
     }
 
     pub fn update_now_playing_status(&mut self, song_name: &str) {
@@ -709,19 +628,89 @@ impl UserInterface {
 
     fn play_mode_text(&self, mode: PlayMode) -> &'static str {
         match mode {
-            PlayMode::Single => self.i18n("单曲播放", "單曲播放", "Single", "単曲再生", "한 곡 재생"),
-            PlayMode::RepeatOne => self.i18n("单曲循环", "單曲循環", "Repeat One", "1曲リピート", "한 곡 반복"),
-            PlayMode::Sequence => self.i18n("顺序播放", "順序播放", "Sequence", "順番再生", "순차 재생"),
-            PlayMode::LoopAll => self.i18n("列表循环", "列表循環", "Loop All", "リストループ", "목록 반복"),
-            PlayMode::Random => self.i18n("随机播放", "隨機播放", "Random", "シャッフル", "셔플"),
+            PlayMode::Single => self.t().play_mode_single,
+            PlayMode::RepeatOne => self.t().play_mode_repeat_one,
+            PlayMode::Sequence => self.t().play_mode_sequence,
+            PlayMode::LoopAll => self.t().play_mode_loop_all,
+            PlayMode::Random => self.t().play_mode_random,
         }
     }
 
     fn play_state_text(&self, state: PlayState) -> &'static str {
         match state {
-            PlayState::Playing => self.i18n("播放中", "播放中", "Playing", "再生中", "재생 중"),
-            PlayState::Paused => self.i18n("已暂停", "已暫停", "Paused", "一時停止", "일시정지"),
-            PlayState::Stopped => self.i18n("已停止", "已停止", "Stopped", "停止", "정지"),
+            PlayState::Playing => self.t().play_state_playing,
+            PlayState::Paused => self.t().play_state_paused,
+            PlayState::Stopped => self.t().play_state_stopped,
+        }
+    }
+
+    /// 获取快捷键提示文本（根据当前模式和终端宽度动态选择）
+    fn get_help_tip_text(&self) -> String {
+        if self.search_mode {
+            if self.online_search_mode {
+                let search_label = if self.playlist_search_mode {
+                    self.t().search_playlist.to_string()
+                } else if self.juhe_search_mode {
+                    self.t().search_juhe.to_string()
+                } else {
+                    self.t().search_online.to_string()
+                };
+                if self.terminal_width >= 80 {
+                    format!(
+                        "{}: {}",
+                        search_label,
+                        self.t().tip_online_wide.to_string()
+                    )
+                } else if self.terminal_width >= 60 {
+                    format!(
+                        "{}: {}",
+                        search_label,
+                        self.t().tip_online_medium.to_string()
+                    )
+                } else {
+                    format!("{}: {}", search_label, self.t().tip_online_narrow)
+                }
+            } else if self.terminal_width >= 60 {
+                self.t().tip_local_wide.to_string()
+            } else {
+                self.t().tip_local_narrow.to_string()
+            }
+        } else if self.favorites_mode {
+            if self.terminal_width >= 60 {
+                self.t().tip_favorites_wide.to_string()
+            } else {
+                self.t().tip_favorites_narrow.to_string()
+            }
+        } else if self.dir_history_mode {
+            if self.terminal_width >= 60 {
+                self.t().tip_dir_wide.to_string()
+            } else {
+                self.t().tip_dir_narrow.to_string()
+            }
+        } else if self.help_mode {
+            if self.terminal_width >= 80 {
+                self.t().tip_help_wide.to_string()
+            } else {
+                self.t().tip_help_narrow.to_string()
+            }
+        } else if self.song_info_mode {
+            if self.terminal_width >= 80 {
+                self.t().tip_song_info_wide.to_string()
+            } else {
+                self.t().tip_song_info_narrow.to_string()
+            }
+        } else if self.comments_mode {
+            if self.terminal_width >= 80 {
+                self.t().tip_comments_wide.to_string()
+            } else {
+                self.t().tip_comments_narrow.to_string()
+            }
+        } else if self.terminal_width >= 100 {
+            self.t().tip_keys_wide.to_string()
+        } else if self.terminal_width >= 80 {
+            self.t().tip_keys_medium.to_string()
+        } else {
+            self.t().tip_keys_narrow.to_string()
         }
     }
 
@@ -754,6 +743,19 @@ impl UserInterface {
             current_width += ch_width;
         }
         format!("{}...", truncated)
+    }
+
+    /// 按显示宽度分割字符串，返回 (不超宽部分, 溢出部分)
+    fn split_at_display_width(text: &str, max_width: usize) -> (&str, &str) {
+        let mut current_width = 0;
+        for (i, ch) in text.char_indices() {
+            let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+            if current_width + ch_width > max_width {
+                return (&text[..i], &text[i..]);
+            }
+            current_width += ch_width;
+        }
+        (text, "")
     }
 
     /// 清除列表区域下方的残留行
@@ -802,15 +804,15 @@ impl UserInterface {
                     let ratio = (target_time.as_secs_f64() / total_secs).clamp(0.0, 1.0);
                     player.seek(ratio)
                 } else {
-                    Err("无法跳转：歌曲时长为零".to_string())
+                    Err(self.t().seek_error_zero_duration.to_string())
                 }
             } else {
-                Err("无法跳转：未知歌曲时长".to_string())
+                Err(self.t().seek_error_unknown_duration.to_string())
             }
         };
 
         if let Err(e) = result {
-            self.update_status(&format!("跳转失败: {}", e));
+            self.update_status(&self.t().fmt_seek_failed.replace("{}", &e));
         }
     }
 
@@ -924,30 +926,8 @@ impl UserInterface {
     /// 根据当前语言构造 DeepSeek 歌曲信息提示词
     fn build_song_info_prompt(&self, song_name: &str) -> String {
         let clean_name = song_name.trim();
-        match self.language {
-            UiLanguage::ZhCn => format!(
-                "请根据歌曲名称整理该歌曲的详细信息。禁止输出任何开场白、问候语或自我介绍，直接输出歌曲信息。\n\n歌曲名称：{}\n\n按以下结构详细输出，每项尽量展开，无法确认的标注「暂无公开资料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手详情：（包括国籍、出生地、出生日期、星座、血型、身高、体重、职业、毕业院校、代表作品、主要成就等）\n词曲创作：（作词、作曲、编曲、制作人等完整创作团队）\n发行时间：（具体日期，若有不同版本请分别列出）\n所属专辑：（专辑名称、第几首曲目、专辑曲目列表）\n创作背景：（详细描述创作灵感来源、幕后故事、创作过程中的趣闻等）\n歌词大意：（深入解读歌词含义、表达的情感与主题思想）\n音乐风格：（流派、BPM、调性、节奏特点、特殊编曲或乐器使用等）\n商业成绩：（榜单排名、销量、播放量、认证等）\n获奖记录：（音乐奖项、提名等）\n影响评价：（乐评人评价、文化影响、历史地位等）\n翻唱引用：（知名翻唱版本、影视/广告/游戏等中的使用）\n趣闻轶事：（与歌曲相关的冷知识、轶事、趣闻等）\n\n要求：\n- 信息尽量准确详实，避免杜撰，不确定的标注「据传」或「待考证」。\n- 如有多个歌手或版本，以原唱或最知名版本为主，必要时补充其他版本。\n- 每项内容尽量详细展开，不要过于简略。\n- 绝对禁止输出开场白、问候语、自我介绍，禁止使用序号编号。\n- 必须使用简体中文回答。",
-                clean_name
-            ),
-            UiLanguage::ZhTw => format!(
-                "請根據歌曲名稱整理該歌曲的詳細資訊。禁止輸出任何開場白、問候語或自我介紹，直接輸出歌曲資訊。\n\n歌曲名稱：{}\n\n依照以下結構詳細輸出，每項盡量展開，無法確認的標註「暫無公開資料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手詳情：（包括國籍、出生地、出生日期、星座、血型、身高、體重、職業、畢業院校、代表作、主要成就等）\n詞曲創作：（作詞、作曲、編曲、製作人等完整創作團隊）\n發行時間：（具體日期，若有不同版本請分別列出）\n所屬專輯：（專輯名稱、第幾首曲目、專輯曲目列表）\n創作背景：（詳細描述創作靈感來源、幕後故事、創作過程中的趣聞等）\n歌詞大意：（深入解讀歌詞含義、表達的情感與主題思想）\n音樂風格：（流派、BPM、調性、節奏特點、特殊編曲或樂器使用等）\n商業成績：（榜單排名、銷量、播放量、認證等）\n得獎紀錄：（音樂獎項、提名等）\n影響評價：（樂評人評價、文化影響、歷史地位等）\n翻唱引用：（知名翻唱版本、影視/廣告/遊戲等中的使用）\n趣聞軼事：（與歌曲相關的冷知識、軼事、趣聞等）\n\n要求：\n- 資訊盡量準確詳實，避免杜撰，不確定的標註「據傳」或「待考證」。\n- 若有多位歌手或多個版本，以原唱或最知名版本為主，必要時補充其他版本。\n- 每項內容盡量詳細展開，不要過於簡略。\n- 絕對禁止輸出開場白、問候語、自我介紹，禁止使用序號編號。\n- 必須使用繁體中文回答。",
-                clean_name
-            ),
-            UiLanguage::En => format!(
-                "Compile detailed information about the song based on its title. Do NOT output any preamble, greeting, or self-introduction. Output the song information directly.\n\nSong Title: {}\n\nOutput in the following structure with detailed descriptions. If any item cannot be verified, write \"No public information available\":\n\nPerformers: (including lead vocals, backing vocals, featured artists, etc.)\nArtist Details: (including nationality, birthplace, date of birth, zodiac sign, blood type, height, weight, occupation, alma mater, notable works, major achievements, etc.)\nSongwriting & Production: (lyricist, composer, arranger, producer, full creative team)\nRelease Date: (specific date; list different versions separately if applicable)\nAlbum: (album name, track number, album track listing)\nCreative Background: (detailed description of inspiration, behind-the-scenes stories, interesting anecdotes during creation)\nLyrics Meaning: (in-depth interpretation of lyrics, emotions and themes expressed)\nMusical Style: (genre, BPM, key, rhythm characteristics, special arrangements or instruments)\nCommercial Performance: (chart positions, sales, streaming numbers, certifications)\nAwards & Nominations: (music awards, nominations)\nImpact & Reviews: (critic reviews, cultural impact, historical significance)\nCovers & Usage: (notable cover versions, usage in films/ads/games/etc.)\nAnecdotes: (trivia, anecdotes related to the song)\n\nRequirements:\n- Keep information as accurate and detailed as possible; avoid fabrication. Mark uncertain info as \"Reportedly\" or \"Unverified\".\n- If multiple singers or versions exist, prioritize the original or most well-known version, and supplement with others.\n- Elaborate on each item in detail rather than being too brief.\n- Absolutely NO preamble, greeting, or self-introduction. Do NOT use numbered lists.\n- You MUST respond in English.",
-                clean_name
-            ),
-            UiLanguage::Ja => format!(
-                "楽曲名に基づいて楽曲の詳細情報を整理してください。冒頭の挨拶や自己紹介は一切出力せず、直接楽曲情報を出力してください。\n\n楽曲名：{}\n\n以下の構成で各項目を詳しく記述してください。取得できない項目は「公開情報なし」と記載してください。\n\n歌手：（メインボーカル、コーラス、フィーチャリングアーティストなど）\n歌手詳細：（国籍、出身地、生年月日、星座、血液型、身長、体重、職業、卒業校、代表作、主な受賞歴など）\n作詞・作曲・制作：（作詞、作曲、編曲、プロデューサーなど完全な制作チーム）\nリリース日：（具体的な日付、異なるバージョンがあればそれぞれ記載）\n収録アルバム：（アルバム名、トラック番号、アルバム収録曲一覧）\n制作背景：（インスピレーションの源泉、舞台裏のエピソード、制作中の逸話などを詳しく）\n歌詞の大意：（歌詞の解釈、表現されている感情とテーマを深く考察）\n音楽スタイル：（ジャンル、BPM、キー、リズムの特徴、特殊なアレンジや楽器使用など）\n商業成績：（チャート順位、売上、再生回数、認定など）\n受賞・ノミネート：（音楽賞、ノミネーションなど）\n影響と評価：（評論家の評価、文化的影響、歴史的意義など）\nカバーと使用例：（有名なカバーバージョン、映画/CM/ゲームなどでの使用）\n興味深い逸話：（楽曲にまつわるトリビア、逸話など）\n\n要求：\n- 情報はできるだけ正確かつ詳細にし、捏造を避けてください。不確かな情報は「伝聞」や「未確認」と記載してください。\n- 複数の歌手やバージョンがある場合は、原曲または最も有名な版を優先し、必要に応じて補足してください。\n- 各項目を簡略にせず、できるだけ詳しく記述してください。\n- 冒頭の挨拶や自己紹介は絶対に出力せず、番号付きリストの使用も禁止します。\n- 必ず日本語で回答してください。",
-                clean_name
-            ),
-            UiLanguage::Ko => format!(
-                "곡명을 바탕으로 해당 곡의 상세 정보를 정리해 주세요. 서론, 인사말, 자기소개를 절대 출력하지 말고 곡 정보를 직접 출력해 주세요.\n\n곡명: {}\n\n아래 구조로 각 항목을 자세히 서술해 주세요. 확인할 수 없는 항목은 \"공개 자료 없음\"으로 표시해 주세요.\n\n가수：（메인 보컬, 백보컬, 피처링 아티스트 등）\n가수 상세：（국적, 출생지, 생년월일, 별자리, 혈액형, 키, 몸무게, 직업, 졸업 학교, 대표작, 주요 수상 경력 등）\n작사·작곡·제작：（작사, 작곡, 편곡, 프로듀서 등 전체 크리에이티브 팀）\n발매일：（구체적인 날짜, 다른 버전이 있으면 각각 표기）\n수록 앨범：（앨범명, 트랙 번호, 앨범 트랙 목록）\n창작 배경：（영감의 원천, 비하인드 스토리, 제작 중 에피소드 등 상세히）\n가사 개요：（가사 해석, 표현된 감정과 주제를 깊이 있게 분석）\n음악 스타일：（장르, BPM, 조성, 리듬 특징, 특수 편곡이나 악기 사용 등）\n상업 성적：（차트 순위, 판매량, 스트리밍 수, 인증 등）\n수상 및 후보：（음악상, 후보 지명 등）\n영향과 평가：（평론가 평가, 문화적 영향, 역사적 의의 등）\n커버 및 사용：（유명한 커버 버전, 영화/광고/게임 등에서의 사용）\n흥미로운 이야기：（곡과 관련된 트리비아, 일화 등）\n\n요구사항：\n- 정보는 최대한 정확하고 상세하게 작성하며, 지어내지 마세요. 불확실한 정보는 \"전해짐\" 또는 \"미확인\"으로 표시하세요.\n- 여러 가수나 버전이 있으면 원곡 또는 가장 널리 알려진 버전을 우선하고, 필요하면 보충하세요.\n- 각 항목을 너무 간단히 하지 말고 최대한 자세히 서술해 주세요.\n- 서론, 인사말, 자기소개는 절대 출력하지 말고, 번호 매기기 목록 사용도 금지합니다.\n- 반드시 한국어로 답변해 주세요.",
-                clean_name
-            ),
-        }
+        self.t().ai_prompt_template.replace("{}", clean_name)
     }
-
     /// 启动后台查询 AI 歌曲信息
     fn start_fetch_song_info_for_current_song(&mut self, song_name: &str) {
         self.song_info_loading = true;
@@ -973,21 +953,9 @@ impl UserInterface {
                             self.song_info_rx = None;
                             self.song_info_content = format!(
                                 "{}{}\n\n{}",
-                                self.i18n(
-                                    "查询失败：",
-                                    "查詢失敗：",
-                                    "Query failed: ",
-                                    "取得失敗: ",
-                                    "조회 실패: "
-                                ),
+                                self.t().query_failed,
                                 err,
-                                self.i18n(
-                                    "提示：可按 k 配置自定义 API 接口。",
-                                    "提示：可按 k 設定自訂 API 接口。",
-                                    "Tip: Press k to configure custom API endpoint.",
-                                    "ヒント: k でカスタム API エンドポイントを設定できます。",
-                                    "팁: k를 눌러 커스텀 API 엔드포인트를 설정할 수 있습니다."
-                                )
+                                self.t().api_config_hint
                             );
                             break;
                         }
@@ -1025,25 +993,13 @@ impl UserInterface {
                     if let Some(url) = result.url {
                         self.github_discussion_status = format!(
                             "{} {}",
-                            self.i18n(
-                                "已创建 Discussion:",
-                                "已建立 Discussion:",
-                                "Discussion created:",
-                                "Discussion 作成済み:",
-                                "Discussion 생성됨:"
-                            ),
+                            self.t().discussion_created,
                             url
                         );
                     } else if let Some(err) = result.error {
                         self.github_discussion_status = format!(
                             "{} {}",
-                            self.i18n(
-                                "创建 Discussion 失败:",
-                                "建立 Discussion 失敗:",
-                                "Discussion creation failed:",
-                                "Discussion 作成失敗:",
-                                "Discussion 생성 실패:"
-                            ),
+                            self.t().discussion_failed,
                             err
                         );
                     }
@@ -1076,13 +1032,7 @@ impl UserInterface {
         let repo = self.github_repo.clone();
 
         self.github_discussion_loading = true;
-        self.github_discussion_status = self.i18n(
-            "正在创建 Discussion...",
-            "正在建立 Discussion...",
-            "Creating Discussion...",
-            "Discussion を作成中...",
-            "Discussion 생성 중..."
-        ).to_string();
+        self.github_discussion_status = self.t().creating_discussion.to_string();
 
         self.github_discussion_rx = Some(
             crate::search::create_github_discussion_background(token, repo, name, content)
@@ -1139,7 +1089,7 @@ impl UserInterface {
                 stdout,
                 cursor::MoveTo(start_x, 8),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.i18n("请选择歌曲播放", "請選擇歌曲播放", "Select a song to play", "再生する曲を選択してください", "재생할 곡을 선택하세요")),
+                style::Print(self.t().select_song_to_play),
                 style::ResetColor,
             )?;
             return Ok(());
@@ -1151,14 +1101,14 @@ impl UserInterface {
                 stdout,
                 cursor::MoveTo(start_x, 8),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.i18n("正在查询歌曲信息...", "正在查詢歌曲資訊...", "Querying song information...", "楽曲情報を取得中...", "곡 정보를 조회하는 중...")),
+                style::Print(self.t().querying_song_info),
                 style::ResetColor,
             )?;
             return Ok(());
         }
 
         let content = if self.song_info_content.trim().is_empty() {
-            self.i18n("暂无查询结果，按 I 重新查询。", "暫無查詢結果，按 I 重新查詢。", "No result yet, press I to query again.", "結果はありません。I キーで再取得してください。", "결과가 없습니다. I 키로 다시 조회하세요.").to_string()
+            self.t().no_query_result.to_string()
         } else {
             self.song_info_content.clone()
         };
@@ -1289,27 +1239,9 @@ impl UserInterface {
         // 输入模式下，将光标定位到输入位置
         if self.api_key_input_mode {
             let prompt_text = match self.api_input_step {
-                0 => self.i18n(
-                    "输入接口地址: ",
-                    "輸入接口地址: ",
-                    "Input API URL: ",
-                    "API URLを入力: ",
-                    "API URL 입력: "
-                ),
-                1 => self.i18n(
-                    "输入API_KEY: ",
-                    "輸入API_KEY: ",
-                    "Input API_KEY: ",
-                    "API_KEYを入力: ",
-                    "API_KEY 입력: "
-                ),
-                2 => self.i18n(
-                    "输入模型名称: ",
-                    "輸入模型名稱: ",
-                    "Input model name: ",
-                    "モデル名を入力: ",
-                    "모델명 입력: "
-                ),
+                0 => self.t().input_api_url,
+                1 => self.t().input_api_key,
+                2 => self.t().input_model_name,
                 _ => "",
             };
             let prompt_len = unicode_width::UnicodeWidthStr::width(prompt_text);
@@ -1322,13 +1254,7 @@ impl UserInterface {
                 cursor::Show,
             )?;
         } else if self.github_token_input_mode {
-            let prompt_text = self.i18n(
-                "输入GitHub_Token: ",
-                "輸入GitHub_Token: ",
-                "Input GitHub_Token: ",
-                "GitHub_Tokenを入力: ",
-                "GitHub_Token 입력: "
-            );
+            let prompt_text = self.t().input_github_token;
             let prompt_len = unicode_width::UnicodeWidthStr::width(prompt_text);
             let value_len = unicode_width::UnicodeWidthStr::width(self.github_token_input_value.as_str());
             let left_width = (self.terminal_width as f32 * 0.50) as u16;
@@ -1343,14 +1269,14 @@ impl UserInterface {
             && !(self.playlist_search_mode && self.current_playlist.is_some()) {
             let prompt_text = if self.online_search_mode {
                 if self.playlist_search_mode {
-                    self.i18n("歌单搜索: ", "歌單搜尋: ", "Playlist Search: ", "プレイリスト検索: ", "플레이리스트 검색: ")
+                    self.t().search_prompt_playlist
                 } else if self.juhe_search_mode {
-                    self.i18n("聚合搜索: ", "聚合搜索: ", "Juhe Search: ", "聚合検索: ", "폴리머 검색: ")
+                    self.t().search_prompt_juhe
                 } else {
-                    self.i18n("网络搜索: ", "網路搜尋: ", "Online Search: ", "オンライン検索: ", "온라인 검색: ")
+                    self.t().search_prompt_online
                 }
             } else {
-                self.i18n("本地搜索: ", "本地搜尋: ", "Local Search: ", "ローカル検索: ", "로컬 검색: ")
+                self.t().search_prompt_local
             };
             let search_prompt_len = unicode_width::UnicodeWidthStr::width(prompt_text);
             let query_len = unicode_width::UnicodeWidthStr::width(self.search_query.as_str());
@@ -1375,13 +1301,7 @@ impl UserInterface {
     fn draw_header<W: Write>(&self, stdout: &mut W) -> io::Result<()> {
         // 根据终端宽度生成标题
         let width = self.terminal_width as usize;
-        let title = self.i18n(
-            "🎵 Ter-Music-Rust - 终端音乐播放器 🎵",
-            "🎵 Ter-Music-Rust - 終端音樂播放器 🎵",
-            "🎵 Ter-Music-Rust - Terminal Music Player 🎵",
-            "🎵 Ter-Music-Rust - ターミナル音楽プレーヤー 🎵",
-            "🎵 Ter-Music-Rust - 터미널 음악 플레이어 🎵",
-        );
+        let title = self.t().app_title;
 
         // 计算标题居中位置（使用显示宽度而非字符数）
         let title_len = unicode_width::UnicodeWidthStr::width(title);
@@ -1433,13 +1353,7 @@ impl UserInterface {
 
         if self.dir_history_mode {
             // 音乐目录模式：标题显示音乐目录
-            let dir_title = match self.language {
-                UiLanguage::ZhCn => format!("音乐目录 (共 {} 个)", self.dir_history.len()),
-                UiLanguage::ZhTw => format!("音樂目錄 (共 {} 個)", self.dir_history.len()),
-                UiLanguage::En => format!("Music Folders ({} total)", self.dir_history.len()),
-                UiLanguage::Ja => format!("音楽フォルダ (合計 {} 件)", self.dir_history.len()),
-                UiLanguage::Ko => format!("음악 폴더 (총 {}개)", self.dir_history.len()),
-            };
+            let dir_title = self.t().fmt_dir_title.replace("{}", &self.dir_history.len().to_string());
             let dir_title_width = unicode_width::UnicodeWidthStr::width(dir_title.as_str());
             let padding = left_width as usize - dir_title_width;
             queue!(
@@ -1522,7 +1436,7 @@ impl UserInterface {
                     stdout,
                     cursor::MoveTo(1, 7),
                     style::SetForegroundColor(self.theme_colors.info_text),
-                    style::Print("音乐目录为空，按 o 打开目录添加"),
+                    style::Print(self.t().dir_empty_hint),
                     style::ResetColor,
                 )?;
             }
@@ -1532,13 +1446,7 @@ impl UserInterface {
             Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
         } else if self.favorites_mode {
             // 收藏列表模式：标题显示收藏列表
-            let fav_title = match self.language {
-                UiLanguage::ZhCn => format!("收藏列表 (共 {} 首)", self.favorites.len()),
-                UiLanguage::ZhTw => format!("收藏列表 (共 {} 首)", self.favorites.len()),
-                UiLanguage::En => format!("Favorites ({} songs)", self.favorites.len()),
-                UiLanguage::Ja => format!("お気に入り ({} 曲)", self.favorites.len()),
-                UiLanguage::Ko => format!("즐겨찾기 (총 {}곡)", self.favorites.len()),
-            };
+            let fav_title = self.t().fmt_favorites_title.replace("{}", &self.favorites.len().to_string());
             let fav_title_width = unicode_width::UnicodeWidthStr::width(fav_title.as_str());
             let padding = left_width as usize - fav_title_width;
             queue!(
@@ -1654,7 +1562,7 @@ impl UserInterface {
                     stdout,
                     cursor::MoveTo(1, 7),
                     style::SetForegroundColor(style::Color::DarkGrey),
-                    style::Print("收藏列表为空，按 f 添加当前歌曲到收藏"),
+                    style::Print(self.t().favorites_empty_hint),
                     style::ResetColor,
                 )?;
             }
@@ -1681,26 +1589,26 @@ impl UserInterface {
                 if self.playlist_search_mode {
                     format!(
                         "{}{}",
-                        self.i18n("歌单搜索: ", "歌單搜尋: ", "Playlist Search: ", "プレイリスト検索: ", "플레이리스트 검색: "),
+                        self.t().search_prompt_playlist,
                         self.search_query
                     )
                 } else if self.juhe_search_mode {
                     format!(
                         "{}{}",
-                        self.i18n("聚合搜索: ", "聚合搜索: ", "Juhe Search: ", "聚合検索: ", "폴리머 검색: "),
+                        self.t().search_prompt_juhe,
                         self.search_query
                     )
                 } else {
                     format!(
                         "{}{}",
-                        self.i18n("网络搜索: ", "網路搜尋: ", "Online Search: ", "オンライン検索: ", "온라인 검색: "),
+                        self.t().search_prompt_online,
                         self.search_query
                     )
                 }
             } else {
                 format!(
                     "{}{}",
-                    self.i18n("本地搜索: ", "本地搜尋: ", "Local Search: ", "ローカル検索: ", "로컬 검색: "),
+                    self.t().search_prompt_local,
                     self.search_query
                 )
             };
@@ -1773,21 +1681,9 @@ impl UserInterface {
 
                     if total == 0 {
                         let hint = if self.search_query.is_empty() {
-                            self.i18n(
-                                "输入歌单名称后按 Enter 搜索歌单",
-                                "輸入歌單名稱後按 Enter 搜尋歌單",
-                                "Enter the playlist name and press Enter to search for the playlist",
-                                "プレイリスト名を入力してEnterキーを押すと、そのプレイリストが検索されます",
-                                "노래 목록 이름을 입력한 후 Enter를 누르면 노래 목록을 검색합니다",
-                            ).to_string()
+                            self.t().playlist_empty_hint
                         } else {
-                            self.i18n(
-                                "歌单搜索无结果，修改关键字后按 Enter 重新搜索",
-                                "歌單蒐索無結果，修改關鍵字後按Enter重新搜索",
-                                "No playlist results. Update keyword and press Enter again",
-                                "プレイリストの検索に結果が表示されません。キーワードを変更してEnterキーを押すと、再度検索できます",
-                                "노래 목록 검색 결과가 없어, 키워드를 수정한 후 Enter를 누르고 다시 검색하세요",
-                            ).to_string()
+                            self.t().playlist_no_result
                         };
                         queue!(
                             stdout,
@@ -1899,40 +1795,16 @@ impl UserInterface {
 
                     // 如果没有搜索结果
                     if total == 0 {
-                        let hint = if self.search_query.is_empty() {
+                        let hint: String = if self.search_query.is_empty() {
                             if self.juhe_search_mode {
-                                self.i18n(
-                                    "输入歌曲名称后按 Enter 搜索聚合搜索",
-                                    "輸入歌曲名稱後按 Enter 搜尋獨家音源",
-                                    "Enter song name, then press Enter to search Juhe",
-                                    "曲名を入力して Enter で独占音源検索",
-                                    "곡명을 입력하고 Enter로 독점음원 검색",
-                                ).to_string()
+                                self.t().juhe_enter_hint.to_string()
                             } else {
-                                self.i18n(
-                                    "输入歌曲名称后按 Enter 搜索网络歌曲",
-                                    "輸入歌曲名稱後按 Enter 搜尋網路歌曲",
-                                    "Enter song name, then press Enter to search online",
-                                    "曲名を入力して Enter でオンライン検索",
-                                    "곡명을 입력하고 Enter로 온라인 검색",
-                                ).to_string()
+                                self.t().online_enter_hint.to_string()
                             }
                         } else if self.online_search_page > 1 {
-                            match self.language {
-                                UiLanguage::ZhCn => format!("第{}页无结果，PgUp翻上页", self.online_search_page),
-                                UiLanguage::ZhTw => format!("第{}頁無結果，PgUp 上一頁", self.online_search_page),
-                                UiLanguage::En => format!("No result on page {}, PgUp for previous page", self.online_search_page),
-                                UiLanguage::Ja => format!("{}ページに結果なし、PgUpで前ページ", self.online_search_page),
-                                UiLanguage::Ko => format!("{}페이지 결과 없음, PgUp 이전 페이지", self.online_search_page),
-                            }
+                            self.t().fmt_page_no_result.replace("{}", &self.online_search_page.to_string())
                         } else {
-                            self.i18n(
-                                "网络搜索无结果，修改关键字后按 Enter 重新搜索",
-                                "網路搜尋無結果，修改關鍵字後按 Enter 重新搜尋",
-                                "No online result. Update keyword and press Enter again",
-                                "結果なし。キーワードを変更して Enter で再検索",
-                                "결과 없음. 키워드 수정 후 Enter로 재검색",
-                            ).to_string()
+                            self.t().online_no_result.to_string()
                         };
                         queue!(
                             stdout,
@@ -1943,7 +1815,7 @@ impl UserInterface {
                         )?;
                     } else if total > 0 {
                         // 在结果列表底部显示页码信息
-                        let page_info = format!("第{}页 | PgUp/PgDn翻页", self.online_search_page);
+                        let page_info = self.t().fmt_page_info.replace("{}", &self.online_search_page.to_string());
                         let info_row = std::cmp::min(total, visible_count);
                         if info_row < visible_count {
                             queue!(
@@ -2022,9 +1894,9 @@ impl UserInterface {
                 // 如果没有搜索结果
                 if total == 0 {
                     let hint = if self.search_query.is_empty() {
-                        "输入关键字后按 Enter 搜索本地歌曲"
+                        self.t().local_search_empty_hint
                     } else {
-                        "按 Enter 搜索本地歌曲，按 n 搜索网络"
+                        self.t().local_search_no_result_hint
                     };
                     queue!(
                         stdout,
@@ -2055,24 +1927,16 @@ impl UserInterface {
 
             // 显示范围信息（如果有滚动）
             let range_info = if total > visible_count {
-                match self.language {
-                    UiLanguage::ZhCn => format!("[当前: {}-{}]", self.scroll_offset + 1, std::cmp::min(self.scroll_offset + visible_count, total)),
-                    UiLanguage::ZhTw => format!("[目前: {}-{}]", self.scroll_offset + 1, std::cmp::min(self.scroll_offset + visible_count, total)),
-                    UiLanguage::En => format!("[Current: {}-{}]", self.scroll_offset + 1, std::cmp::min(self.scroll_offset + visible_count, total)),
-                    UiLanguage::Ja => format!("[現在: {}-{}]", self.scroll_offset + 1, std::cmp::min(self.scroll_offset + visible_count, total)),
-                    UiLanguage::Ko => format!("[현재: {}-{}]", self.scroll_offset + 1, std::cmp::min(self.scroll_offset + visible_count, total)),
-                }
+                self.t().fmt_current_range
+                    .replacen("{}", &(self.scroll_offset + 1).to_string(), 1)
+                    .replacen("{}", &std::cmp::min(self.scroll_offset + visible_count, total).to_string(), 1)
             } else {
                 String::new()
             };
 
-            let title_text = match self.language {
-                UiLanguage::ZhCn => format!("播放列表 {} (共 {} 首)", range_info, playlist.len()),
-                UiLanguage::ZhTw => format!("播放列表 {} (共 {} 首)", range_info, playlist.len()),
-                UiLanguage::En => format!("Playlist {} ({} songs)", range_info, playlist.len()),
-                UiLanguage::Ja => format!("プレイリスト {} ({} 曲)", range_info, playlist.len()),
-                UiLanguage::Ko => format!("재생목록 {} (총 {}곡)", range_info, playlist.len()),
-            };
+            let title_text = self.t().fmt_playlist_title
+                .replacen("{}", &range_info, 1)
+                .replacen("{}", &playlist.len().to_string(), 1);
             let title_width = unicode_width::UnicodeWidthStr::width(title_text.as_str());
             let title_padding = (left_width as usize).saturating_sub(title_width);
             queue!(
@@ -2167,29 +2031,11 @@ impl UserInterface {
         // 绘制右侧标题（歌词/评论/API 配置输入/GitHub Token 输入）
         let lyrics_title = if self.api_key_input_mode {
             let prompt = match self.api_input_step {
-                0 => self.i18n(
-                    "输入接口地址: ",
-                    "輸入接口地址: ",
-                    "Input API URL: ",
-                    "API URLを入力: ",
-                    "API URL 입력: "
-                )
+                0 => self.t().input_api_url
                 .to_string(),
-                1 => self.i18n(
-                    "输入API_KEY: ",
-                    "輸入API_KEY: ",
-                    "Input API_KEY: ",
-                    "API_KEYを入力: ",
-                    "API_KEY 입력: "
-                )
+                1 => self.t().input_api_key
                 .to_string(),
-                2 => self.i18n(
-                    "输入模型名称: ",
-                    "輸入模型名稱: ",
-                    "Input model name: ",
-                    "モデル名を入力: ",
-                    "모델명 입력: "
-                )
+                2 => self.t().input_model_name
                 .to_string(),
                 _ => String::new(),
             };
@@ -2198,45 +2044,33 @@ impl UserInterface {
             let visible_value = tail_to_width(self.api_key_input_value.as_str(), value_max_width);
             format!("{}{}", prompt, visible_value)
         } else if self.github_token_input_mode {
-            let prompt = self
-                .i18n(
-                    "输入GitHub_Token: ",
-                    "輸入GitHub_Token: ",
-                    "Input GitHub_Token: ",
-                    "GitHub_Tokenを入力: ",
-                    "GitHub_Token 입력: "
-                )
-                .to_string();
+            let prompt = self.t().input_github_token.to_string();
             let prompt_width = unicode_width::UnicodeWidthStr::width(prompt.as_str());
             let value_max_width = (right_width.saturating_sub(1) as usize).saturating_sub(prompt_width);
             let visible_value = tail_to_width(self.github_token_input_value.as_str(), value_max_width);
             format!("{}{}", prompt, visible_value)
         } else if self.comments_mode {
-            match self.language {
-                UiLanguage::ZhCn => format!("歌曲评论 共{}条（第{}页）", self.comments_total, self.comments_page),
-                UiLanguage::ZhTw => format!("歌曲評論 共{}條（第{}頁）", self.comments_total, self.comments_page),
-                UiLanguage::En => format!("Song Comments {} (Page {})", self.comments_total, self.comments_page),
-                UiLanguage::Ja => format!("楽曲コメント {} 件（{} ページ）", self.comments_total, self.comments_page),
-                UiLanguage::Ko => format!("노래 리뷰 {}개 ({}페이지)", self.comments_total, self.comments_page),
-            }
+            self.t().fmt_comments_title
+                .replacen("{}", &self.comments_total.to_string(), 1)
+                .replacen("{}", &self.comments_page.to_string(), 1)
         } else if self.song_info_mode {
-            let label = self.i18n("歌曲信息", "歌曲資訊", "Song Info", "楽曲情報", "곡 정보").to_string();
+            let label = self.t().song_info_label;
             if let Some(ref file) = current_file {
                 let clean_name = file.name.trim_end_matches(".mp3").trim_end_matches(".flac").trim_end_matches(".wav").trim_end_matches(".ogg").trim_end_matches(".m4a").trim_end_matches(".aac").trim_end_matches(".wma");
                 format!("{} {}", label, clean_name)
             } else {
-                label
+                label.to_string()
             }
         } else if self.help_mode {
-            self.i18n("帮助信息", "幫助資訊", "Help", "ヘルプ", "도움말").to_string()
+            self.t().help_label.to_string()
         } else if let Some(ref file) = current_file {
             format!(
                 "{}{}",
-                self.i18n("歌曲歌词 ", "歌曲歌詞 ", "Song Lyrics ", "楽曲歌詞 ", "곡 가사 "),
+                self.t().lyrics_label_with_song,
                 Self::sanitize_single_line_text(&file.name)
             )
         } else {
-            self.i18n("歌曲歌词", "歌曲歌詞", "Song Lyrics", "楽曲歌詞", "곡 가사").to_string()
+            self.t().lyrics_label_no_song.to_string()
         };
         
         // 截断标题以适应右侧宽度
@@ -2387,275 +2221,8 @@ impl UserInterface {
 
     /// 获取帮助信息文本行
     fn get_help_lines(&self) -> Vec<String> {
-        match self.language {
-            UiLanguage::ZhCn => vec![
-                "§快捷按键".to_string(),
-                "→ ↑/↓         上下选择歌曲".to_string(),
-                "→ Enter       播放选中歌曲".to_string(),
-                "→ Space       播放/暂停歌曲".to_string(),
-                "→ Esc         停止播放/返回歌词".to_string(),
-                "→ ←/→         上一曲/下一曲".to_string(),
-                "→ [/]         快退/快进5秒".to_string(),
-                "→ ,/.         快退/快进10秒".to_string(),
-                "→ +/-         音量大小加减".to_string(),
-                "".to_string(),
-                "§功能按键".to_string(),
-                "→ 1-5         切换播放模式".to_string(),
-                "→ o           打开音乐目录".to_string(),
-                "→ s           搜索本地歌曲".to_string(),
-                "→ n           搜索网络歌曲".to_string(),
-                "→ j           搜索聚合歌曲".to_string(),
-                "→ p           搜索在线歌单".to_string(),
-                "→ i           查看歌曲信息".to_string(),
-                "→ f           添加到收藏夹".to_string(),
-                "→ v           查看收藏列表".to_string(),
-                "→ m           音乐目录历史".to_string(),
-                "→ c           显示歌曲评论".to_string(),
-                "→ l           切换界面语言".to_string(),
-                "→ t           切换界面主题".to_string(),
-                "→ k           配置API 接口".to_string(),
-                "→ g           配置GitHub Token".to_string(),
-                "→ q           退出音乐程序".to_string(),
-                "".to_string(),
-                "§播放模式".to_string(),
-                "→ 1  单曲播放（歌曲播放完停止）".to_string(),
-                "→ 2  单曲循环（循环播放当前歌曲）".to_string(),
-                "→ 3  顺序播放（顺序播放完后回到第一首）".to_string(),
-                "→ 4  列表循环（循环播放整个列表）".to_string(),
-                "→ 5  随机播放（随机选择播放歌曲）".to_string(),
-                "".to_string(),
-                "§支持格式".to_string(),
-                "  MP3、WAV、FLAC、OGG、OGA、".to_string(),
-                "  Opus、M4A、AAC、AIFF、APE".to_string(),
-                "".to_string(),
-                "§命令行参数".to_string(),
-                "→ -o <目录>   打开音乐目录".to_string(),
-                "→ -h, --help  显示帮助信息".to_string(),
-                "".to_string(),
-                "§鼠标操作".to_string(),
-                "  点击歌曲列表选择歌曲".to_string(),
-                "  点击进度条跳转播放位置".to_string(),
-                "  点击音量条调节音量".to_string(),
-                "  拖动歌词区域跳转歌词".to_string(),
-                "".to_string(),
-                "§GitHub仓库".to_string(),
-                "  https://github.com/xxgg121/ter-music-rust".to_string(),
-            ],
-            UiLanguage::ZhTw => vec![
-                "§快捷按鍵".to_string(),
-                "→ ↑/↓         上下選擇歌曲".to_string(),
-                "→ Enter       播放選中歌曲".to_string(),
-                "→ Space       播放/暫停歌曲".to_string(),
-                "→ Esc         停止播放/返回歌詞".to_string(),
-                "→ ←/→         上一曲/下一曲".to_string(),
-                "→ [/]         快退/快進5秒".to_string(),
-                "→ ,/.         快退/快進10秒".to_string(),
-                "→ +/-         音量大小加減".to_string(),
-                "".to_string(),
-                "§功能按鍵".to_string(),
-                "→ 1-5         切換播放模式".to_string(),
-                "→ o           打開音樂目錄".to_string(),
-                "→ s           搜尋本地歌曲".to_string(),
-                "→ n           搜尋網路歌曲".to_string(),
-                "→ j           搜尋聚合歌曲".to_string(),
-                "→ p           搜索在線歌單".to_string(),
-                "→ i           查看歌曲資訊".to_string(),
-                "→ f           新增到收藏夾".to_string(),
-                "→ v           查看收藏列表".to_string(),
-                "→ m           音樂目錄歷史".to_string(),
-                "→ c           顯示歌曲評論".to_string(),
-                "→ l           切換界面語言".to_string(),
-                "→ t           切換界面主題".to_string(),
-                "→ k           設定API接口".to_string(),
-                "→ g           設定GitHub Token".to_string(),
-                "→ q           退出音樂程式".to_string(),
-                "".to_string(),
-                "§播放模式".to_string(),
-                "→ 1  單曲播放（歌曲播放完停止）".to_string(),
-                "→ 2  單曲循環（循環播放當前歌曲）".to_string(),
-                "→ 3  順序播放（順序播放完後回到第一首）".to_string(),
-                "→ 4  列表循環（循環播放整個列表）".to_string(),
-                "→ 5  隨機播放（隨機選擇播放歌曲）".to_string(),
-                "".to_string(),
-                "§支持格式".to_string(),
-                "  MP3、WAV、FLAC、OGG、OGA、".to_string(),
-                "  Opus、M4A、AAC、AIFF、APE".to_string(),
-                "".to_string(),
-                "§命令列參數".to_string(),
-                "→ -o <目錄>   打開音樂目錄".to_string(),
-                "→ -h, --help  顯示幫助資訊".to_string(),
-                "".to_string(),
-                "§滑鼠操作".to_string(),
-                "  點擊歌曲列表選擇歌曲".to_string(),
-                "  點擊進度條跳轉播放位置".to_string(),
-                "  點擊音量條調節音量".to_string(),
-                "  拖動歌詞區域跳轉歌詞".to_string(),
-                "".to_string(),
-                "§GitHub倉庫".to_string(),
-                "  https://github.com/xxgg121/ter-music-rust".to_string(),
-            ],
-            UiLanguage::En => vec![
-                "§Keyboard Shortcuts".to_string(),
-                "→ ↑/↓         Previous Next Select song".to_string(),
-                "→ Enter       Play selected song".to_string(),
-                "→ Space       Play/Pause".to_string(),
-                "→ Esc         Stop/Back to lyrics".to_string(),
-                "→ ←/→         Previous/Next track".to_string(),
-                "→ [/]         Rewind/Forward 5s".to_string(),
-                "→ ,/.         Rewind/Forward 10s".to_string(),
-                "→ +/-         Volume up/down".to_string(),
-                "".to_string(),
-                "§Feature Keys".to_string(),
-                "→ 1-5         Switch play mode".to_string(),
-                "→ o           Open music folder".to_string(),
-                "→ s           Search local songs".to_string(),
-                "→ n           Search online songs".to_string(),
-                "→ j           Search Juhe songs".to_string(),
-                "→ p           Search online playlists".to_string(),
-                "→ i           Song info".to_string(),
-                "→ f           Add to favorites".to_string(),
-                "→ v           View favorites".to_string(),
-                "→ m           Music folder history".to_string(),
-                "→ c           Song comments".to_string(),
-                "→ l           Switch language".to_string(),
-                "→ t           Switch theme".to_string(),
-                "→ k           Configure API".to_string(),
-                "→ g           Configure GitHub Token".to_string(),
-                "→ q           Quit".to_string(),
-                "".to_string(),
-                "§Play Modes".to_string(),
-                "→ 1  Single play (stop after one)".to_string(),
-                "→ 2  Single repeat (loop current)".to_string(),
-                "→ 3  Sequential (restart from 1st)".to_string(),
-                "→ 4  List repeat (loop entire list)".to_string(),
-                "→ 5  Shuffle (select random play)".to_string(),
-                "".to_string(),
-                "§Supported Formats".to_string(),
-                "  MP3, WAV, FLAC, OGG, OGA,".to_string(),
-                "  Opus, M4A, AAC, AIFF, APE".to_string(),
-                "".to_string(),
-                "§Command Line".to_string(),
-                "→ -o <dir>    Open music folder".to_string(),
-                "→ -h, --help  Show help".to_string(),
-                "".to_string(),
-                "§Mouse Operations".to_string(),
-                "  Click song list to select".to_string(),
-                "  Click progress bar to seek".to_string(),
-                "  Click volume bar to adjust".to_string(),
-                "  Drag lyrics area to jump".to_string(),
-                "".to_string(),
-                "§GitHub Repository".to_string(),
-                "  https://github.com/xxgg121/ter-music-rust".to_string(),
-            ],
-            UiLanguage::Ja => vec![
-                "§ショートカットキー".to_string(),
-                "→ ↑/↓         前の次の曲を選択".to_string(),
-                "→ Enter       選択した曲を再生".to_string(),
-                "→ Space       再生/一時停止".to_string(),
-                "→ Esc         停止/歌詞に戻る".to_string(),
-                "→ ←/→         前の曲/次の曲".to_string(),
-                "→ [/]         5秒巻き戻し/早送り".to_string(),
-                "→ ,/.         10秒巻き戻し/早送り".to_string(),
-                "→ +/-         音量アップ/ダウン".to_string(),
-                "".to_string(),
-                "§機能キー".to_string(),
-                "→ 1-5         再生モード切替".to_string(),
-                "→ o           音楽フォルダを開く".to_string(),
-                "→ s           ローカル曲を検索".to_string(),
-                "→ n           ネット曲を検索".to_string(),
-                "→ j           アグリゲート検索".to_string(),
-                "→ p           プレイリスト検索".to_string(),
-                "→ i           楽曲情報".to_string(),
-                "→ f           お気に入りに追加".to_string(),
-                "→ v           お気に入り一覧".to_string(),
-                "→ m           音楽フォルダ履歴".to_string(),
-                "→ c           曲のコメント".to_string(),
-                "→ l           言語切替".to_string(),
-                "→ t           テーマ切替".to_string(),
-                "→ k           API 設定".to_string(),
-                "→ g           GitHub Token 設定".to_string(),
-                "→ q           終了".to_string(),
-                "".to_string(),
-                "§再生モード".to_string(),
-                "→ 1  単曲再生（1曲で停止）".to_string(),
-                "→ 2  単曲リピート（現在の曲をループ）".to_string(),
-                "→ 3  順次再生（最後まで再生後1曲目に戻る）".to_string(),
-                "→ 4  リストリピート（全リストをループ）".to_string(),
-                "→ 5  シャッフル（ランダム再生）".to_string(),
-                "".to_string(),
-                "§対応形式".to_string(),
-                "  MP3、WAV、FLAC、OGG、OGA、".to_string(),
-                "  Opus、M4A、AAC、AIFF、APE".to_string(),
-                "".to_string(),
-                "§コマンドライン".to_string(),
-                "→ -o <dir>    音楽フォルダを開く".to_string(),
-                "→ -h, --help  ヘルプを表示".to_string(),
-                "".to_string(),
-                "§マウス操作".to_string(),
-                "  曲リストをクリックして選択".to_string(),
-                "  プログレスバーをクリックしてシーク".to_string(),
-                "  音量バーをクリックして調整".to_string(),
-                "  歌詞エリアをドラッグしてジャンプ".to_string(),
-                "".to_string(),
-                "§GitHubリポジトリ".to_string(),
-                "  https://github.com/xxgg121/ter-music-rust".to_string(),
-            ],
-            UiLanguage::Ko => vec![
-                "§단축키".to_string(),
-                "→ ↑/↓         노래 선택하기".to_string(),
-                "→ Enter       선택한 곡 재생".to_string(),
-                "→ Space       재생/일시정지".to_string(),
-                "→ Esc         정지/가사로 돌아가기".to_string(),
-                "→ ←/→         이전곡/다음곡".to_string(),
-                "→ [/]         5초 뒤로/앞으로".to_string(),
-                "→ ,/.         10초 뒤로/앞으로".to_string(),
-                "→ +/-         볼륨 올리기/내리기".to_string(),
-                "".to_string(),
-                "§기능 키".to_string(),
-                "→ 1-5         재생 모드 전환".to_string(),
-                "→ o           음악 폴더 열기".to_string(),
-                "→ s           로컬 곡 검색".to_string(),
-                "→ n           온라인 곡 검색".to_string(),
-                "→ j           폴리머 검색".to_string(),
-                "→ p           플레이리스트 검색".to_string(),
-                "→ i           곡 정보".to_string(),
-                "→ f           즐겨찾기 추가".to_string(),
-                "→ v           즐겨찾기 목록".to_string(),
-                "→ m           음악 폴더 기록".to_string(),
-                "→ c           곡 댓글".to_string(),
-                "→ l           언어 전환".to_string(),
-                "→ t           테마 전환".to_string(),
-                "→ k           API 설정".to_string(),
-                "→ g           GitHub Token 설정".to_string(),
-                "→ q           종료".to_string(),
-                "".to_string(),
-                "§재생 모드".to_string(),
-                "→ 1  단곡 재생 (1곡 후 정지)".to_string(),
-                "→ 2  단곡 반복 (현재 곡 반복)".to_string(),
-                "→ 3  순차 재생 (끝나면 첫 곡으로)".to_string(),
-                "→ 4  목록 반복 (전체 목록 반복)".to_string(),
-                "→ 5  셔플 (무작위로 곡 재생하기)".to_string(),
-                "".to_string(),
-                "§지원 형식".to_string(),
-                "  MP3, WAV, FLAC, OGG, OGA,".to_string(),
-                "  Opus, M4A, AAC, AIFF, APE".to_string(),
-                "".to_string(),
-                "§명령줄 옵션".to_string(),
-                "→ -o <dir>    음악 폴더 열기".to_string(),
-                "→ -h, --help  도움말 표시".to_string(),
-                "".to_string(),
-                "§마우스 조작".to_string(),
-                "  곡 목록 클릭하여 선택".to_string(),
-                "  진행 막대 클릭하여 이동".to_string(),
-                "  볼륨 막대 클릭하여 조절".to_string(),
-                "  가사 영역 드래그하여 이동".to_string(),
-                "".to_string(),
-                "§GitHub저장소".to_string(),
-                "  https://github.com/xxgg121/ter-music-rust".to_string(),
-            ],
-        }
+        self.t().help_lines.iter().map(|s| (*s).to_string()).collect()
     }
-
     /// 绘制歌词（右侧）
     fn draw_lyrics<W: Write>(
         &mut self,
@@ -2766,7 +2333,7 @@ impl UserInterface {
                     stdout,
                     cursor::MoveTo(start_x, 8),
                     style::SetForegroundColor(style::Color::DarkGrey),
-                    style::Print("（纯音乐无歌词）"),
+                    style::Print(self.t().instrumental_no_lyrics),
                     style::ResetColor,
                 )?;
             }
@@ -2777,7 +2344,7 @@ impl UserInterface {
                 cursor::MoveTo(start_x, 8),
                 terminal::Clear(ClearType::UntilNewLine),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.i18n("正在下载歌词文件...", "正在下載歌詞檔中...", "Downloading lyrics...", "歌詞をダウンロード中...", "가사 다운로드 중...")),
+                style::Print(self.t().downloading_lyrics),
                 style::ResetColor,
             )?;
         } else if current_file.is_some() {
@@ -2786,7 +2353,7 @@ impl UserInterface {
                 stdout,
                 cursor::MoveTo(start_x, 8),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.i18n("未找到歌词文件", "未找到歌詞檔", "Lyrics file not found", "歌詞ファイルが見つかりません", "가사 파일을 찾을 수 없음")),
+                style::Print(self.t().no_lyrics_found),
                 style::ResetColor,
             )?;
         } else {
@@ -2794,7 +2361,7 @@ impl UserInterface {
                 stdout,
                 cursor::MoveTo(start_x, 8),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print("请选择歌曲播放"),
+                style::Print(self.t().select_song_for_lyrics),
                 style::ResetColor,
             )?;
         }
@@ -2835,7 +2402,7 @@ impl UserInterface {
                 stdout,
                 cursor::MoveTo(start_x, 8),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.i18n("请选择歌曲播放", "請選擇歌曲播放", "Select a song to play", "再生する曲を選択してください", "재생할 곡을 선택하세요")),
+                style::Print(self.t().select_song_to_play),
                 style::ResetColor,
             )?;
             return Ok(());
@@ -2849,7 +2416,7 @@ impl UserInterface {
                 stdout,
                 cursor::MoveTo(start_x, 8),
                 style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.i18n("暂无评论", "暫無評論", "No comments", "コメントはありません", "댓글이 없습니다")),
+                style::Print(self.t().no_comments),
                 style::ResetColor,
             )?;
             return Ok(());
@@ -2866,7 +2433,7 @@ impl UserInterface {
 
             // 语义顺序：有 beReplied 时，先显示被回复的原评论，再显示当前这条回复
             if let Some(reply) = &selected.reply {
-                lines.push(format!("{}：", reply.nickname));
+                lines.push(self.t().fmt_comment_name.replace("{}", &reply.nickname));
                 let origin_comment_line = reply.content.to_string();
                 lines.extend(wrap_text_to_width(
                     &origin_comment_line,
@@ -2878,7 +2445,7 @@ impl UserInterface {
                 }
 
                 lines.push(String::new());
-                lines.push(format!("{}：", selected.nickname));
+                lines.push(self.t().fmt_comment_name.replace("{}", &selected.nickname));
                 let reply_comment_line = selected.content.to_string();
                 lines.extend(wrap_text_to_width(
                     &reply_comment_line,
@@ -2886,7 +2453,7 @@ impl UserInterface {
                 ));
             } else {
                 // 非回复场景：仅显示当前评论
-                lines.push(format!("{}：", selected.nickname));
+                lines.push(self.t().fmt_comment_name.replace("{}", &selected.nickname));
                 let content_line = selected.content.to_string();
                 lines.extend(wrap_text_to_width(
                     &content_line,
@@ -2936,7 +2503,8 @@ impl UserInterface {
             };
 
             let prefix = if is_selected { "► " } else { "  " };
-            let full_text = format!("{}{}：{}", prefix, list_nickname, list_content);
+            let nickname_part = self.t().fmt_comment_name.replace("{}", list_nickname);
+            let full_text = format!("{}{}{}", prefix, nickname_part, list_content);
             let display_text = Self::truncate_with_ellipsis(&full_text, width.saturating_sub(1) as usize);
 
             queue!(
@@ -2960,61 +2528,156 @@ impl UserInterface {
         Ok(())
     }
 
-    /// 绘制控制栏
+    /// 绘制控制栏（快捷键提示 + 播放状态信息）
     fn draw_controls<W: Write>(&mut self, stdout: &mut W) -> io::Result<()> {
         let (state, volume, mode) = {
             let audio_player = self.audio_player.lock().unwrap();
             (audio_player.get_state(), audio_player.get_volume(), audio_player.get_play_mode())
         };
 
-        // 控制栏位置：倒数第6行（避免与状态栏的快捷键提示重叠）
+        // 控制栏分隔线位置：倒数第6行
         let control_line = self.terminal_height.saturating_sub(6);
 
         queue!(
             stdout,
             cursor::MoveTo(0, control_line),
-            terminal::Clear(ClearType::UntilNewLine), // 清除到行尾
+            terminal::Clear(ClearType::UntilNewLine),
             style::SetForegroundColor(self.theme_colors.section_title),
-            style::Print("─".repeat(self.terminal_width as usize)), // 动态宽度分隔线
+            style::Print("─".repeat(self.terminal_width as usize)),
             style::ResetColor,
         )?;
 
-        // 播放状态（显示正在播放的歌曲）
+        // 播放状态
         let state_str = self.play_state_text(state).to_string();
-
-        // 音量条
         let vol_bar: String = "█".repeat(volume as usize / 5);
         let vol_empty: String = "░".repeat(20 - volume as usize / 5);
 
-        // 控制信息位置：倒数第4行
+        let state_label = self.t().play_status_label;
+        let volume_label = self.t().volume_label;
+        let mode_label = self.t().play_mode_label;
+
+        // 快捷键提示行和播放状态信息行
+        let tip_line = self.terminal_height.saturating_sub(5);
         let info_line = self.terminal_height.saturating_sub(4);
+        let term_width = self.terminal_width as usize;
 
-        let state_label = self.i18n("播放状态", "播放狀態", "State", "再生状態", "재생 상태");
-        let volume_label = self.i18n("播放音量", "播放音量", "Volume", "音量", "볼륨");
-        let mode_label = self.i18n("播放模式", "播放模式", "Mode", "再生モード", "재생 모드");
+        if self.terminal_height > 4 {
+            // 获取快捷键提示文本
+            let help_text = self.get_help_tip_text();
+            let help_width = unicode_width::UnicodeWidthStr::width(help_text.as_str());
 
-        // 计算音量条布局：用于鼠标点击调整音量
-        let vol_prefix = format!("{}: {} | {}: [", state_label, state_str, volume_label);
-        let vol_prefix_width = unicode_width::UnicodeWidthStr::width(vol_prefix.as_str());
-        self.volume_bar_layout = Some(VolumeBarLayout {
-            row: info_line,
-            bar_start_col: vol_prefix_width,
-            bar_width: 20, // 音量条固定20个字符宽度
-        });
+            if help_width <= term_width {
+                // 快捷键文本不超长，正常显示
+                queue!(
+                    stdout,
+                    cursor::MoveTo(0, tip_line),
+                    terminal::Clear(ClearType::UntilNewLine),
+                    style::SetForegroundColor(style::Color::DarkGrey),
+                    style::Print(&help_text),
+                    style::ResetColor,
+                )?;
 
-        queue!(
-            stdout,
-            cursor::MoveTo(0, info_line),
-            terminal::Clear(ClearType::UntilNewLine), // 清除到行尾
-            style::SetForegroundColor(self.theme_colors.info_text),
-            style::Print(format!("{}: {} | ", state_label, state_str)),
-            style::Print(format!(
-                "{}: [{}{}] {:3}% | ",
-                volume_label, vol_bar, vol_empty, volume
-            )),
-            style::Print(format!("{}: {}", mode_label, self.play_mode_text(mode))),
-            style::ResetColor,
-        )?;
+                // 播放状态信息（独立行）
+                let vol_prefix = format!("{}: {} | {}: [", state_label, state_str, volume_label);
+                let vol_prefix_width = unicode_width::UnicodeWidthStr::width(vol_prefix.as_str());
+                self.volume_bar_layout = Some(VolumeBarLayout {
+                    row: info_line,
+                    bar_start_col: vol_prefix_width,
+                    bar_width: 20,
+                });
+
+                queue!(
+                    stdout,
+                    cursor::MoveTo(0, info_line),
+                    terminal::Clear(ClearType::UntilNewLine),
+                    style::SetForegroundColor(self.theme_colors.info_text),
+                    style::Print(format!("{}: {} | ", state_label, state_str)),
+                    style::Print(format!(
+                        "{}: [{}{}] {:3}% | ",
+                        volume_label, vol_bar, vol_empty, volume
+                    )),
+                    style::Print(format!("{}: {}", mode_label, self.play_mode_text(mode))),
+                    style::ResetColor,
+                )?;
+            } else {
+                // 快捷键文本超长，需要换行显示
+                let (first_part, overflow) = Self::split_at_display_width(&help_text, term_width);
+
+                // 第一行：快捷键文本
+                queue!(
+                    stdout,
+                    cursor::MoveTo(0, tip_line),
+                    terminal::Clear(ClearType::UntilNewLine),
+                    style::SetForegroundColor(style::Color::DarkGrey),
+                    style::Print(first_part),
+                    style::ResetColor,
+                )?;
+
+                // 第二行：快捷键溢出部分（DarkGrey）+ 空格分隔 + 播放状态信息（info_text）
+                let separator = "  ";
+                let play_info = format!("{}: {} | {}: [{}{}] {:3}% | {}: {}",
+                    state_label, state_str, volume_label, vol_bar, vol_empty, volume, mode_label, self.play_mode_text(mode));
+                let play_info_width = unicode_width::UnicodeWidthStr::width(play_info.as_str());
+                let separator_width = unicode_width::UnicodeWidthStr::width(separator);
+
+                // 计算溢出文本可占的最大宽度（为播放状态信息留出空间）
+                let max_overflow_width = term_width.saturating_sub(play_info_width + separator_width);
+                let (overflow_fit, _) = if unicode_width::UnicodeWidthStr::width(overflow) > max_overflow_width {
+                    Self::split_at_display_width(overflow, max_overflow_width)
+                } else {
+                    (overflow, "")
+                };
+
+                let overflow_fit_width = unicode_width::UnicodeWidthStr::width(overflow_fit);
+
+                // 计算音量条位置（需要考虑溢出文本和分隔符的偏移）
+                let vol_prefix = format!("{}: {} | {}: [", state_label, state_str, volume_label);
+                let vol_prefix_width = overflow_fit_width + separator_width + unicode_width::UnicodeWidthStr::width(vol_prefix.as_str());
+                self.volume_bar_layout = Some(VolumeBarLayout {
+                    row: info_line,
+                    bar_start_col: vol_prefix_width,
+                    bar_width: 20,
+                });
+
+                queue!(
+                    stdout,
+                    cursor::MoveTo(0, info_line),
+                    terminal::Clear(ClearType::UntilNewLine),
+                    // 溢出的快捷键文本（跟前面快捷键同色 DarkGrey）
+                    style::SetForegroundColor(style::Color::DarkGrey),
+                    style::Print(overflow_fit),
+                    // 分隔空格
+                    style::Print(separator),
+                    // 播放状态信息（info_text 颜色）
+                    style::SetForegroundColor(self.theme_colors.info_text),
+                    style::Print(&play_info),
+                    style::ResetColor,
+                )?;
+            }
+        } else {
+            // 终端高度不够，只显示播放状态信息
+            let vol_prefix = format!("{}: {} | {}: [", state_label, state_str, volume_label);
+            let vol_prefix_width = unicode_width::UnicodeWidthStr::width(vol_prefix.as_str());
+            self.volume_bar_layout = Some(VolumeBarLayout {
+                row: info_line,
+                bar_start_col: vol_prefix_width,
+                bar_width: 20,
+            });
+
+            queue!(
+                stdout,
+                cursor::MoveTo(0, info_line),
+                terminal::Clear(ClearType::UntilNewLine),
+                style::SetForegroundColor(self.theme_colors.info_text),
+                style::Print(format!("{}: {} | ", state_label, state_str)),
+                style::Print(format!(
+                    "{}: [{}{}] {:3}% | ",
+                    volume_label, vol_bar, vol_empty, volume
+                )),
+                style::Print(format!("{}: {}", mode_label, self.play_mode_text(mode))),
+                style::ResetColor,
+            )?;
+        }
 
         Ok(())
     }
@@ -3063,7 +2726,7 @@ impl UserInterface {
         // 播放进度（状态栏上面，如果有足够空间）
         if self.terminal_height > 1 {
             let progress_line = self.terminal_height.saturating_sub(2);
-            let prefix = self.i18n("播放进度：", "播放進度：", "Progress: ", "再生進捗: ", "재생 진행: ");
+            let prefix = self.t().progress_label;
 
             if let Some((time_str, progress_percent)) = progress_info {
                 let bar_width = self.terminal_width as usize;
@@ -3120,7 +2783,7 @@ impl UserInterface {
 
             if play_state == PlayState::Stopped {
                 // 停止状态也显示进度条样式
-                let stopped_msg = self.i18n("播放状态：--:--/--:--", "播放狀態：--:--/--:--", "State: --:--/--:--", "再生状態: --:--/--:--", "재생 상태: --:--/--:--");
+                let stopped_msg = self.t().stopped_status;
                 let msg_width = unicode_width::UnicodeWidthStr::width(stopped_msg);
                 let bar_total = (self.terminal_width as usize).saturating_sub(msg_width + 3).max(10);
 
@@ -3157,189 +2820,6 @@ impl UserInterface {
                     style::ResetColor,
                 )?;
             }
-        }
-
-        // 快捷键提示（播放状态上面，如果有足够空间）
-        if self.terminal_height > 4 {
-            
-            let tip_line = self.terminal_height.saturating_sub(5);
-            let help_text = if self.search_mode {
-                if self.online_search_mode {
-                    let search_label = if self.playlist_search_mode {
-                        self.i18n("歌单搜索", "歌單搜尋", "Playlist", "プレイリスト検索", "플레이리스트 검색")
-                    } else if self.juhe_search_mode {
-                        self.i18n("聚合搜索", "聚合搜索", "Juhe", "聚合検索", "폴리머 검색")
-                    } else {
-                        self.i18n("网络搜索", "網路搜尋", "Online", "オンライン", "온라인")
-                    };
-                    if self.terminal_width >= 80 {
-                        format!(
-                            "{}: {}",
-                            search_label,
-                            self.i18n(
-                                "↑↓上下移动 | Up/Down上下滚动 | Enter播放 | PgUp/PgDn翻页 | Esc返回",
-                                "↑↓上下移動 | Up/Down上下滾動 | Enter播放 | PgUp/PgDn翻頁 | Esc返回",
-                                "↑↓ Move | Up/Down Scroll | Enter Play | PgUp/PgDn Page | Esc Back",
-                                "↑↓移動 | Up/Downスクロール | Enter再生 | PgUp/PgDnページ | Esc戻る",
-                                "↑↓ 이동 | Up/Down 스크롤 | Enter 재생 | PgUp/PgDn 페이지 | Esc 뒤로",
-                            )
-                        )
-                    } else if self.terminal_width >= 60 {
-                        format!(
-                            "{}: {}",
-                            search_label,
-                            self.i18n(
-                                "Enter搜索|↑↓选择|Enter播放|PgUp/PgDn翻页|Esc返回",
-                                "Enter搜尋|↑↓選擇|Enter播放|PgUp/PgDn翻頁|Esc返回",
-                                "Enter Search|↑↓ Select|Enter Play|PgUp/PgDn Page|Esc",
-                                "Enter検索|↑↓選択|Enter再生|PgUp/PgDnページ|Esc",
-                                "Enter 검색|↑↓ 선택|Enter 재생|PgUp/PgDn 페이지|Esc",
-                            )
-                        )
-                    } else {
-                        format!("{}: Enter|↑↓|DL|PgUp/Dn|Esc", search_label)
-                    }
-                } else if self.terminal_width >= 60 {
-                    self.i18n(
-                        "本地搜索: 输入关键字Enter搜索 | ↑↓选择 | Enter播放 | Esc退出",
-                        "本地搜尋: 輸入關鍵字Enter 搜尋 | ↑↓選擇 | Enter播放 | Esc 退出",
-                        "Local Search: keyword + Enter | ↑↓ Select | Enter Play | Esc",
-                        "ローカル検索: キーワード+Enter | ↑↓選択 | Enter再生 | Esc",
-                        "로컬 검색: 키워드+Enter | ↑↓ 선택 | Enter 재생 | Esc",
-                    ).to_string()
-                } else {
-                    self.i18n(
-                        "本地搜索: 输入Enter搜索|↑↓选择|Enter播放|Esc退出",
-                        "本地搜尋: 輸入Enter搜尋|↑↓選擇|Enter播放|Esc退出",
-                        "Local: Enter Search|↑↓|Enter Play|Esc",
-                        "ローカル: Enter検索|↑↓|Enter再生|Esc",
-                        "로컬: Enter검색|↑↓|Enter재생|Esc",
-                    ).to_string()
-                }
-            } else if self.favorites_mode {
-                if self.terminal_width >= 60 {
-                    self.i18n(
-                        "收藏列表: ↑↓选择 | Enter播放 | d删除收藏 | Esc返回",
-                        "收藏列表: ↑↓選擇 | Enter播放 | d刪除收藏 | Esc返回",
-                        "Favorites: ↑↓ Select | Enter Play | d Delete | Esc Back",
-                        "お気に入り: ↑↓選択 | Enter再生 | d削除 | Esc戻る",
-                        "즐겨찾기: ↑↓ 선택 | Enter 재생 | d 삭제 | Esc 뒤로",
-                    ).to_string()
-                } else {
-                    self.i18n(
-                        "收藏列表: ↑↓选择|Enter播放|d删除|Esc返回",
-                        "收藏列表: ↑↓選擇|Enter播放|d刪除|Esc返回",
-                        "Fav: ↑↓|Enter|d Del|Esc",
-                        "お気に入り: ↑↓|Enter|d削除|Esc",
-                        "즐겨찾기: ↑↓|Enter|d삭제|Esc",
-                    ).to_string()
-                }
-            } else if self.dir_history_mode {
-                if self.terminal_width >= 60 {
-                    self.i18n(
-                        "音乐目录: ↑↓选择 | Enter切换目录 | d删除记录 | Esc返回",
-                        "音樂目錄: ↑↓選擇 | Enter 切換目錄 | d 刪除記錄 | Esc 返回",
-                        "Folders: ↑↓ Select | Enter Switch | d Delete | Esc Back",
-                        "音楽フォルダ: ↑↓選択 | Enter切替 | d削除 | Esc戻る",
-                        "음악 폴더: ↑↓ 선택 | Enter 전환 | d 삭제 | Esc 뒤로",
-                    ).to_string()
-                } else {
-                    self.i18n(
-                        "音乐目录: ↑↓选择|Enter切换|d删除|Esc返回",
-                        "音樂目錄: ↑↓選擇|Enter切換|d刪除|Esc返回",
-                        "Folders: ↑↓|Enter|d Del|Esc",
-                        "音楽フォルダ: ↑↓|Enter|d削除|Esc",
-                        "음악 폴더: ↑↓|Enter|d삭제|Esc",
-                    ).to_string()
-                }
-            } else if self.help_mode {
-                if self.terminal_width >= 80 {
-                    self.i18n(
-                        "帮助信息: ↑/↓ 上下移动 | Up/Down 上下滚动 |  Esc返回",
-                        "幫助資訊: ↑/↓ 上下移動 | Up/Down 上下滾動 | Esc返回",
-                        "Help: ↑/↓ ↑/↓ Scroll | Up/Down Scroll | Esc Back",
-                        "ヘルプ: ↑/↓ スクロール | Up/Down スクロール |  Esc戻る",
-                        "도움말: ↑/↓ 스크롤 | Up/Down 스크롤 |  Esc 뒤로",
-                    ).to_string()
-                } else {
-                    self.i18n(
-                        "帮助: ↑↓滚动|Esc返回",
-                        "幫助: ↑↓滾動|Esc返回",
-                        "Help: ↑↓|Esc",
-                        "ヘルプ: ↑↓|Esc",
-                        "도움말: ↑↓|Esc",
-                    ).to_string()
-                }
-            } else if self.song_info_mode {
-                if self.terminal_width >= 80 {
-                    self.i18n(
-                        "歌曲信息: ↑/↓ 上下移动 | Up/Down 上下滚动 | Esc返回",
-                        "歌曲資訊: ↑/↓ 上下移動 | Up/Down 上下滾動 | Esc返回",
-                        "Song Info: ↑/↓ Scroll | Up/Down Scroll | Esc Back",
-                        "楽曲情報: ↑/↓ スクロール | Up/Down スクロール | Esc戻る",
-                        "곡 정보: ↑/↓ 스크롤 | Up/Down 스크롤 | Esc 뒤로",
-                    ).to_string()
-                } else {
-                    self.i18n(
-                        "歌曲信息: ↑↓移动|Scroll滚动|Esc返回",
-                        "歌曲資訊: ↑↓移動|Scroll滾動|Esc返回",
-                        "Song Info: ↑↓|Scroll|Esc",
-                        "楽曲情報: ↑↓|Scroll|Esc",
-                        "곡 정보: ↑↓|Scroll|Esc",
-                    ).to_string()
-                }
-            } else if self.comments_mode {
-                if self.terminal_width >= 80 {
-                    self.i18n(
-                        "歌曲评论: ↑↓选择 | PgUp/PgDn翻页 | Enter详情 | Esc返回",
-                        "歌曲評論: ↑↓選擇 | PgUp/PgDn翻頁 | Enter詳情 | Esc返回",
-                        "Comments: ↑↓ Select | PgUp/PgDn Page | Enter Detail | Esc Back",
-                        "コメント: ↑↓選択 | PgUp/PgDn頁 | Enter詳細 | Esc戻る",
-                        "댓글: ↑↓ 선택 | PgUp/PgDn 페이지 | Enter 상세 | Esc 뒤로",
-                    ).to_string()
-                } else {
-                    self.i18n(
-                        "歌曲评论: ↑↓选择|PgUp/PgDn翻页|Enter详情|Esc返回",
-                        "歌曲評論: ↑↓選擇|PgUp/PgDn翻頁|Enter詳情|Esc返回",
-                        "Comments: ↑↓|PgUp/PgDn|Enter|Esc",
-                        "コメント: ↑↓|PgUp/PgDn|Enter|Esc",
-                        "댓글: ↑↓|PgUp/PgDn|Enter|Esc",
-                    ).to_string()
-                }
-            } else if self.terminal_width >= 100 {
-                self.i18n(
-                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | Esc停止 | ←→上下曲 | [,/].快退快进 | +-音量 | 1-5模式 | h帮助 | o打开 | q退出",
-                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | Esc停止 | ←→上下曲 | [,/].快退快進 | +-音量 | 1-5模式 | h幫助 | o開啟 | q退出",
-                    "Keys: ↑↓ Select | Enter Play | Space Pause | Esc Stop | ←→ Prev/Next | [,/].Seek | +-Vol | 1-5Mode | h Help| o Open | q Quit",
-                    "キー: ↑↓選択 | Enter再生 | Space一時停止 | Esc停止 | ←→前後曲 | [,/].シーク | +-音量 | 1-5モード | hヘルプ | o開く | q終了",
-                    "키: ↑↓ 선택 | Enter 재생 | Space 일시정지 | Esc 정지 | ←→ 이전/다음 | [,/].탐색 | +-볼륨 | 1-5모드 | h도움말 | o열기 | q종료",
-                ).to_string()
-            } else if self.terminal_width >= 80 {
-                self.i18n(
-                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | ←→上下曲 | [,/].快退快进 | +-音量 | h帮助 | o打开 | q退出",
-                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | ←→上下曲 | [,/].快退快進 | +-音量 | h幫助 | o開啟 | q退出",
-                    "Keys: ↑↓ | Enter | Space | ←→ | [,/].Seek | +-Vol | h Help| o Open | q Quit",
-                    "キー: ↑↓ | Enter | Space | ←→ | [,/].シーク | +-音量 | hヘルプ | o開く | q終了",
-                    "키: ↑↓ | Enter | Space | ←→ | [,/].탐색 | +-볼륨 | h도움말 | o열기 | q종료",
-                ).to_string()
-            } else {
-                self.i18n(
-                    "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | h帮助 |q退出",
-                    "快捷鍵: ↑↓選擇 | Enter播放 | Space暫停 | h幫助 |q退出",
-                    "Keys: ↑↓ | Enter | Space | h Help| q Quit",
-                    "キー: ↑↓ | Enter | Space | hヘルプ | q終了",
-                    "키: ↑↓ | Enter | Space |  h도움말  | q종료",
-                ).to_string()
-            };
-
-            queue!(
-                stdout,
-                cursor::MoveTo(0, tip_line),
-                terminal::Clear(ClearType::UntilNewLine),
-                style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(help_text),
-                style::ResetColor,
-            )?;
         }
 
         Ok(())
@@ -3648,7 +3128,10 @@ impl UserInterface {
                     }
                 }
                 KeyCode::Enter => {
-                    if self.online_search_mode {
+                    // 评论/帮助模式下，Enter 由全局处理器处理
+                    if self.comments_mode || self.help_mode {
+                        handled_in_search = false;
+                    } else if self.online_search_mode {
                         if self.online_searching {
                             // 正在搜索中，忽略
                         } else if self.online_downloading {
@@ -3700,7 +3183,10 @@ impl UserInterface {
                     }
                 }
                 KeyCode::Up => {
-                    if self.online_search_mode {
+                    // 评论/歌曲信息/帮助模式下，上下键控制右侧视图而非搜索列表
+                    if self.comments_mode || self.song_info_mode || self.help_mode {
+                        handled_in_search = false;
+                    } else if self.online_search_mode {
                         if self.online_selected_index > 0 {
                             self.online_selected_index -= 1;
                         }
@@ -3709,7 +3195,10 @@ impl UserInterface {
                     }
                 }
                 KeyCode::Down => {
-                    if self.online_search_mode {
+                    // 评论/歌曲信息/帮助模式下，上下键控制右侧视图而非搜索列表
+                    if self.comments_mode || self.song_info_mode || self.help_mode {
+                        handled_in_search = false;
+                    } else if self.online_search_mode {
                         let total = if self.playlist_search_mode && self.current_playlist.is_none() {
                             self.playlist_search_results.len()
                         } else {
@@ -3784,7 +3273,10 @@ impl UserInterface {
                     }
                 }
                 KeyCode::PageUp => {
-                    if self.playlist_search_mode && self.current_playlist.is_some() {
+                    // 评论/歌曲信息/帮助模式下，PageUp 由全局处理器处理
+                    if self.comments_mode || self.song_info_mode || self.help_mode {
+                        handled_in_search = false;
+                    } else if self.playlist_search_mode && self.current_playlist.is_some() {
                         // 歌单详情页：翻到上一“页”（每页20首）
                         let page_size = 20usize;
                         let total = self.online_search_results.len();
@@ -3807,7 +3299,10 @@ impl UserInterface {
                     }
                 }
                 KeyCode::PageDown => {
-                    if self.playlist_search_mode && self.current_playlist.is_some() {
+                    // 评论/歌曲信息/帮助模式下，PageDown 由全局处理器处理
+                    if self.comments_mode || self.song_info_mode || self.help_mode {
+                        handled_in_search = false;
+                    } else if self.playlist_search_mode && self.current_playlist.is_some() {
                         // 歌单详情页：翻到下一“页”（每页20首）
                         let page_size = 20usize;
                         let total = self.online_search_results.len();
@@ -3961,7 +3456,7 @@ impl UserInterface {
                 } else {
                     // 停止播放
                     self.audio_player.lock().unwrap().stop();
-                    self.update_status(self.i18n("播放状态: 已停止", "播放狀態: 已停止", "State: Stopped", "再生状態: 停止", "재생 상태: 정지"));
+                    self.update_status(self.t().state_stopped_msg);
                 }
             }
             KeyCode::Left => {
@@ -4131,6 +3626,7 @@ impl UserInterface {
             KeyCode::Char('l') | KeyCode::Char('L') => {
                 // 切换界面语言
                 self.language = self.language.next();
+                crate::langs::set_global_language(self.language);
                 self.cached_lyrics_title = None;
 
                 // 语言切换后立即刷新"正在播放"状态前缀，避免显示旧语言
@@ -4319,13 +3815,7 @@ impl UserInterface {
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     self.online_searching = false;
                     self.online_search_rx = None;
-                    self.update_status(self.i18n(
-                        "网络搜索失败：后台任务已断开",
-                        "網路搜尋失敗：背景任務已中斷",
-                        "Online search failed: background task disconnected",
-                        "オンライン検索失敗：バックグラウンド処理が切断されました",
-                        "온라인 검색 실패: 백그라운드 작업 연결이 끊어졌습니다",
-                    ));
+                    self.update_status(self.t().online_search_failed);
                 }
             }
         }
@@ -4338,26 +3828,14 @@ impl UserInterface {
                     self.online_selected_index = 0;
                     self.online_scroll_offset = 0;
                     if self.playlist_search_results.is_empty() {
-                        self.update_status(self.i18n(
-                            "未搜索到歌单结果",
-                            "未搜尋到歌單結果",
-                            "No playlist results found",
-                            "プレイリスト検索結果がありません",
-                            "플레이리스트 검색 결과가 없습니다",
-                        ));
+                        self.update_status(self.t().no_playlist_result);
                     }
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     self.online_searching = false;
                     self.playlist_search_rx = None;
-                    self.update_status(self.i18n(
-                        "歌单搜索失败：后台任务已断开",
-                        "歌單搜尋失敗：背景任務已中斷",
-                        "Playlist search failed: background task disconnected",
-                        "プレイリスト検索失敗：バックグラウンド処理が切断されました",
-                        "플레이리스트 검색 실패: 백그라운드 작업 연결이 끊어졌습니다",
-                    ));
+                    self.update_status(self.t().playlist_search_failed);
                 }
             }
         }
@@ -4375,13 +3853,7 @@ impl UserInterface {
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     self.online_searching = false;
                     self.playlist_songs_rx = None;
-                    self.update_status(self.i18n(
-                        "歌单歌曲加载失败：后台任务已断开",
-                        "歌單歌曲載入失敗：背景任務已中斷",
-                        "Playlist songs load failed: background task disconnected",
-                        "プレイリスト曲の読み込み失敗：バックグラウンド処理が切断されました",
-                        "플레이리스트 곡 로드 실패: 백그라운드 작업 연결이 끊어졌습니다",
-                    ));
+                    self.update_status(self.t().playlist_songs_failed);
                 }
             }
         }
@@ -4433,7 +3905,7 @@ impl UserInterface {
                 if self.online_auto_skip_times.is_empty() {
                     self.update_status(&format!(
                         "{}{}",
-                        self.i18n("播放失败: ", "播放失敗: ", "Play failed: ", "再生失敗: ", "재생 실패: "),
+                        self.t().play_failed,
                         e
                     ));
                 } else {
@@ -4568,7 +4040,7 @@ impl UserInterface {
                                         if self.online_auto_skip_times.is_empty() {
                                             self.update_status(&format!(
                                                 "{}{}",
-                                                self.i18n("播放失败: ", "播放失敗: ", "Play failed: ", "再生失敗: ", "재생 실패: "),
+                                                self.t().play_failed,
                                                 e
                                             ));
                                         } else {
@@ -4591,7 +4063,7 @@ impl UserInterface {
                             }
                             None => {
                                 // 下载失败，不做提示以避免覆盖波形
-                                let _err = result.error.unwrap_or_else(|| self.i18n("未知错误", "未知錯誤", "Unknown error", "不明なエラー", "알 수 없는 오류").to_string());
+                                let _err = result.error.unwrap_or_else(|| self.t().unknown_error.to_string());
                             }
                         }
                         break;
@@ -4800,7 +4272,7 @@ impl UserInterface {
                 Err(e) => {
                     self.update_status(&format!(
                         "{}{}",
-                        self.i18n("播放失败: ", "播放失敗: ", "Play failed: ", "再生失敗: ", "재생 실패: "),
+                        self.t().play_failed,
                         e
                     ));
                 }
@@ -4855,7 +4327,7 @@ impl UserInterface {
                         };
 
                         if let Err(e) = seek_result {
-                            self.update_status(&format!("跳转失败: {}", e));
+                            self.update_status(&self.t().fmt_seek_failed.replace("{}", &e));
                         }
                         return Ok(());
                     }
@@ -5294,14 +4766,14 @@ impl UserInterface {
                     let ratio = target_secs / total_secs;
                     player.seek(ratio)
                 } else {
-                    Err("无法跳转：歌曲时长为零".to_string())
+                    Err(self.t().seek_error_zero_duration.to_string())
                 }
             } else {
-                Err("无法跳转：未知歌曲时长".to_string())
+                Err(self.t().seek_error_unknown_duration.to_string())
             }
         };
         if let Err(e) = result {
-            self.update_status(&format!("跳转失败: {}", e));
+            self.update_status(&self.t().fmt_seek_failed.replace("{}", &e));
         }
     }
 
@@ -5437,7 +4909,7 @@ impl UserInterface {
                 }
             } else if !manual {
                 self.audio_player.lock().unwrap().stop();
-                self.update_status(self.i18n("播放完成", "播放完成", "Playback finished", "再生完了", "재생 완료"));
+                self.update_status(self.t().play_complete);
             }
             return;
         }
@@ -5453,7 +4925,7 @@ impl UserInterface {
         } else if !manual {
             // 自动播放完成，停止播放
             self.audio_player.lock().unwrap().stop();
-            self.update_status(self.i18n("播放完成", "播放完成", "Playback finished", "再生完了", "재생 완료"));
+            self.update_status(self.t().play_complete);
         }
     }
 
@@ -5521,24 +4993,30 @@ impl UserInterface {
 
     /// 打开文件夹
     fn open_folder(&mut self) {
-        use crate::playlist::open_folder_dialog;
+        use crate::playlist::{open_folder_dialog, FolderDialogResult};
 
-        // 优先使用图形对话框
-        if let Some(path) = open_folder_dialog() {
-            let path_str = path.to_string_lossy().to_string();
-            self.load_directory(&path_str);
-        }
+        let dialog_result = open_folder_dialog();
 
-        // 在 Linux 下若图形对话框不可用（无 zenity/kdialog/yad/qarma/python-tk），回退到终端输入
-        #[cfg(target_os = "linux")]
-        {
-            let path = self.terminal_input_path();
-            if let Some(path_str) = path {
+        match dialog_result {
+            FolderDialogResult::Selected(path) => {
+                let path_str = path.to_string_lossy().to_string();
                 self.load_directory(&path_str);
             }
+            FolderDialogResult::Cancelled => {
+                // 用户取消了图形对话框，不进行终端输入，直接返回播放界面
+            }
+            FolderDialogResult::NoDialogAvailable => {
+                // 没有可用的图形对话框工具，Linux 下回退到终端输入
+                #[cfg(target_os = "linux")]
+                {
+                    let path = self.terminal_input_path();
+                    if let Some(path_str) = path {
+                        self.load_directory(&path_str);
+                    }
+                }
+                // Windows/macOS 下不会出现此情况
+            }
         }
-
-        // Windows/macOS 下取消或关闭对话框时，不进行终端输入，保持在播放界面
     }
 
     /// 在终端内交互式输入路径（临时退出 raw mode）
@@ -5551,7 +5029,7 @@ impl UserInterface {
         let _ = terminal::disable_raw_mode();
 
         // 提示用户输入
-        print!("\n请输入音乐目录路径: ");
+        print!("\n{}", self.t().input_dir_path);
         let _ = io::stdout().flush();
 
         // 读取用户输入
@@ -5604,7 +5082,7 @@ impl UserInterface {
             Err(e) => {
                 self.update_status(&format!(
                     "{}{}",
-                    self.i18n("加载失败: ", "載入失敗: ", "Load failed: ", "読み込み失敗: ", "로드 실패: "),
+                    self.t().load_failed,
                     e
                 ));
             }
@@ -5644,7 +5122,7 @@ impl UserInterface {
             Err(e) => {
                 self.update_status(&format!(
                     "{}{}",
-                    self.i18n("加载失败: ", "載入失敗: ", "Load failed: ", "読み込み失敗: ", "로드 실패: "),
+                    self.t().load_failed,
                     e
                 ));
             }

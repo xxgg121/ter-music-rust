@@ -82,15 +82,21 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 - **기록 삭제**: 기록 화면에서 `d`
 
 ### 🌐 다국어 UI
-`l` 키로 5개 언어를 순환 전환:
+`l` 키로 11개 언어를 순환 전환:
 
 | 언어 | 설정값 |
 |------|--------|
-| 중국어 간체 | `zh-CN` |
-| 중국어 번체 | `zh-TW` |
+| 중국어 간체 | `sc` |
+| 중국어 번체 | `tc` |
 | English | `en` |
 | 日本語 | `ja` |
 | 한국어 | `ko` |
+| Русский | `ru` |
+| Français | `fr` |
+| Deutsch | `de` |
+| Español | `es` |
+| Italiano | `it` |
+| Português | `pt` |
 
 ### 🎨 멀티 테마 UI
 `t` 키로 4개 테마를 순환 전환:
@@ -132,7 +138,7 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 | `api_model` | AI 모델명(기본값: `deepseek-v4-flash`) |
 | `github_token` | GitHub Token(곡 정보 Discussion 제출용, 비워두면 기본 Token 사용) |
 | `theme` | 테마 이름 |
-| `language` | UI 언어 (`zh-CN` / `zh-TW` / `en` / `ja` / `ko`) |
+| `language` | UI 언어 (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
 
 **자동 저장 시점**: 곡 전환, 테마 전환, 언어 전환, 즐겨찾기 변경, 30초마다, 종료 시(Ctrl+C 포함)
 
@@ -671,6 +677,33 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605030941519730_ter-music-rust-mac.zip "附件(Attached)")
 [ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
 [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## 버전 1.6.0 (2026-05-04)
+
+### 🎉 신규 기능
+
+#### 다국어 확장 및 국제화 리팩터링
+- ✨ **6개 UI 언어 추가**: 러시아어(Русский), 프랑스어(Français), 독일어(Deutsch), 스페인어(Español), 이탈리아어(Italiano), 포르투갈어(Português)를 추가하여 총 11개 언어 지원
+- ✨ **전체 모듈 국제화**: 사용자 대면 모든 텍스트(UI 인터페이스, 명령줄 도움말, 오류 메시지, 대화상자 제목)가 국제화되었으며, `ui.rs`, `main.rs`, `search.rs`, `audio.rs`, `config.rs`, `playlist.rs` 포함
+- ✨ **언어 팩 중앙 관리**: `langs.rs` 모듈을 추가하여 모든 언어의 번역 텍스트를 하나의 파일에서 집중 관리. `LangTexts` 구조체와 11개 언어 정적 인스턴스 포함
+- ✨ **전역 언어 접근자**: 비 UI 모듈(search.rs / audio.rs / config.rs / playlist.rs)이 스레드 안전하게 현재 언어 번역 텍스트를 가져올 수 있는 `langs::global_texts()` 함수 제공
+- ✨ **AI 프롬프트 다국어화**: 각 언어의 AI 곡 정보 쿼리 프롬프트가 해당 언어로 출력되어, 응답 언어가 UI 언어와 일치함을 보장
+
+### 🔧 기능 개선
+
+- 🌐 **CLI 도움말 국제화**: 명령줄 `-h` 도움말 정보가 UI 언어 설정을 따름
+- 🌐 **오류 메시지 국제화**: 오디오 오류, 검색 오류, 설정 오류, 디렉터리 오류 등 메시지가 UI 언어를 따름
+- 🌐 **대화상자 제목 국제화**: macOS / Linux 폴더 선택 대화상자 제목이 UI 언어를 따름
+- ♻️ **코드 분리**: 각 모듈은 더 이상 하드코딩된 텍스트 문자열을 포함하지 않으며, 모든 텍스트는 `self.t()` 또는 `langs::global_texts()`를 통해 번역 텍스트를 읽어옴
+
+### 🐞 버그 수정
+
+- 🛠️ **댓글 모드 키보드 포커스 수정**: 온라인 검색/통합 검색/플레이리스트 검색 모드에서 `c`를 눌러 댓글을 본 후, 위아래 키가 댓글 목록이 아닌 곡 목록을 제어하던 문제를 수정
+- 🛠️ **Linux폴더 선택 대화상자 수정**: Linux에서 `o`를 눌렀을 때 그래픽 폴더 선택 대화상자가 표시되지 않던 문제를 수정. raw 모드와 그래픽 대화상자의 충돌을 올바르게 처리
+- 🛠️ **UTF-8로그 슬라이스 안전성 수정**: 멀티바이트 UTF-8 문자열의 바이트 단위 슬라이스가 프로그램 충돌을 일으킬 수 있던 문제를 수정. 문자 단위 안전 자르기로 변경
+- 🛠️ **설정 파일 포맷 수정**: 설정 파일 오류 메시지의 `replace("{}")` 이중 치환으로 인해 두 번째 플레이스홀더가 올바르게 치환되지 않던 문제를 수정
 
 ---
 

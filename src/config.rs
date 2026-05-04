@@ -14,7 +14,7 @@ fn default_theme() -> String {
 }
 
 fn default_language() -> String {
-    "zh-CN".to_string()
+    "sc".to_string()
 }
 
 fn default_api_key() -> String {
@@ -257,9 +257,9 @@ impl Config {
                 Ok(content) => match Self::parse_with_repair(&content) {
                     Ok((config, repaired_text)) => {
                         if let Some(repaired) = repaired_text {
-                            eprintln!("检测到旧配置格式问题，已自动修复({})", config_path.display());
+                            eprintln!("{}", crate::langs::global_texts().fmt_config_auto_fix_detected.replace("{}", &format!("{}", config_path.display())));
                             if let Err(e) = fs::write(&config_path, repaired) {
-                                eprintln!("自动回写修复后的配置失败({}): {}", config_path.display(), e);
+                                eprintln!("{}", crate::langs::global_texts().fmt_config_auto_fix_failed.replacen("{}", &format!("{}", config_path.display()), 1).replacen("{}", &e.to_string(), 1));
                             }
                         }
 
@@ -273,11 +273,11 @@ impl Config {
                         }
                     }
                     Err(e) => {
-                        eprintln!("配置文件格式错误({}): {}，尝试下一个配置", config_path.display(), e);
+                        eprintln!("{}", crate::langs::global_texts().fmt_config_parse_error.replacen("{}", &format!("{}", config_path.display()), 1).replacen("{}", &e.to_string(), 1));
                     }
                 },
                 Err(e) => {
-                    eprintln!("无法读取配置文件({}): {}，尝试下一个配置", config_path.display(), e);
+                    eprintln!("{}", crate::langs::global_texts().fmt_config_read_error.replacen("{}", &format!("{}", config_path.display()), 1).replacen("{}", &e.to_string(), 1));
                 }
             }
         }
@@ -291,7 +291,7 @@ impl Config {
 
         if let Some(parent) = config_path.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
-                eprintln!("无法创建配置目录: {}", e);
+                eprintln!("{}", crate::langs::global_texts().fmt_config_mkdir_failed.replace("{}", &e.to_string()));
                 return;
             }
         }
@@ -300,11 +300,11 @@ impl Config {
             Ok(json) => match fs::write(&config_path, json) {
                 Ok(()) => {}
                 Err(e) => {
-                    eprintln!("无法保存配置文件: {}", e);
+                    eprintln!("{}", crate::langs::global_texts().fmt_config_save_failed.replace("{}", &e.to_string()));
                 }
             },
             Err(e) => {
-                eprintln!("无法序列化配置: {}", e);
+                eprintln!("{}", crate::langs::global_texts().fmt_config_serialize_failed.replace("{}", &e.to_string()));
             }
         }
     }
@@ -331,7 +331,7 @@ mod tests {
         assert_eq!(config.play_mode, "Single");
         assert_eq!(config.volume, 50);
         assert_eq!(config.theme, "Neon");
-        assert_eq!(config.language, "zh-CN");
+        assert_eq!(config.language, "sc");
     }
 
     #[test]
