@@ -42,7 +42,7 @@ Un reproductor de música para terminal, simple y práctico, implementado en Rus
 - **Carga de letras locales**: búsqueda automática de archivos `.lrc` coincidentes
 - **Detección de codificación de letras**: detección automática de UTF-8 / GBK
 - **Descarga automática en línea**: descarga asíncrona en segundo plano cuando faltan letras locales
-- **Desplazamiento resaltado**: la línea actual se resalta con `►`, desplazamiento automático centrado
+- **Desplazamiento resaltado**: la línea actual se resalta con `>`, desplazamiento automático centrado
 - **Salto por marca de letra**: arrastra el área de letras o usa la rueda del ratón para saltar por marca de tiempo
 
 ### 🔍 Búsqueda
@@ -63,7 +63,7 @@ Un reproductor de música para terminal, simple y práctico, implementado en Rus
 
 ### ⭐ Favoritos
 - **Añadir/eliminar favoritos**: pulsa `f` para alternar el estado de favorito de la pista actual
-- **Lista de favoritos**: pulsa `v` para ver los favoritos (con marcador `★`)
+- **Lista de favoritos**: pulsa `v` para ver los favoritos (con marcador `*`)
 - **Reproducción entre directorios**: cambio automático de directorio cuando un favorito está fuera del directorio actual
 - **Eliminar favorito**: pulsa `d` en la lista de favoritos
 
@@ -77,7 +77,7 @@ Un reproductor de música para terminal, simple y práctico, implementado en Rus
 ### 📂 Gestión de directorios
 - **Elegir directorio de música**: pulsa `o` para abrir el diálogo de selección de carpeta (la reproducción comienza automáticamente tras la primera apertura exitosa)
 - **Historial de directorios**: pulsa `m` para ver y cambiar rápidamente entre directorios
-- **Marcador de directorio actual**: `▶` indica el directorio activo actualmente
+- **Marcador de directorio actual**: `>>` indica el directorio activo actualmente
 - **Eliminar elemento del historial**: pulsa `d` en la vista de historial
 
 ### 🌐 Interfaz multilingüe
@@ -672,10 +672,31 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La primera compilación descarga y compila todas las dependencias; esto es esperado. Las compilaciones posteriores son mucho más rápidas.
 
 ### Descargar Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605041058546980_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605041059025049_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605041059164016_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605041059236181_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605030941394786_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605030941519730_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## Versión 1.7.0 (2026-05-05)
+
+### 🐞 Correcciones de errores
+
+- 🛠️ **Interfaz incompleta en el primer inicio en Linux**: corregido un problema donde la interfaz se reducía a la esquina superior izquierda del terminal en el primer inicio del programa en Linux y requería un clic para mostrarse completamente. Añadida espera de 50ms después de entrar en alternate screen, re-consulta del tamaño del terminal y limpieza de pantalla
+- 🛠️ **Sin sugerencia para lista de reproducción vacía**: corregido un problema donde la lista de reproducción estaba vacía sin indicación en el primer inicio sin directorio de música seleccionado. Añadida sugerencia «Pulsa o para seleccionar directorio de música» (mismo estilo que la sugerencia del área de letras)
+- 🛠️ **Desbordamiento del fondo azul de la línea seleccionada**: corregido un problema donde el fondo azul de la línea seleccionada se extendía más allá del límite del panel izquierdo hacia el área de letras. Reemplazo de `Clear(UntilNewLine)` por relleno de espacios de ancho exacto
+- 🛠️ **Residuo de letras anteriores en el área de letras**: corregido un problema donde al cambiar a una canción sin letras, las letras de la canción anterior permanecían visibles. Limpieza de todas las líneas antes de dibujar
+- 🛠️ **Sin redibujado al redimensionar ventana en pausa/detenido**: corregido un problema donde la interfaz no se actualizaba inmediatamente al redimensionar el terminal en estado de pausa o detención. Añadido manejo del evento `Event::Resize`
+- 🛠️ **Paginación de comentarios no visible en pausa**: corregido un problema donde PageUp/PageDown en modo comentarios no se mostraban en pausa o detención. Añadido estado de carga de comentarios a la condición de redibujado periódico
+- 🛠️ **Reinicio de comentarios al cambiar canción en modo comentarios**: corregido un problema donde los comentarios se reiniciaban al cambiar de canción en modo comentarios, perdiendo la posición de lectura actual. Omisión del reinicio de comentarios en modo comentarios
+- 🛠️ **Pérdida de caracteres del título al reproducir**: corregido un problema de pérdida de caracteres en títulos de canciones que comienzan con dígitos/inglés (ej: «17 años» se mostraba como «1 años»). Causa: los símbolos Unicode `►★▶■❚` tienen ancho ambiguo en terminales del este asiático (inconsistencia de 1 o 2 columnas), provocando desplazamiento del cursor y sobrescritura de caracteres posteriores. Todos los símbolos Unicode ambiguos reemplazados por caracteres ASCII de ancho no ambiguo: `►`→`>`, `★`→`*`, `▶`→`>>`, `■`→`||`, `❚`→`[]`
+
+### 🔧 Mejoras
+
+- 🎨 **Unificación de símbolos UI en ASCII**: prefijo de reproducción `>>` (reproduciendo), `||` (pausa), `[]` (detenido), marcador de selección `>`, marcador de favorito `*`, marcador de directorio actual `>>`, marcador de resaltado de letras `>`, marcador de selección de comentario `>`, eliminación de ambigüedad de ancho en terminales del este asiático
+- 📝 **Optimización del texto de sugerencia de lista de reproducción vacía**: cambiado «Ningún directorio de música disponible seleccionado, modo de lista vacía activado, pulsa o para abrir el directorio de música» por «Ningún directorio de música disponible, modo de lista de reproducción vacía activado, pulsa o para abrir el directorio de música», redacción más precisa y natural
+- 📂 **Establecer directorio predeterminado cuando no hay directorio disponible**: cuando no hay directorio disponible, establecer automáticamente el directorio de música predeterminado (USERPROFILE/ter-music-rust/music) y añadir al historial de directorios de música; al descargar canciones desde la búsqueda en línea, usar el directorio de música predeterminado en lugar del directorio de trabajo actual
 
 ---
 

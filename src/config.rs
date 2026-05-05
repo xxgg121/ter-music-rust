@@ -60,6 +60,13 @@ pub fn get_app_config_dir() -> PathBuf {
     exe_dir.to_path_buf()
 }
 
+/// 获取默认音乐目录（用户配置目录/music），不存在时自动创建
+pub fn get_default_music_dir() -> PathBuf {
+    let music_dir = get_app_config_dir().join("music");
+    let _ = fs::create_dir_all(&music_dir);
+    music_dir
+}
+
 /// 获取当天日志文件路径（用户配置目录/logs/YYYY-MM-DD.log）
 pub fn get_daily_log_path() -> PathBuf {
     let filename = format!("{}.log", Local::now().format("%Y-%m-%d"));

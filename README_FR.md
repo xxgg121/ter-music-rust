@@ -42,7 +42,7 @@ Un lecteur de musique en terminal, simple et pratique, développé en Rust. Il p
 - **Chargement local des paroles** : recherche automatique des fichiers `.lrc` correspondants
 - **Détection de l'encodage des paroles** : détection automatique UTF-8 / GBK
 - **Téléchargement automatique en ligne** : téléchargement asynchrone en arrière-plan lorsque les paroles locales sont manquantes
-- **Surbrillance défilante** : la ligne en cours est mise en surbrillance avec `►`, défilement automatique centré
+- **Surbrillance défilante** : la ligne en cours est mise en surbrillance avec `>`, défilement automatique centré
 - **Saut par position de paroles** : glissez la zone des paroles ou utilisez la molette de la souris pour sauter à l'horodatage des paroles
 
 ### 🔍 Recherche
@@ -63,7 +63,7 @@ Un lecteur de musique en terminal, simple et pratique, développé en Rust. Il p
 
 ### ⭐ Favoris
 - **Ajouter/supprimer des favoris** : appuyez sur `f` pour basculer l'état favori de la piste en cours
-- **Liste des favoris** : appuyez sur `v` pour voir les favoris (avec le marqueur `★`)
+- **Liste des favoris** : appuyez sur `v` pour voir les favoris (avec le marqueur `*`)
 - **Lecture inter-répertoires** : changement automatique de répertoire lorsqu'un favori se trouve en dehors du répertoire actuel
 - **Supprimer un favori** : appuyez sur `d` dans la liste des favoris
 
@@ -77,7 +77,7 @@ Un lecteur de musique en terminal, simple et pratique, développé en Rust. Il p
 ### 📂 Gestion des répertoires
 - **Choisir le répertoire de musique** : appuyez sur `o` pour ouvrir la boîte de dialogue de sélection de dossier (la lecture démarre automatiquement après la première ouverture réussie)
 - **Historique des répertoires** : appuyez sur `m` pour voir et changer rapidement de répertoire
-- **Marqueur du répertoire actuel** : `▶` indique le répertoire actif actuel
+- **Marqueur du répertoire actuel** : `>>` indique le répertoire actif actuel
 - **Supprimer un élément de l'historique** : appuyez sur `d` dans la vue de l'historique
 
 ### 🌐 Interface multilingue
@@ -672,10 +672,31 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La première compilation télécharge et compile toutes les dépendances ; c'est normal. Les compilations suivantes sont beaucoup plus rapides.
 
 ### Télécharger les versions
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605041058546980_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605041059025049_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605041059164016_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605041059236181_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605030941394786_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605030941519730_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## Version 1.7.0 (2026-05-05)
+
+### 🐞 Corrections de bugs
+
+- 🛠️ **Interface incomplète au premier lancement sur Linux** : correction d'un problème où l'interface était réduite dans le coin supérieur gauche du terminal lors du premier lancement sur Linux et nécessitait un clic pour s'afficher complètement. Ajout d'une attente de 50ms après l'entrée en alternate screen, re-requête de la taille du terminal et effacement de l'écran
+- 🛠️ **Absence de suggestion pour la liste de lecture vide** : correction d'un problème où la liste de lecture était vide sans indication lors du premier lancement sans répertoire de musique sélectionné. Ajout de la suggestion « Appuyez sur o pour sélectionner un répertoire de musique » (même style que la suggestion de la zone des paroles)
+- 🛠️ **Débordement du fond bleu de la ligne sélectionnée** : correction d'un problème où le fond bleu de la ligne sélectionnée débordait au-delà de la limite du panneau gauche dans la zone des paroles. Remplacement de `Clear(UntilNewLine)` par un remplissage d'espaces de largeur exacte
+- 🛠️ **Rémanence des paroles précédentes dans la zone des paroles** : correction d'un problème où les paroles de la chanson précédente restaient visibles lors du changement de chanson sans paroles. Effacement de toutes les lignes avant le dessin
+- 🛠️ **Absence de redessin lors du redimensionnement en pause/arrêt** : correction d'un problème où l'interface ne se mettait pas à jour immédiatement lors du redimensionnement du terminal en pause ou à l'arrêt. Ajout de la gestion de l'événement `Event::Resize`
+- 🛠️ **Pagination des commentaires non affichée en pause** : correction d'un problème où PageUp/PageDown en mode commentaires ne s'affichait pas en pause ou à l'arrêt. Ajout de l'état de chargement des commentaires à la condition de redessin périodique
+- 🛠️ **Réinitialisation des commentaires au changement de chanson en mode commentaires** : correction d'un problème où les commentaires étaient réinitialisés lors du changement de chanson en mode commentaires, perdant la position de lecture. Saut de la réinitialisation en mode commentaires
+- 🛠️ **Perte de caractères du titre en lecture** : correction d'un problème de perte de caractères dans les titres de chansons commençant par des chiffres/anglais (ex : « 17 ans » affiché comme « 1 ans »). Cause : les symboles Unicode `►★▶■❚` ont une largeur ambiguë dans les terminaux est-asiatiques (incohérence 1 ou 2 colonnes), provoquant un décalage du curseur et l'écrasement des caractères suivants. Remplacement de tous les symboles Unicode ambigus par des caractères ASCII de largeur non ambiguë : `►`→`>`, `★`→`*`, `▶`→`>>`, `■`→`||`, `❚`→`[]`
+
+### 🔧 Améliorations
+
+- 🎨 **Unification des symboles UI en ASCII** : préfixe de lecture `>>` (lecture), `||` (pause), `[]` (arrêt), marqueur de sélection `>`, marqueur de favori `*`, marqueur de répertoire actuel `>>`, marqueur de surbrillance des paroles `>`, marqueur de sélection de commentaire `>`, élimination de l'ambiguïté de largeur dans les terminaux est-asiatiques
+- 📝 **Optimisation du libellé de la suggestion de liste de lecture vide** : modification de « Aucun répertoire de musique disponible sélectionné, mode liste vide activé, appuyez sur o pour ouvrir le répertoire de musique » en « Aucun répertoire de musique disponible, mode liste de lecture vide activé, appuyez sur o pour ouvrir le répertoire de musique », libellé plus précis et naturel
+- 📂 **Définition du répertoire par défaut en l'absence de répertoire disponible** : lorsqu'aucun répertoire n'est disponible, définition automatique du répertoire de musique par défaut (USERPROFILE/ter-music-rust/music) et ajout à l'historique des répertoires de musique ; lors du téléchargement de chansons depuis la recherche en ligne, utilisation du répertoire de musique par défaut au lieu du répertoire de travail courant
 
 ---
 

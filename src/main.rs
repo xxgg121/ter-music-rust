@@ -98,31 +98,29 @@ fn main() {
     }
 
     // 先尝试加载已有目录（命令行或配置）
-    let mut loaded_playlist = music_dir
+    let loaded_playlist = music_dir
         .as_ref()
         .and_then(|dir| playlist::scan_music_directory(dir).ok())
         .map(|pl| Arc::new(Mutex::new(pl)));
 
-    // 若未成功加载，弹出图形对话框让用户选择目录（可重复选择）
-    while loaded_playlist.is_none() {
-        let selected_dir = playlist::open_folder_dialog();
-        match selected_dir {
-            playlist::FolderDialogResult::Selected(dir) => {
-                loaded_playlist = playlist::scan_music_directory(&dir)
-                    .ok()
-                    .map(|pl| Arc::new(Mutex::new(pl)));
-            }
-            playlist::FolderDialogResult::Cancelled => break,
-            playlist::FolderDialogResult::NoDialogAvailable => break,
-        }
-    }
-
-    // 若最终仍未选择到可用目录，则进入空列表模式（可按 o 再次选择目录）
-    let playlist = match loaded_playlist {
-        Some(pl) => pl,
+    // 若未成功加载，使用默认音乐目录（配置目录/music），并设置到配置中
+    let (playlist, need_startup_dialog) = match loaded_playlist {
+        Some(pl) => (pl, false),
         None => {
             eprintln!("{}", texts.cli_no_dir_selected);
-            Arc::new(Mutex::new(Playlist::new()))
+            let default_music_dir = config::get_default_music_dir();
+            let default_music_dir_str = default_music_dir.to_string_lossy().to_string();
+            // 设置 music_directory 为默认目录
+            config.music_directory = Some(default_music_dir_str.clone());
+            // 添加到 dir_history（如果不存在）
+            if !config.dir_history.iter().any(|p| *p == default_music_dir_str) {
+                config.dir_history.push(default_music_dir_str);
+            }
+            // 尝试扫描默认目录（可能有之前下载的歌曲）
+            let pl = playlist::scan_music_directory(&default_music_dir)
+                .map(|pl| Arc::new(Mutex::new(pl)))
+                .unwrap_or_else(|_| Arc::new(Mutex::new(Playlist::new())));
+            (pl, true)
         }
     };
 
@@ -139,6 +137,9 @@ fn main() {
 
     // 创建用户界面
     let mut ui = UserInterface::new(playlist.clone(), audio_player.clone());
+    if need_startup_dialog {
+        ui.set_need_startup_dialog(true);
+    }
     ui.set_theme_by_name(&config.theme);
     ui.set_language_by_name(&config.language);
     ui.set_api_key(config.api_key.clone());

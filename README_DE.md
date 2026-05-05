@@ -42,7 +42,7 @@ Ein schlanker und praktischer Terminal-Musikplayer in Rust mit lokaler/online Su
 - **Lokales Laden von Liedtexten**: Automatisches Finden passender `.lrc`-Dateien
 - **Liedtext-Kodierungserkennung**: Automatische Erkennung von UTF-8 / GBK
 - **Automatischer Online-Download**: Asynchroner Hintergrund-Download bei fehlenden lokalen Liedtexten
-- **Scrollende Hervorhebung**: Aktuelle Zeile wird mit `►` hervorgehoben, automatisches zentriertes Scrollen
+- **Scrollende Hervorhebung**: Aktuelle Zeile wird mit `>` hervorgehoben, automatisches zentriertes Scrollen
 - **Liedtext-Positionssprung**: Ziehen des Liedtextbereichs oder Mausrad zum Springen nach Liedtext-Zeitstempel
 
 ### 🔍 Suche
@@ -63,7 +63,7 @@ Ein schlanker und praktischer Terminal-Musikplayer in Rust mit lokaler/online Su
 
 ### ⭐ Favoriten
 - **Favoriten hinzufügen/entfernen**: `f` drücken, um den Favoritenstatus des aktuellen Titels umzuschalten
-- **Favoritenliste**: `v` drücken, um Favoriten anzuzeigen (mit `★`-Markierung)
+- **Favoritenliste**: `v` drücken, um Favoriten anzuzeigen (mit `*`-Markierung)
 - **Verzeichnisübergreifende Wiedergabe**: Automatischer Verzeichniswechsel, wenn sich ein Favorit außerhalb des aktuellen Verzeichnisses befindet
 - **Favorit löschen**: `d` in der Favoritenliste drücken
 
@@ -77,7 +77,7 @@ Ein schlanker und praktischer Terminal-Musikplayer in Rust mit lokaler/online Su
 ### 📂 Verzeichnisverwaltung
 - **Musikverzeichnis wählen**: `o` drücken, um den Ordnerauswahl-Dialog zu öffnen (Wiedergabe startet automatisch nach erster erfolgreicher Öffnung)
 - **Verzeichnisverlauf öffnen**: `m` drücken, um Verzeichnisse anzuzeigen und schnell zu wechseln
-- **Aktuelles Verzeichnis-Marker**: `▶` zeigt das aktuell aktive Verzeichnis an
+- **Aktuelles Verzeichnis-Marker**: `>>` zeigt das aktuell aktive Verzeichnis an
 - **Verlaufseintrag löschen**: `d` in der Verlaufsansicht drücken
 
 ### 🌐 Mehrsprachige Benutzeroberfläche
@@ -672,10 +672,31 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 Der erste Build lädt und kompiliert alle Abhängigkeiten herunter; dies ist erwartet. Spätere Builds sind deutlich schneller.
 
 ### Downloads
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605041058546980_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605041059025049_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605041059164016_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605041059236181_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605030941394786_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605030941519730_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## Version 1.7.0 (2026-05-05)
+
+### 🐞 Fehlerbehebungen
+
+- 🛠️ **Unvollständige Oberfläche beim ersten Start auf Linux**: Problem behoben, bei dem die Oberfläche beim ersten Programmstart auf Linux in die obere linke Ecke des Terminals gequetscht war und ein Klick erforderlich war, um sie vollständig anzuzeigen. 50ms Wartezeit nach dem Wechsel zum Alternate Screen hinzugefügt, Terminalgröße erneut abgefragt und Bildschirm gelöscht
+- 🛠️ **Fehlender Hinweis bei leerer Wiedergabeliste**: Problem behoben, bei dem die Wiedergabeliste beim ersten Start ohne ausgewähltes Musikverzeichnis ohne Hinweis leer war. Hinweis „o drücken, um Musikverzeichnis auszuwählen" hinzugefügt (gleicher Stil wie Hinweis im Liedtextbereich)
+- 🛠️ **Überlauf des blauen Hintergrunds der ausgewählten Zeile**: Problem behoben, bei dem die blaue Hintergrundhervorhebung der ausgewählten Zeile über die Grenze des linken Panels in den Liedtextbereich rechts hinausging. `Clear(UntilNewLine)` durch exakte Breiten-Leerraumfüllung ersetzt
+- 🛠️ **Verbleibende vorherige Liedtexte im Liedtextbereich**: Problem behoben, bei dem beim Wechsel zu einem Song ohne Liedtexte die Liedtexte des vorherigen Songs im rechten Bereich sichtbar blieben. Alle Zeilen vor dem Zeichnen gelöscht
+- 🛠️ **Kein Neuzeichnen bei Fenstergrößenänderung im Pause/Stopp-Zustand**: Problem behoben, bei dem die Oberfläche bei Größenänderung des Terminals im Pause- oder Stopp-Zustand nicht sofort aktualisiert wurde. `Event::Resize`-Ereignisbehandlung hinzugefügt
+- 🛠️ **Kommentar-Paginierung wird bei Pause nicht angezeigt**: Problem behoben, bei dem PageUp/PageDown im Kommentarmodus bei Pause oder Stopp nicht angezeigt wurden. Kommentar-Ladezustand zur Bedingung für periodisches Neuzeichnen hinzugefügt
+- 🛠️ **Zurücksetzen der Kommentare bei Songwechsel im Kommentarmodus**: Problem behoben, bei dem Kommentare beim Songwechsel im Kommentarmodus zurückgesetzt wurden und die aktuelle Leseposition verloren ging. Zurücksetzen der Kommentare im Kommentarmodus übersprungen
+- 🛠️ **Titelzeichenverlust bei Wiedergabe**: Problem des Zeichenverlusts in Songtiteln behoben, die mit Ziffern/Englisch beginnen (z.B. „17 Jahre" wurde als „1 Jahre" angezeigt). Ursache: Unicode-Symbole `►★▶■❚` haben in ostasiatischen Terminals eine mehrdeutige Breite (1 oder 2 Spalten-Unstimmigkeit), was zu Cursor-Verschiebung und Überschreiben nachfolgender Zeichen führte. Alle mehrdeutigen Unicode-Symbole durch ASCII-Zeichen mit eindeutiger Breite ersetzt: `►`→`>`, `★`→`*`, `▶`→`>>`, `■`→`||`, `❚`→`[]`
+
+### 🔧 Verbesserungen
+
+- 🎨 **UI-Symbole in ASCII vereinheitlicht**: Wiedergabepräfix `>>` (Wiedergabe), `||` (Pause), `[]` (Stopp), Auswahmarker `>`, Favoritenmarker `*`, aktuelles Verzeichnis-Marker `>>`, Liedtext-Hervorhebungsmarker `>`, Kommentar-Auswahlmarker `>`, Beseitigung der Breitenmehrdeutigkeit in ostasiatischen Terminals
+- 📝 **Optimierung des Hinweistextes für leere Wiedergabeliste**: Änderung von „Kein verfügbares Musikverzeichnis ausgewählt, Leerer-Listen-Modus aktiviert, o drücken um Musikverzeichnis zu öffnen" zu „Kein verfügbares Musikverzeichnis, Leerer-Wiedergabelisten-Modus aktiviert, o drücken um Musikverzeichnis zu öffnen", Formulierung präziser und natürlicher
+- 📂 **Standardverzeichnis bei fehlendem Verzeichnis setzen**: Wenn kein Verzeichnis verfügbar ist, automatisch das Standard-Musikverzeichnis (USERPROFILE/ter-music-rust/music) setzen und zum Musikverzeichnisverlauf hinzufügen; beim Herunterladen von Songs aus der Online-Suche das Standard-Musikverzeichnis anstelle des aktuellen Arbeitsverzeichnisses verwenden
 
 ---
 

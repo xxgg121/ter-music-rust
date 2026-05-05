@@ -42,7 +42,7 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 - **Local lyric loading**: automatically find matching `.lrc` files
 - **Lyric encoding detection**: auto-detect UTF-8 / GBK
 - **Automatic online download**: async background download when local lyrics are missing
-- **Scrolling highlight**: current line is highlighted with `►`, auto-centered scrolling
+- **Scrolling highlight**: current line is highlighted with `>`, auto-centered scrolling
 - **Lyric position jump**: drag lyric area or use mouse wheel to jump by lyric timestamp
 
 ### 🔍 Search
@@ -63,7 +63,7 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 
 ### ⭐ Favorites
 - **Add/remove favorites**: press `f` to toggle favorite state of current track
-- **Favorites list**: press `v` to view favorites (with `★` marker)
+- **Favorites list**: press `v` to view favorites (with `*` marker)
 - **Cross-directory playback**: auto-switch directory when a favorite is outside current directory
 - **Delete favorite**: press `d` in favorites list
 
@@ -77,7 +77,7 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 ### 📂 Directory Management
 - **Choose music directory**: press `o` to open folder picker dialog (playback starts automatically after first successful open)
 - **Open directory history**: press `m` to view and quickly switch directories
-- **Current directory marker**: `▶` indicates currently active directory
+- **Current directory marker**: `>>` indicates currently active directory
 - **Delete history item**: press `d` in history view
 
 ### 🌐 Multi-language UI
@@ -672,10 +672,31 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605041058546980_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605041059025049_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605041059164016_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605041059236181_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605030941394786_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605030941519730_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## Version 1.7.0 (2026-05-05)
+
+### 🐞 Bug Fixes
+
+- 🛠️ **Linux first-run display incomplete**: fixed the issue where the interface was shrunk in the top-left corner of the terminal on first run on Linux, requiring a click to display properly. Added 50ms sleep after entering alternate screen, re-query terminal size and clear screen
+- 🛠️ **Empty playlist no hint**: when no music directory is selected on first run, the playlist is empty with no guidance. Added "Press o to select music directory" hint (matching the lyrics area hint style)
+- 🛠️ **Selected row blue background overflow**: fixed the blue background highlight on selected rows extending past the left panel boundary into the right-side lyrics area. Replaced `Clear(UntilNewLine)` with exact-width space filling
+- 🛠️ **Lyrics area residual content**: fixed the issue where old lyrics from a previous song remained visible when switching to a song with no lyrics. Added clearing loop at the beginning of lyrics drawing
+- 🛠️ **Window resize not redrawing when paused/stopped**: fixed the UI not immediately redrawing when the terminal window is resized while paused or stopped. Added `Event::Resize` event handling
+- 🛠️ **Comments paging not showing when paused**: fixed PageUp/PageDown in comments view not showing results when paused or stopped. Added comments loading state to periodic redraw condition
+- 🛠️ **Comments reset on song change in comments mode**: fixed comments being reset when song changes while in comments mode, losing the user's current viewing content. Skip comment reset in comments mode
+- 🛠️ **Title character loss when playing**: fixed characters being lost from song titles when playing (e.g. "17岁" displayed as "1岁"). Root cause: Unicode symbols `►★▶■❚` have ambiguous width (1 or 2 columns) in East Asian terminals, causing cursor offset. Replaced all ambiguous-width Unicode symbols with width-unambiguous ASCII characters: `►`→`>`, `★`→`*`, `▶`→`>>`, `■`→`||`, `❚`→`[]`
+
+### 🔧 Improvements
+
+- 🎨 **UI symbols unified to ASCII**: playing prefix `>>` (playing), `||` (paused), `[]` (stopped), selection marker `>`, favorite marker `*`, current directory marker `>>`, lyrics highlight marker `>`, comment selection marker `>`, eliminating East Asian terminal width ambiguity
+- 📝 **Empty playlist hint wording optimization**: changed "No available music directory selected, entered empty list mode, press o to open music directory" to "No available music directory, entered empty playlist mode, press o to open music directory" for more accurate and natural wording
+- 📂 **Set default directory when no directory available**: when no directory is available, automatically set the default music directory (USERPROFILE/ter-music-rust/music) and add it to music directory history; use the default music directory instead of current working directory when downloading songs from online search
 
 ---
 
