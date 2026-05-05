@@ -672,10 +672,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次建置會下載並編譯所有依賴；這是正常現象。後續建置會快得多。
 
 ### 下載發行版
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605030941394786_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605030941519730_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/20260503094157446_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605030942036738_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605050312131911_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605050312183967_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605050312251425_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605050312355690_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
