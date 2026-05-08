@@ -138,6 +138,12 @@
 | `github_token` | GitHub Token（用于提交歌曲信息 Discussion，留空使用默认 Token） |
 | `theme` | 界面主题名称 |
 | `language` | 界面语言（`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`） |
+| `lyrics_visible` | 桌面歌词是否显示（默认 `false`） |
+| `lyrics_position` | 桌面歌词位置（`bottom` / `top`，默认 `bottom`） |
+| `lyrics_scroll` | 桌面歌词滚动模式（`vertical` / `horizontal` / `karaoke`，默认 `vertical`） |
+| `lyrics_alpha` | 桌面歌词背景透明度 10-100（默认 70） |
+| `lyrics_x` | 桌面歌词窗口 X 坐标（-1 为自动计算） |
+| `lyrics_y` | 桌面歌词窗口 Y 坐标（-1 为自动计算） |
 
 **自动保存时机**：切歌、切换主题、切换语言、收藏变更、每 30 秒、退出时（含 Ctrl+C）
 
@@ -223,6 +229,7 @@ cargo run --release -- -o d:\Music
 | `t` | 切换界面主题 |
 | `k` | 配置API 接口 |
 | `g` | 配置Github Token |
+| `z` | 桌面歌词开关 |
 | `q` | 退出音乐程序 |
 
 ### 歌曲搜索按键
@@ -540,16 +547,17 @@ registry = "https://mirrors.ustc.edu.cn/crates.io-index"
 
 ```
 src/
-├── main.rs       # 主程序入口（参数解析、初始化、配置恢复/保存）
-├── defs.rs       # 公共定义（PlayMode/PlayState 枚举、MusicFile/Playlist 结构体）
-├── langs.rs      # 语言包（11 种语言翻译文本集中管理、全局语言访问器）
-├── audio.rs      # 音频播放控制（rodio 封装、播放/暂停/跳转/音量/进度）
-├── analyzer.rs   # 音频分析器（实时 RMS 音量、EMA 平滑、波形可视化）
-├── playlist.rs   # 播放列表管理（目录扫描、并行获取时长、文件夹选择对话框）
-├── lyrics.rs     # 歌词解析（LRC 格式、本地查找、编码检测、后台下载）
-├── search.rs     # 网络搜索下载（酷我+酷狗+网易搜索、在线下载、评论拉取、歌曲信息流式查询）
-├── config.rs     # 配置文件管理（JSON 序列化、8 项配置持久化）
-└── ui.rs         # 用户界面（终端渲染、事件处理、多视图模式、主题/语言系统）
+├── main.rs           # 主程序入口（参数解析、初始化、配置恢复/保存）
+├── defs.rs           # 公共定义（PlayMode/PlayState 枚举、MusicFile/Playlist 结构体）
+├── langs.rs          # 语言包（11 种语言翻译文本集中管理、全局语言访问器）
+├── audio.rs          # 音频播放控制（rodio 封装、播放/暂停/跳转/音量/进度）
+├── analyzer.rs       # 音频分析器（实时 RMS 音量、EMA 平滑、波形可视化）
+├── playlist.rs       # 播放列表管理（目录扫描、并行获取时长、文件夹选择对话框）
+├── lyrics.rs         # 歌词解析（LRC 格式、本地查找、编码检测、后台下载）
+├── search.rs         # 网络搜索下载（酷我+酷狗+网易搜索、在线下载、评论拉取、歌曲信息流式查询）
+├── config.rs         # 配置文件管理（JSON 序列化、配置项持久化）
+├── desktop_lyrics.rs # 桌面歌词悬浮窗（Windows API/Linux子进程、透明度/位置/拖动/快捷键）
+└── ui.rs             # 用户界面（终端渲染、事件处理、多视图模式、主题/语言系统）
 ```
 
 ### 技术栈
@@ -671,14 +679,50 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605050312131911_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605050312183967_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605050312251425_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605050312355690_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260508120240809_ter-music-rust-win.zip "附件(Attached)")  [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605081202471668_ter-music-rust-mac.zip "附件(Attached)")  [ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605081203011605_ter-music-rust-linux.zip "附件(Attached)")  [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605081203119759_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新日志
+
+## 版本 1.8.0 (2026-05-08)
+
+### 🎉 新功能
+
+#### 桌面歌词悬浮窗
+- ✨ **桌面歌词开关**：按 `z` 键开启/关闭桌面歌词悬浮窗
+- ✨ **三种桌面歌词**：支持垂直滚动、横向滚动、卡拉 OK 三种显示方式，桌面歌词窗口点鼠标右键可循环切换
+- ✨ **窗口位置切换**：按 `PgUp`/`PgDn` 切换悬浮窗在屏幕底部/顶部位置
+- ✨ **透明度调节**：按 `↑`/`↓` 调整背景透明度 10%-100%，歌词文字始终比背景高10%
+- ✨ **位置鼠标拖动**：左键拖动移动悬浮窗位置，位置自动保存到配置
+- ✨ **点击聚焦控制**：点击聚焦后支持完整快捷键：`←`/`→`上下曲、`Space`暂停、`[`/`]`快退快进、`,`/`.`5秒/10秒跳转、`+/-`音量、`1-5`播放模式、`PgUp`/`PgDn`位置切换、`↑`/`↓`透明度、`T`切换主题
+- ✨ **跨平台支持**：Windows 使用原生窗口 API，Linux/MacOS 通过子进程方式实现（winit 0.30 限制）
+- ✨ **歌词滚动动画**：切换歌曲时平滑滚动过渡效果
+- ✨ **卡拉 OK 模式**：以两行四句方式展示歌词，当前句逐字高亮，按非空歌词分组避免空行导致提前切组
+- ✨ **卡拉 OK 切组动画**：一组歌词切换到下一组时加入淡入淡出与轻微滑动过渡，保持与垂直/横向模式一致的平滑体验
+- ✨ **长句自适应显示**：卡拉 OK 第二行歌词较长时自动向左调整起始位置，优先显示完整内容，仅在超过桌面歌词区域宽度时使用省略号
+- ✨ **高亮颜色一致性**：卡拉 OK 当前句使用与其他桌面歌词模式一致的高亮色与粗体显示，同时保持布局宽度稳定不位移
+- ✨ **主题同步**：桌面歌词跟随界面主题（Neon/Sunset/Ocean/GrayWhite）
+- ✨ **配置持久化**：桌面歌词的显示状态、位置、透明度、坐标自动保存和恢复
+
+### 🐞 Bug 修复
+
+- 🛠️ **Linux 桌面歌词主题颜色修复**：修复 Linux 桌面歌词使用 `softbuffer` 渲染时 RGB/BGR 通道顺序写反，导致 Neon/Sunset/Ocean 主题颜色显示偏移、与 TUI 主界面不一致的问题；GrayWhite 因灰阶色差不明显此前不易察觉
+
+### 🔧 功能改进
+
+- 🔍 **新增配置项**：`lyrics_enabled`（是否显示桌面歌词）、`lyrics_position`（位置：bottom/top）、`lyrics_scroll`（滚动模式：vertical/horizontal/karaoke）、`lyrics_alpha`（透明度 10-100）、`lyrics_x`/`lyrics_y`（窗口坐标）
+
+### 💻 技术细节
+
+#### 依赖更新
+- ➕ 添加 `fontdue` 依赖（Linux/MacOS 字体渲染）
+- ➕ 添加 `softbuffer` 依赖（Linux/MacOS 软件渲染）
+
+#### 项目结构更新
+- `desktop_lyrics.rs`：桌面歌词模块（Windows API 实现 + Linux/MacOS 子进程方案）
+
+---
 
 ## 版本 1.7.0 (2026-05-05)
 

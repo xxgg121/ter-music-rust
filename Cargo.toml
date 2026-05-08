@@ -1,6 +1,6 @@
 [package]
 name = "ter-music-rust"
-version = "1.7.0"
+version = "1.8.0"
 edition = "2021"
 description = "A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems."
 license = "MIT"
@@ -32,7 +32,15 @@ ctrlc = "3.4"
 
 # Windows 特定依赖
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["wincon", "winbase", "processenv"] }
+winapi = { version = "0.3", features = ["wincon", "winbase", "processenv", "wingdi", "winuser", "libloaderapi", "errhandlingapi", "windowsx"] }
+
+# Linux / macOS 桌面歌词依赖
+[target.'cfg(not(windows))'.dependencies]
+winit = "0.30"
+softbuffer = "0.4"
+fontdue = "0.9"
+raw-window-handle = "0.6"
+libc = "0.2"
 
 [profile.release]
 opt-level = 3

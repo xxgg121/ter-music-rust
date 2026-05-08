@@ -138,6 +138,12 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 | `github_token` | GitHub Token（楽曲情報 Discussion 投稿用、空欄でデフォルト Token を使用） |
 | `theme` | テーマ名 |
 | `language` | UI 言語（`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`） |
+| `lyrics_enabled` | デスクトップ歌詞の表示/非表示 |
+| `lyrics_position` | デスクトップ歌詞の位置（bottom/top） |
+| `lyrics_scroll` | デスクトップ歌詞のスクロールモード（`vertical` / `horizontal` / `karaoke`、デフォルト `vertical`） |
+| `lyrics_alpha` | デスクトップ歌詞の背景透明度（10-100） |
+| `lyrics_x` | デスクトップ歌詞ウィンドウのX座標 |
+| `lyrics_y` | デスクトップ歌詞ウィンドウのY座標 |
 
 **自動保存のタイミング**: 曲切り替え、テーマ変更、言語変更、お気に入り変更、30 秒ごと、終了時（Ctrl+C 含む）
 
@@ -224,6 +230,7 @@ cargo run --release -- -o d:\Music
 | `t` | テーマ切り替え |
 | `k` | API エンドポイント設定 |
 | `g` | GitHub Token 設定 |
+| `z` | デスクトップ歌詞の表示切替 |
 | `q` | 終了 |
 
 ### 検索画面
@@ -549,6 +556,7 @@ src/
 ├── analyzer.rs   # 音声解析（リアルタイム RMS、EMA 平滑化、波形表示）
 ├── playlist.rs   # プレイリスト管理（ディレクトリ走査、再生時間並列取得、フォルダ選択）
 ├── lyrics.rs     # 歌詞解析（LRC、ローカル検索、エンコード判定、バックグラウンド取得）
+├── desktop_lyrics.rs  # デスクトップ歌詞（Windows API + Linux子プロセス、透明度/位置/ドラッグ/ショートカット）
 ├── search.rs     # ネット検索/取得（酷我+酷狗+網易検索、ダウンロード、コメント取得、楽曲情報ストリーミング検索）
 ├── config.rs     # 設定管理（JSON シリアライズ、8 項目の永続化）
 └── ui.rs         # UI（ターミナル描画、イベント処理、マルチビュー、テーマ/言語）
@@ -672,10 +680,48 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 初回は依存関係のダウンロードとコンパイルが発生するため時間がかかります。2 回目以降は大幅に高速化されます。
 
 ### Release のダウンロード
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605050312131911_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605050312183967_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605050312251425_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605050312355690_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260508120240809_ter-music-rust-win.zip "附件(Attached)")  [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605081202471668_ter-music-rust-mac.zip "附件(Attached)")  [ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605081203011605_ter-music-rust-linux.zip "附件(Attached)")  [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605081203119759_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## 📝 更新履歴
+
+## バージョン 1.8.0 (2026-05-08)
+
+### 🎉 新機能
+
+#### デスクトップ歌詞フローティングウィンドウ
+- ✨ **デスクトップ歌詞の切替**：`z` キーでデスクトップ歌詞フローティングウィンドウの表示/非表示を切替
+- ✨ **3種類のデスクトップ歌詞**：縦スクロール、横スクロール、カラオケの3種類の表示方式に対応し、デスクトップ歌詞ウィンドウを右クリックすると循環切替できます
+- ✨ **位置切替**：`PgUp`/`PgDn` で画面下部/上部への位置切替
+- ✨ **透明度調整**：`↑`/`↓` で背景透明度を 10%-100% に調整、歌詞テキストは背景より常に10%高い不透明度
+- ✨ **位置のマウスドラッグ**：左クリックドラッグでウィンドウ位置を移動、位置は設定に自動保存
+- ✨ **クリックフォーカス制御**：クリックしてフォーカス後、完全なショートカットをサポート：`←`/`→` で前/次の曲、`Space` で一時停止、`[`/`]` でシーク、`,`/`.` で5秒/10秒ジャンプ、`+/-` で音量、`1-5` で再生モード、`PgUp`/`PgDn` で位置、`↑`/`↓` で透明度、`T` でテーマ切替
+- ✨ **クロスプラットフォーム対応**：Windows はネイティブ WinAPI を使用、Linux/macOS は子プロセス方式で実装（winit 0.30 の制限）
+- ✨ **歌詞スクロールアニメーション**：曲切替時のスムーズなスクロール遷移効果
+- ✨ **カラオケモード**：歌詞を2行4フレーズで表示し、現在のフレーズを文字単位でハイライトします。空行による早すぎるグループ切替を避けるため、空でない歌詞でグループ化します
+- ✨ **カラオケのグループ切替アニメーション**：歌詞グループが次のグループへ切り替わる際にフェードと軽いスライド遷移を追加し、縦/横モードと同じ滑らかな体験を維持します
+- ✨ **長文の自適応表示**：カラオケ2行目が長い場合は開始位置を自動で左へ調整し、可能な限り全文を表示します。デスクトップ歌詞領域幅を超える場合のみ省略記号を使用します
+- ✨ **ハイライト色の一貫性**：カラオケの現在フレーズは他のデスクトップ歌詞モードと同じハイライト色と太字表示を使用しつつ、レイアウト幅を安定させて位置ずれを防ぎます
+- ✨ **テーマ同期**：デスクトップ歌詞は UI テーマ（Neon/Sunset/Ocean/GrayWhite）に追従
+- ✨ **設定の永続化**：デスクトップ歌詞の表示状態、位置、透明度、座標を自動保存・復元
+
+### 🐞 バグ修正
+
+- 🛠️ **Linux デスクトップ歌詞のテーマ色修正**：Linux デスクトップ歌詞を `softbuffer` でレンダリングする際に RGB/BGR チャンネル順が逆になり、Neon/Sunset/Ocean テーマの色がずれて TUI メイン画面と一致しない問題を修正。GrayWhite はグレースケールのため差が目立たず、これまで気付きにくい問題でした
+
+### 🔧 機能改善
+
+- 🔍 **新しい設定項目**：`lyrics_enabled`（表示/非表示）、`lyrics_position`（bottom/top）、`lyrics_scroll`（スクロールモード：vertical/horizontal/karaoke）、`lyrics_alpha`（10-100）、`lyrics_x`/`lyrics_y`（ウィンドウ座標）
+
+### 💻 技術的詳細
+
+#### 依存関係の更新
+- ➕ `fontdue` 依存関係を追加（Linux/macOS フォントレンダリング）
+- ➕ `softbuffer` 依存関係を追加（Linux/macOS ソフトウェアレンダリング）
+
+#### プロジェクト構造の更新
+- `desktop_lyrics.rs`：デスクトップ歌詞モジュール（Windows API + Linux子プロセス、透明度/位置/ドラッグ/ショートカット）
 
 ---
 

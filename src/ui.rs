@@ -15,6 +15,7 @@ use crossterm::{
 
 use crate::audio::AudioPlayer;
 use crate::defs::{PlayMode, PlayState, Playlist};
+use crate::desktop_lyrics::{DesktopLyricsHandle, DesktopLyricsPosition};
 use crate::langs::{UiLanguage, LangTexts};
 use crate::lyrics::{Lyrics, LyricsDownloadResult};
 use crate::search::{OnlineSong, OnlinePlaylist, SearchDownloadResult, PlaylistSearchResult, PlaylistSongsResult, DownloadProgress, SongCommentItem, SongCommentsResult, GitHubDiscussionResult};
@@ -396,6 +397,8 @@ pub struct UserInterface {
     online_auto_skip_times: VecDeque<Instant>,
     /// 是否需要在启动后弹出目录选择对话框
     need_startup_dialog: bool,
+    /// 桌面歌词句柄
+    desktop_lyrics: DesktopLyricsHandle,
 }
 
 impl UserInterface {
@@ -505,6 +508,7 @@ impl UserInterface {
             language: UiLanguage::Sc,
             online_auto_skip_times: VecDeque::new(),
             need_startup_dialog: false,
+            desktop_lyrics: DesktopLyricsHandle::new(),
         }
     }
 
@@ -2992,6 +2996,53 @@ impl UserInterface {
     }
 
     /// 处理键盘事件
+    fn handle_desktop_key(&mut self, key: &str) {
+        match key {
+            "LEFT" => self.play_prev(),
+            "RIGHT" => self.play_next(),
+            "UP" => {
+                self.desktop_lyrics.adjust_alpha(1);
+                self.save_config_now();
+            }
+            "DOWN" => {
+                self.desktop_lyrics.adjust_alpha(-1);
+                self.save_config_now();
+            }
+            "PAGEUP" | "PAGEDOWN" => {
+                self.desktop_lyrics.toggle_position();
+                self.save_config_now();
+            }
+            "SPACE" => {
+                let player = self.audio_player.lock().unwrap();
+                match player.get_state() {
+                    crate::defs::PlayState::Playing => { drop(player); self.audio_player.lock().unwrap().pause(); }
+                    crate::defs::PlayState::Paused => { drop(player); self.audio_player.lock().unwrap().resume(); }
+                    _ => {}
+                }
+            }
+            "-" => { self.audio_player.lock().unwrap().volume_down(); }
+            "=" => { self.audio_player.lock().unwrap().volume_up(); }
+            "[" => self.seek_relative(-5.0),
+            "]" => self.seek_relative(5.0),
+            "," => self.seek_relative(-10.0),
+            "." => self.seek_relative(10.0),
+            "1" => self.set_play_mode(crate::defs::PlayMode::Single),
+            "2" => self.set_play_mode(crate::defs::PlayMode::RepeatOne),
+            "3" => self.set_play_mode(crate::defs::PlayMode::Sequence),
+            "4" => self.set_play_mode(crate::defs::PlayMode::LoopAll),
+            "5" => self.set_play_mode(crate::defs::PlayMode::Random),
+            
+            "T" => {
+                self.theme = self.theme.next();
+                self.theme_colors = self.theme.colors();
+                self.desktop_lyrics.update_theme(self.theme.config_key());
+                self.cached_lyrics_title = None;
+                self.save_config_now();
+            }
+            _ => {}
+        }
+    }
+
     fn handle_key_event(&mut self, code: KeyCode) -> io::Result<()> {
         // API 配置输入模式（三步：接口地址 → API Key → 模型名称）
         if self.api_key_input_mode {
@@ -3310,7 +3361,6 @@ impl UserInterface {
                     }
                 }
                 KeyCode::Up => {
-                    // 评论/歌曲信息/帮助模式下，上下键控制右侧视图而非搜索列表
                     if self.comments_mode || self.song_info_mode || self.help_mode {
                         handled_in_search = false;
                     } else if self.online_search_mode {
@@ -3322,7 +3372,6 @@ impl UserInterface {
                     }
                 }
                 KeyCode::Down => {
-                    // 评论/歌曲信息/帮助模式下，上下键控制右侧视图而非搜索列表
                     if self.comments_mode || self.song_info_mode || self.help_mode {
                         handled_in_search = false;
                     } else if self.online_search_mode {
@@ -3611,16 +3660,10 @@ impl UserInterface {
                 self.seek_relative(10.0);
             }
             KeyCode::Char('+') | KeyCode::Char('=') => {
-                // 音量增加
                 self.audio_player.lock().unwrap().volume_up();
-                // 不更新状态消息，避免覆盖"正在播放:"的波形显示
-                // 音量已在控制栏显示
             }
             KeyCode::Char('-') => {
-                // 音量减少
                 self.audio_player.lock().unwrap().volume_down();
-                // 不更新状态消息，避免覆盖"正在播放:"的波形显示
-                // 音量已在控制栏显示
             }
             KeyCode::Char('1') => {
                 self.set_play_mode(PlayMode::Single);
@@ -3641,6 +3684,10 @@ impl UserInterface {
                 // 切换主题
                 self.theme = self.theme.next();
                 self.theme_colors = self.theme.colors();
+                // 同步更新桌面歌词主题
+                self.desktop_lyrics.update_theme(self.theme.config_key());
+                // 立即触发歌词更新，确保主题同步（因为歌词更新也会带主题信息）
+                self.push_current_lyrics_to_desktop();
                 // 强制重绘歌词标题，避免因标题文本未变化而保留旧主题颜色
                 self.cached_lyrics_title = None;
                 self.save_config_now();
@@ -3795,7 +3842,6 @@ impl UserInterface {
             }
             KeyCode::PageUp => {
                 if self.comments_mode && self.comments_page > 1 {
-                    self.comments_page -= 1;
                     self.current_comments.clear();
                     self.comments_selected_index = 0;
                     self.comments_scroll_offset = 0;
@@ -3806,6 +3852,10 @@ impl UserInterface {
                 }
             }
             KeyCode::PageDown => {
+                // 桌面歌词激活时 PgUp/PgDn 切换位置
+                if self.desktop_lyrics.is_active() {
+                    self.desktop_lyrics.toggle_position();
+                }
                 if self.comments_mode {
                     self.comments_page += 1;
                     self.current_comments.clear();
@@ -3865,6 +3915,14 @@ impl UserInterface {
                 // github_token 为空表示使用默认 token，输入框显示为空
                 self.github_token_input_value = self.github_token.clone();
                 self.cached_lyrics_title = None;
+            }
+            KeyCode::Char('z') | KeyCode::Char('Z') => {
+                let theme_name = self.theme.config_key();
+                self.desktop_lyrics.toggle(theme_name);
+                if self.desktop_lyrics.is_active() {
+                    self.push_current_lyrics_to_desktop();
+                }
+                self.save_config_now();
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => {
                 // 退出
@@ -5277,6 +5335,54 @@ impl UserInterface {
         self.status_message = message.to_string();
     }
 
+    /// 推送当前歌词到桌面悬浮窗
+    fn push_current_lyrics_to_desktop(&mut self) {
+        if !self.desktop_lyrics.is_active() {
+            return;
+        }
+        let theme_name = self.theme.config_key();
+        if let Some(ref lyrics) = self.current_lyrics {
+            if !lyrics.is_empty() {
+                let current_time = {
+                    let player = self.audio_player.lock().unwrap();
+                    player.get_progress().0
+                };
+                let lines = lyrics.get_lines();
+
+                // Convert to the format expected by desktop lyrics: Vec<(String, f64)>
+                let all_lyrics: Vec<(String, f64)> = lines.iter()
+                    .map(|line| (line.text.clone(), line.time.as_secs_f64()))
+                    .collect();
+
+                let current_time_sec = current_time.as_secs_f64();
+
+                self.desktop_lyrics.update_all_lyrics(&all_lyrics, current_time_sec, theme_name);
+
+                // Also update the traditional three-line format for backward compatibility
+                let idx = lines.partition_point(|line| line.time <= current_time);
+                let current_idx = if idx == 0 { 0 } else { idx - 1 };
+                let prev_text = if current_idx > 0 {
+                    &lines[current_idx - 1].text
+                } else {
+                    ""
+                };
+                let curr_text = &lines[current_idx].text;
+                let next_text = if current_idx + 1 < lines.len() {
+                    &lines[current_idx + 1].text
+                } else {
+                    ""
+                };
+                let combined = format!("{}\n{}\n{}", prev_text, curr_text, next_text);
+                self.desktop_lyrics.update_lyrics(&combined, theme_name);
+                return;
+            }
+        }
+        // No lyrics available
+        let empty_lyrics: Vec<(String, f64)> = vec![];
+        self.desktop_lyrics.update_all_lyrics(&empty_lyrics, 0.0, theme_name);
+        self.desktop_lyrics.update_lyrics("\n\n", theme_name);
+    }
+
     /// 设置是否需要在启动后弹出目录选择对话框
     pub fn set_need_startup_dialog(&mut self, need: bool) {
         self.need_startup_dialog = need;
@@ -5360,6 +5466,54 @@ impl UserInterface {
     }
 
     /// 设置 GitHub Token（空字符串或默认 Token 均视为使用内置默认值，不写入配置文件）
+    pub fn set_lyrics_position(&mut self, position: String) {
+        self.desktop_lyrics.set_position(DesktopLyricsPosition::from_config_key(&position));
+    }
+
+    pub fn set_lyrics_alpha(&mut self, alpha: u8) {
+        self.desktop_lyrics.set_alpha(alpha);
+    }
+
+    pub fn set_lyrics_coords(&mut self, x: i32, y: i32) {
+        self.desktop_lyrics.set_coords(x, y);
+    }
+
+    pub fn set_lyrics_scroll(&mut self, mode: crate::desktop_lyrics::DesktopLyricsScrollMode) {
+        self.desktop_lyrics.set_scroll_mode(mode);
+    }
+
+    pub fn open_desktop_lyrics(&mut self, theme_name: &str) {
+        self.desktop_lyrics.open(theme_name);
+        if self.desktop_lyrics.is_active() {
+            self.push_current_lyrics_to_desktop();
+        }
+    }
+
+    pub fn is_lyrics_active(&self) -> bool {
+        self.desktop_lyrics.is_active()
+    }
+
+    /// 获取桌面歌词位置配置键
+    pub fn get_lyrics_position_key(&self) -> String {
+        self.desktop_lyrics.position().config_key().to_string()
+    }
+
+    pub fn get_lyrics_alpha(&self) -> u8 {
+        self.desktop_lyrics.alpha()
+    }
+
+    pub fn get_lyrics_scroll(&self) -> String {
+        self.desktop_lyrics.scroll_mode().config_key().to_string()
+    }
+
+    pub fn get_lyrics_x(&self) -> i32 {
+        self.desktop_lyrics.get_position_coords().0
+    }
+
+    pub fn get_lyrics_y(&self) -> i32 {
+        self.desktop_lyrics.get_position_coords().1
+    }
+
     pub fn set_github_token(&mut self, token: String) {
         let trimmed = token.trim().to_string();
         // 如果配置文件中存的是内置默认 Token，视为空（使用内置默认值，不回写配置）
@@ -5429,6 +5583,12 @@ impl UserInterface {
             api_base_url: self.api_base_url.clone(),
             api_model: self.api_model.clone(),
             github_token: self.get_github_token(),
+            lyrics_visible: self.desktop_lyrics.is_active(),
+            lyrics_position: self.get_lyrics_position_key(),
+            lyrics_alpha: self.get_lyrics_alpha(),
+            lyrics_x: self.get_lyrics_x(),
+            lyrics_y: self.get_lyrics_y(),
+            lyrics_scroll: self.get_lyrics_scroll(),
         };
 
         new_config.save();
@@ -5500,8 +5660,26 @@ impl UserInterface {
                 || self.comments_loading)
                 && now.duration_since(last_progress_update) >= progress_update_interval
             {
+                self.push_current_lyrics_to_desktop();
                 self.draw()?;
                 last_progress_update = now;
+            }
+
+            // 轮询桌面歌词窗口事件
+            if let Some(ev) = self.desktop_lyrics.try_recv_event() {
+                match ev {
+                    crate::desktop_lyrics::DesktopLyricsEvent::PositionChanged { x, y } => {
+                        self.desktop_lyrics.move_window(x, y);
+                        self.save_config_now();
+                    }
+                    crate::desktop_lyrics::DesktopLyricsEvent::KeyPress { key } => {
+                        self.handle_desktop_key(&key);
+                    }
+                    crate::desktop_lyrics::DesktopLyricsEvent::ScrollModeChanged { scroll_mode } => {
+                        self.desktop_lyrics.set_scroll_mode(scroll_mode);
+                        self.save_config_now();
+                    }
+                }
             }
 
             // 等待事件（超时50ms，与更新频率匹配）

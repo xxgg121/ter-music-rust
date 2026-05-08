@@ -138,6 +138,12 @@ La configurazione è memorizzata in `USERPROFILE/ter-music-rust/config.json` nel
 | `github_token` | Token GitHub (usato per inviare discussioni sulle informazioni dei brani; lasciare vuoto per usare il Token predefinito) |
 | `theme` | Nome del tema |
 | `language` | Lingua dell'interfaccia (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
+| `lyrics_enabled` | Mostra/nascondi la finestra flottante delle lyrics desktop |
+| `lyrics_position` | Posizione della finestra lyrics desktop (bottom/top) |
+| `lyrics_scroll` | Modalità di scorrimento lyrics desktop (`vertical` / `horizontal` / `karaoke`, predefinita `vertical`) |
+| `lyrics_alpha` | Trasparenza dello sfondo della finestra lyrics desktop (10-100) |
+| `lyrics_x` | Coordinata X della finestra lyrics desktop |
+| `lyrics_y` | Coordinata Y della finestra lyrics desktop |
 
 **Attivatori di salvataggio automatico**: cambio traccia, cambio tema, cambio lingua, cambio preferiti, ogni 30 secondi e all'uscita (incluso Ctrl+C)
 
@@ -224,7 +230,9 @@ cargo run --release -- -o d:\Music
 | `t` | Cambia tema |
 | `k` | Configura endpoint API |
 | `g` | Configura Token GitHub |
+| `z` | Attiva/disattiva lyrics desktop |
 | `q` | Esci |
+
 
 ### Vista di ricerca
 
@@ -549,6 +557,7 @@ src/
 ├── analyzer.rs   # Analizzatore audio (volume RMS in tempo reale, smorzamento EMA, rendering forma d'onda)
 ├── playlist.rs   # Gestione playlist (scansione directory, caricamento parallelo durata, selettore cartella)
 ├── lyrics.rs     # Analisi testi (LRC, ricerca locale, rilevamento codifica, download in background)
+├── desktop_lyrics.rs   # Modulo lyrics desktop (Windows API + processo figlio Linux, trasparenza/posizione/trascinamento/scorciatoie)
 ├── search.rs     # Ricerca/download online (ricerca Kuwo + Kugou + NetEase, download, recupero commenti, interrogazione streaming informazioni)
 ├── config.rs     # Gestione configurazione (serializzazione JSON, 8 elementi persistenti)
 └── ui.rs         # Interfaccia (rendering terminale, gestione eventi, modalità multi-vista, sistema tema/lingua)
@@ -672,10 +681,46 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La prima compilazione scarica e compila tutte le dipendenze; questo è normale. Le compilazioni successive sono molto più veloci.
 
 ### Scarica Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605050312131911_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605050312183967_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605050312251425_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605050312355690_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260508120240809_ter-music-rust-win.zip "附件(Attached)")  [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605081202471668_ter-music-rust-mac.zip "附件(Attached)")  [ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605081203011605_ter-music-rust-linux.zip "附件(Attached)")  [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605081203119759_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## Versione 1.8.0 (2026-05-08)
+
+### 🎉 Nuove funzionalità
+
+#### Finestra flottante lyrics desktop
+- ✨ **Attiva/disattiva lyrics desktop** : Premi `z` per mostrare/nascondere la finestra flottante delle lyrics
+- ✨ **Tre modalità lyrics desktop** : supporta scorrimento verticale, scorrimento orizzontale e modalità Karaoke; fai clic destro sulla finestra lyrics desktop per cambiare modalità in ciclo
+- ✨ **Cambio posizione** : Premi `PgUp`/`PgDn` per passare tra le posizioni inferiore/superiore dello schermo
+- ✨ **Regolazione trasparenza** : Premi `↑`/`↓` per regolare la trasparenza dello sfondo da 10% a 100%, il testo è sempre il 10% più opaco dello sfondo
+- ✨ **Trascinamento posizione con mouse** : Trascina con il pulsante sinistro per spostare la posizione della finestra, la posizione viene salvata automaticamente nella configurazione
+- ✨ **Controllo con click focus** : Dopo aver cliccato per mettere a fuoco, supporta scorciatoie complete: `←`/`→` brano precedente/successivo, `Space` pausa, `[`/`]` ricerca, `,`/`.` salto di 5s/10s, `+/-` volume, `1-5` modalità riproduzione, `PgUp`/`PgDn` posizione, `↑`/`↓` trasparenza, `T` cambia tema
+- ✨ **Supporto multipiattaforma** : Windows usa la nativa API WinAPI, Linux/macOS usano l'approccio del processo figlio (a causa della limitazione winit 0.30)
+- ✨ **Animazione scorrimento lyrics** : Effetto di transizione fluida quando si cambia brano
+- ✨ **Modalità Karaoke** : mostra le lyrics in due righe con quattro frasi, evidenzia la frase corrente carattere per carattere e raggruppa le lyrics per righe non vuote per evitare cambi di gruppo anticipati causati da righe vuote
+- ✨ **Animazione cambio gruppo Karaoke** : aggiunge dissolvenza e un leggero scorrimento quando si passa da un gruppo di lyrics al successivo, mantenendo un'esperienza fluida come nelle modalità verticale/orizzontale
+- ✨ **Visualizzazione adattiva delle righe lunghe** : quando la seconda riga Karaoke è lunga, la posizione iniziale si sposta automaticamente a sinistra per mostrare il contenuto completo il più possibile; i puntini di sospensione vengono usati solo quando supera la larghezza dell'area lyrics desktop
+- ✨ **Coerenza del colore di evidenziazione** : la frase corrente in Karaoke usa lo stesso colore di evidenziazione e stile grassetto degli altri modi lyrics desktop, mantenendo stabile la larghezza del layout senza spostamenti
+- ✨ **Sincronizzazione tema** : Le lyrics desktop seguono il tema dell'interfaccia (Neon/Sunset/Ocean/GrayWhite)
+- ✨ **Persistenza configurazione** : Lo stato di visualizzazione, la posizione, la trasparenza e le coordinate delle lyrics vengono salvati e ripristinati automaticamente
+
+### 🐞 Correzioni di bug
+
+- 🛠️ **Correzione colori tema lyrics desktop su Linux** : corretto l'ordine invertito dei canali RGB/BGR durante il rendering delle lyrics desktop Linux con `softbuffer`, che faceva apparire spostati i colori Neon/Sunset/Ocean e non coerenti con la TUI; GrayWhite era difficile da notare perché i colori in scala di grigi nascondevano il problema
+
+### 🔧 Miglioramenti
+
+- 🔍 **Nuovi elementi di configurazione** : `lyrics_enabled` (mostra/nascondi), `lyrics_position` (bottom/top), `lyrics_scroll` (modalità di scorrimento: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordinate finestra)
+
+### 💻 Dettagli tecnici
+
+#### Aggiornare le dipendenze
+- ➕ Aggiunta dipendenza `fontdue` (rendering font Linux/macOS)
+- ➕ Aggiunta dipendenza `softbuffer` (rendering software Linux/macOS)
+
+#### Aggiornare la struttura del progetto
+- `desktop_lyrics.rs` : Modulo lyrics desktop (Windows API + processo figlio Linux, trasparenza/posizione/trascinamento/scorciatoie)
 
 ---
 

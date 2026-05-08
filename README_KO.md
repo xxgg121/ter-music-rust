@@ -139,6 +139,12 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 | `github_token` | GitHub Token(곡 정보 Discussion 제출용, 비워두면 기본 Token 사용) |
 | `theme` | 테마 이름 |
 | `language` | UI 언어 (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
+| `lyrics_enabled` | 데스크톱 가사 표시/숨기기 |
+| `lyrics_position` | 데스크톱 가사 위치 (bottom/top) |
+| `lyrics_scroll` | 데스크톱 가사 스크롤 모드 (`vertical` / `horizontal` / `karaoke`, 기본 `vertical`) |
+| `lyrics_alpha` | 데스크톱 가사 투명도 (10-100) |
+| `lyrics_x` | 데스크톱 가사 창 X 좌표 |
+| `lyrics_y` | 데스크톱 가사 창 Y 좌표 |
 
 **자동 저장 시점**: 곡 전환, 테마 전환, 언어 전환, 즐겨찾기 변경, 30초마다, 종료 시(Ctrl+C 포함)
 
@@ -225,6 +231,7 @@ cargo run --release -- -o d:\Music
 | `t` | 테마 전환 |
 | `k` | API 엔드포인트 설정 |
 | `g` | GitHub Token 설정 |
+| `z` | 데스크톱 가사 표시 전환 |
 | `q` | 종료 |
 
 ### 검색 화면
@@ -550,6 +557,7 @@ src/
 ├── analyzer.rs   # 오디오 분석기(실시간 RMS, EMA 스무딩, 파형 시각화)
 ├── playlist.rs   # 재생목록 관리(디렉터리 스캔, 길이 병렬 수집, 폴더 선택)
 ├── lyrics.rs     # 가사 파싱(LRC, 로컬 탐색, 인코딩 감지, 백그라운드 다운로드)
+├── desktop_lyrics.rs  # 데스크톱 가사 플로팅 창(Windows API + Linux 자식 프로세스, 투명도/위치/드래그/단축키)
 ├── search.rs     # 온라인 검색/다운로드(쿠워+쿠거+왕이윈 검색, 다운로드, 댓글 수집, 곡 정보 스트리밍 조회)
 ├── config.rs     # 설정 관리(JSON 직렬화, 8개 항목 영구화)
 └── ui.rs         # UI(터미널 렌더링, 이벤트 처리, 멀티 뷰, 테마/언어 시스템)
@@ -673,10 +681,48 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605050312131911_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605050312183967_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605050312251425_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605050312355690_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260508120240809_ter-music-rust-win.zip "附件(Attached)")  [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605081202471668_ter-music-rust-mac.zip "附件(Attached)")  [ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605081203011605_ter-music-rust-linux.zip "附件(Attached)")  [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605081203119759_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## 📝 업데이트 로그
+
+## 버전 1.8.0 (2026-05-08)
+
+### 🎉 새로운 기능
+
+#### 데스크톱 가사 플로팅 창
+- ✨ **데스크톱 가사 토글**：`z` 키로 데스크톱 가사 플로팅 창 표시/숨기기
+- ✨ **세 가지 데스크톱 가사 모드**：세로 스크롤, 가로 스크롤, Karaoke 세 가지 표시 방식을 지원하며, 데스크톱 가사 창을 마우스 오른쪽 버튼으로 클릭하면 순환 전환됩니다
+- ✨ **위치 전환**：`PgUp`/`PgDn`으로 화면 하단/상단 위치 전환
+- ✨ **투명도 조절**：`↑`/`↓`로 배경 투명도 10%-100% 조절, 가사 텍스트는 배경보다 항상 10% 더 불투명
+- ✨ **위치 마우스 드래그**：왼쪽 클릭 드래그로 창 위치 이동, 위치는 설정에 자동 저장
+- ✨ **클릭 포커스 제어**：클릭하여 포커스 후 전체 단축키 지원: `←`/`→` 이전/다음 곡, `Space` 일시정지, `[`/`]` 탐색, `,`/`.` 5초/10초 점프, `+/-` 볼륨, `1-5` 재생 모드, `PgUp`/`PgDn` 위치, `↑`/`↓` 투명도, `T` 테마 전환
+- ✨ **크로스 플랫폼 지원**：Windows는 네이티브 WinAPI 사용, Linux/macOS는 자식 프로세스 방식으로 구현 (winit 0.30 제한)
+- ✨ **가사 스크롤 애니메이션**：곡 전환 시 부드러운 스크롤 전환 효과
+- ✨ **Karaoke 모드**：가사를 두 줄 네 구절로 표시하고 현재 구절을 글자 단위로 강조하며, 빈 줄 때문에 그룹이 일찍 전환되지 않도록 비어 있지 않은 가사 기준으로 그룹화합니다
+- ✨ **Karaoke 그룹 전환 애니메이션**：한 가사 그룹에서 다음 그룹으로 전환될 때 페이드와 약한 슬라이드 전환을 추가하여 세로/가로 모드와 동일한 부드러운 경험을 제공합니다
+- ✨ **긴 줄 자동 맞춤 표시**：Karaoke 두 번째 줄이 길 때 시작 위치를 자동으로 왼쪽으로 조정하여 가능한 한 전체 내용을 표시하고, 데스크톱 가사 영역 너비를 초과할 때만 말줄임표를 사용합니다
+- ✨ **강조 색상 일관성**：Karaoke 현재 구절은 다른 데스크톱 가사 모드와 동일한 강조 색상 및 굵은 글꼴을 사용하면서 레이아웃 너비를 안정적으로 유지해 위치 밀림을 방지합니다
+- ✨ **테마 동기화**：데스크톱 가사는 UI 테마(Neon/Sunset/Ocean/GrayWhite)와 동기화
+- ✨ **설정 영속성**：데스크톱 가사의 표시 상태, 위치, 투명도, 좌표 자동 저장 및 복원
+
+### 🐞 버그 수정
+
+- 🛠️ **Linux 데스크톱 가사 테마 색상 수정**：Linux 데스크톱 가사를 `softbuffer`로 렌더링할 때 RGB/BGR 채널 순서가 반대로 기록되어 Neon/Sunset/Ocean 테마 색상이 어긋나고 TUI 메인 화면과 일치하지 않던 문제를 수정했습니다. GrayWhite는 회색조라 차이가 눈에 잘 띄지 않아 이전에는 발견하기 어려웠습니다
+
+### 🔧 기능 개선
+
+- 🔍 **새로운 설정 항목**：`lyrics_enabled` (표시/숨기기), `lyrics_position` (bottom/top), `lyrics_scroll` (스크롤 모드: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (창 좌표)
+
+### 💻 기술적 세부사항
+
+#### 종속성 업데이트
+- ➕ `fontdue` 종속성 추가 (Linux/macOS 폰트 렌더링)
+- ➕ `softbuffer` 종속성 추가 (Linux/macOS 소프트웨어 렌더링)
+
+#### 프로젝트 구조 업데이트
+- `desktop_lyrics.rs`: 데스크톱 가사 모듈 (Windows API + Linux 자식 프로세스, 투명도/위치/드래그/단축키)
 
 ---
 

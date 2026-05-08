@@ -138,6 +138,12 @@ Configuration is stored in `USERPROFILE/ter-music-rust/config.json` in the progr
 | `github_token` | GitHub Token (used for submitting song info discussions; leave empty to use default Token) |
 | `theme` | Theme name |
 | `language` | UI language (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
+| `lyrics_enabled` | Desktop lyrics visibility (show/hide) |
+| `lyrics_position` | Desktop lyrics position (bottom/top) |
+| `lyrics_scroll` | Desktop lyrics scroll mode (`vertical` / `horizontal` / `karaoke`, default `vertical`) |
+| `lyrics_alpha` | Desktop lyrics background transparency (10-100) |
+| `lyrics_x` | Desktop lyrics window x coordinate |
+| `lyrics_y` | Desktop lyrics window y coordinate |
 
 **Auto-save triggers**: track change, theme change, language change, favorite change, every 30 seconds, and on exit (including Ctrl+C)
 
@@ -224,6 +230,7 @@ cargo run --release -- -o d:\Music
 | `t` | Switch theme |
 | `k` | Configure API endpoint |
 | `g` | Configure GitHub Token |
+| `z` | Toggle desktop lyrics |
 | `q` | Quit |
 
 ### Search View
@@ -549,6 +556,7 @@ src/
 ├── analyzer.rs   # Audio analyzer (real-time RMS volume, EMA smoothing, waveform rendering)
 ├── playlist.rs   # Playlist management (directory scan, parallel duration loading, folder picker)
 ├── lyrics.rs     # Lyric parsing (LRC, local search, encoding detection, background download)
+├── desktop_lyrics.rs  # Desktop lyrics module (Windows API + Linux child process, transparency/position/drag/shortcuts)
 ├── search.rs     # Online search/download (Kuwo + Kugou + NetEase search, download, comments fetch, song info streaming query)
 ├── config.rs     # Config management (JSON serialization, 8 persistent items)
 └── ui.rs         # UI (terminal rendering, event handling, multi-view mode, theme/language system)
@@ -672,12 +680,50 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605050312131911_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605050312183967_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605050312251425_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605050312355690_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260508120240809_ter-music-rust-win.zip "附件(Attached)")  [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605081202471668_ter-music-rust-mac.zip "附件(Attached)")  [ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605081203011605_ter-music-rust-linux.zip "附件(Attached)")  [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605081203119759_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
+
+---
+
+## 📝 Changelog
+
+## Version 1.8.0 (2026-05-08)
+
+### 🎉 New Features
+
+#### Desktop Lyrics Floating Window
+- ✨ **Toggle desktop lyrics**: Press `z` to show/hide desktop lyrics floating window
+- ✨ **Three desktop lyrics modes**: Supports vertical scrolling, horizontal scrolling, and Karaoke display modes; right-click the desktop lyrics window to cycle modes
+- ✨ **Position switching**: Press `PgUp`/`PgDn` to switch between bottom/top screen positions
+- ✨ **Transparency adjustment**: Press `↑`/`↓` to adjust background transparency 10%-100%, text is always 10% more opaque than background
+- ✨ **Position dragging**: Left-click drag to move window position, position auto-saved to config
+- ✨ **Click to focus controls**: After clicking to focus, supports full shortcuts: `←`/`→` for prev/next track, `Space` for pause, `[`/`]` for seek, `,`/`.` for 5s/10s jump, `+/-` for volume, `1-5` for play mode, `PgUp`/`PgDn` for position, `↑`/`↓` for transparency, `T` for theme toggle
+- ✨ **Cross-platform support**: Windows uses native WinAPI, Linux/MacOS uses child process approach (due to winit 0.30 limitation)
+- ✨ **Lyrics scroll animation**: Smooth scrolling transition effect when switching songs
+- ✨ **Karaoke mode**: Shows lyrics as two rows with four phrases, highlights the current phrase character by character, and groups lyrics by non-empty lines to avoid early group switching caused by blank lines
+- ✨ **Karaoke group transition animation**: Adds fade and slight slide transitions when switching from one lyric group to the next, keeping the experience smooth like vertical/horizontal modes
+- ✨ **Long-line adaptive display**: When the second Karaoke row is long, the start position automatically shifts left to show as much complete text as possible; ellipsis is used only when it exceeds the desktop lyrics area width
+- ✨ **Highlight color consistency**: Karaoke current phrase now uses the same highlight color and bold style as other desktop lyrics modes while keeping layout width stable without shifting
+- ✨ **Theme sync**: Desktop lyrics follow UI theme (Neon/Sunset/Ocean/GrayWhite)
+- ✨ **Config persistence**: Desktop lyrics visibility, position, transparency, and coordinates are auto-saved and restored
+
+### 🐞 Bug Fixes
+
+- 🛠️ **Linux desktop lyrics theme color fix**: Fixed reversed RGB/BGR channel order when Linux desktop lyrics are rendered with `softbuffer`, which caused Neon/Sunset/Ocean theme colors to appear shifted and inconsistent with the TUI; GrayWhite was previously hard to notice because grayscale colors hide the issue
+
+### 🔧 Improvements
+
+- 🔍 **New config items**: `lyrics_enabled` (show/hide), `lyrics_position` (bottom/top), `lyrics_scroll` (scroll mode: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (window coordinates)
+
+### 💻 Technical Details
+
+#### Dependencies
+- ➕ Added `fontdue` dependency (Linux/MacOS font rendering)
+- ➕ Added `softbuffer` dependency (Linux/MacOS software rendering)
+
+#### Project Structure
+- `desktop_lyrics.rs`: Desktop lyrics module (Windows API + Linux child process, transparency/position/drag/shortcuts)
 
 ## Version 1.7.0 (2026-05-05)
 

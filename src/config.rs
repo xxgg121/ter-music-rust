@@ -9,6 +9,27 @@ use serde::{Deserialize, Serialize};
 
 use crate::defs::PlayMode;
 
+
+fn default_lyrics_visible() -> bool {
+    false
+}
+
+fn default_lyrics_position() -> String {
+    "bottom".to_string()
+}
+
+fn default_lyrics_scroll() -> String {
+    "vertical".to_string()
+}
+
+fn default_lyrics_alpha() -> u8 {
+    70
+}
+
+fn default_lyrics_coord() -> i32 {
+    -1
+}
+
 fn default_theme() -> String {
     "Neon".to_string()
 }
@@ -117,6 +138,25 @@ pub struct Config {
     /// GitHub Token（用于创建 Discussions，为空则使用默认 Token）
     #[serde(default = "default_github_token")]
     pub github_token: String,
+    /// 桌面歌词是否可见
+    #[serde(default = "default_lyrics_visible")]
+    pub lyrics_visible: bool,
+    /// 桌面歌词位置: "bottom" | "top"
+    #[serde(default = "default_lyrics_position")]
+    pub lyrics_position: String,
+    /// 桌面歌词滚动模式: "vertical" | "horizontal" | "karaoke"
+    #[serde(default = "default_lyrics_scroll")]
+    pub lyrics_scroll: String,
+    /// 桌面歌词背景透明度 0-100, 默认 70
+    #[serde(default = "default_lyrics_alpha")]
+    pub lyrics_alpha: u8,
+    /// 桌面歌词窗口 X 坐标 (-1 = 使用默认计算位置)
+    #[serde(default = "default_lyrics_coord")]
+    pub lyrics_x: i32,
+    /// 桌面歌词窗口 Y 坐标 (-1 = 使用默认计算位置)
+    #[serde(default = "default_lyrics_coord")]
+    pub lyrics_y: i32,
+    
 }
 
 impl Default for Config {
@@ -134,6 +174,12 @@ impl Default for Config {
             api_base_url: default_api_base_url(),
             api_model: default_api_model(),
             github_token: default_github_token(),
+            lyrics_visible: default_lyrics_visible(),
+            lyrics_position: default_lyrics_position(),
+            lyrics_alpha: default_lyrics_alpha(),
+            lyrics_scroll: default_lyrics_scroll(),
+            lyrics_x: default_lyrics_coord(),
+            lyrics_y: default_lyrics_coord(),
         }
     }
 }

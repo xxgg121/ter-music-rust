@@ -4,6 +4,7 @@ mod audio;
 mod analyzer;
 mod config;
 mod defs;
+mod desktop_lyrics;
 mod langs;
 mod lyrics;
 mod playlist;
@@ -32,6 +33,12 @@ fn setup_console() {
 #[cfg(not(windows))]
 fn setup_console() {}
 
+/// 桌面歌词子进程入口桩函数（Windows 上不使用子进程模式）
+#[cfg(windows)]
+fn run_lyrics_child() {
+    eprintln!("桌面歌词在 Windows 上直接以内置线程运行，无需 --desktop-lyrics 子进程模式。");
+}
+
 /// 显示帮助信息
 fn show_help(lang: &str) {
     let ui_lang = langs::UiLanguage::from_config_key(lang);
@@ -40,6 +47,83 @@ fn show_help(lang: &str) {
         println!("{}", line);
     }
     println!();
+}
+
+/// 桌面歌词子进程入口（仅 Linux/macOS）
+/// Windows 上桌面歌词通过线程直接运行，不需要子进程模式。
+#[cfg(not(windows))]
+fn run_lyrics_child() {
+    use std::io::{BufRead, Write};
+
+    let position = desktop_lyrics::DesktopLyricsPosition::from_config_key(
+        &std::env::var("TER_DESKTOP_LYRICS_POSITION").unwrap_or_else(|_| "bottom".to_string()),
+    );
+    let theme_name = std::env::var("TER_DESKTOP_LYRICS_THEME").unwrap_or_else(|_| "Neon".to_string());
+    let alpha: u8 = std::env::var("TER_DESKTOP_LYRICS_ALPHA")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(70);
+    let x: i32 = std::env::var("TER_DESKTOP_LYRICS_X")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(-1);
+    let y: i32 = std::env::var("TER_DESKTOP_LYRICS_Y")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(-1);
+
+    // 命令行参数已解析，子进程启动桌面歌词窗口
+    // 创建命令 channel：父进程通过 stdin 发送命令，子进程通过 cmd_rx 接收
+    let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<desktop_lyrics::DesktopLyricsCommand>();
+    
+    // 创建事件 channel：窗口线程通过 ev_tx 发送事件，父进程通过 ev_rx 接收并转发到 stdout
+    let (ev_tx, ev_rx) = std::sync::mpsc::channel::<desktop_lyrics::DesktopLyricsEvent>();
+    
+    // 从 stdin 读取命令的线程
+    std::thread::spawn(move || {
+        let stdin = std::io::stdin();
+        let reader = std::io::BufReader::new(stdin);
+        for line in reader.lines() {
+            match line {
+                Ok(l) => {
+                    let trimmed = l.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if let Ok(cmd) = serde_json::from_str::<desktop_lyrics::DesktopLyricsCommand>(trimmed) {
+                        if cmd_tx.send(cmd).is_err() {
+                            break;
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    // 事件转发：窗口线程通过 mpsc channel 发送事件，
+    // 此线程读取后序列化为 JSON 写入 stdout
+    std::thread::spawn(move || {
+        for event in ev_rx {
+            if let Ok(json) = serde_json::to_string(&event) {
+                let mut stdout = std::io::stdout();
+                let _ = writeln!(stdout, "{}", json);
+                let _ = stdout.flush();
+            }
+        }
+    });
+
+    // 运行窗口
+    desktop_lyrics::unix_impl::run_desktop_lyrics_window(
+        cmd_rx,
+        position,
+        &theme_name,
+        alpha,
+        x,
+        y,
+        ev_tx,
+        Vec::new(),
+    );
 }
 
 /// 主函数
@@ -54,6 +138,11 @@ fn main() {
     }
     if config.api_model.trim().is_empty() {
         config.api_model = "deepseek-v4-flash".to_string();
+    }
+
+    // 兼容旧版桌面歌词透明度（旧版 26-230 映射到新版 0-100）
+    if config.lyrics_alpha > 100 {
+        config.lyrics_alpha = ((config.lyrics_alpha as u32 - 26) * 100 / (230 - 26)) as u8;
     }
 
     let lang = config.language.clone();
@@ -80,6 +169,11 @@ fn main() {
                     eprintln!("{}", texts.cli_error_option_o);
                     std::process::exit(1);
                 }
+            }
+            "--desktop-lyrics" => {
+                // 子进程模式：运行桌面歌词窗口
+                run_lyrics_child();
+                return;
             }
             _ => {
                 eprintln!("{} '{}'", texts.cli_error_unknown_option, args[i]);
@@ -146,6 +240,13 @@ fn main() {
     ui.set_api_base_url(config.api_base_url.clone());
     ui.set_api_model(config.api_model.clone());
     ui.set_github_token(config.github_token.clone());
+    ui.set_lyrics_position(config.lyrics_position.clone());
+    ui.set_lyrics_alpha(config.lyrics_alpha);
+    ui.set_lyrics_coords(config.lyrics_x, config.lyrics_y);
+    ui.set_lyrics_scroll(crate::desktop_lyrics::DesktopLyricsScrollMode::from_config_key(&config.lyrics_scroll));
+    if config.lyrics_visible {
+        ui.open_desktop_lyrics(&config.theme);
+    }
 
     // 注册 Ctrl+C 信号处理器，优雅退出并保存配置
     {
@@ -217,6 +318,12 @@ fn main() {
             api_base_url: ui.get_api_base_url(),
             api_model: ui.get_api_model(),
             github_token: ui.get_github_token(),
+            lyrics_visible: ui.is_lyrics_active(),
+            lyrics_position: ui.get_lyrics_position_key(),
+            lyrics_alpha: ui.get_lyrics_alpha(),
+            lyrics_x: ui.get_lyrics_x(),
+            lyrics_y: ui.get_lyrics_y(),
+            lyrics_scroll: ui.get_lyrics_scroll(),
         };
 
         new_config.save();

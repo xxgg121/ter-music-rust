@@ -138,6 +138,12 @@ Die Konfiguration wird in `USERPROFILE/ter-music-rust/config.json` im Programmve
 | `github_token` | GitHub-Token (verwendet für Song-Info-Diskussionen; leer lassen für Standard-Token) |
 | `theme` | Themenname |
 | `language` | UI-Sprache (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
+| `lyrics_enabled` | Desktop-Lyrics anzeigen/ausblenden |
+| `lyrics_position` | Position der Desktop-Lyrics (bottom/top) |
+| `lyrics_scroll` | Scrollmodus der Desktop-Lyrics (`vertical` / `horizontal` / `karaoke`, Standard `vertical`) |
+| `lyrics_alpha` | Hintergrundtransparenz der Desktop-Lyrics (10-100) |
+| `lyrics_x` | X-Koordinate der Desktop-Lyrics-Fensterposition |
+| `lyrics_y` | Y-Koordinate der Desktop-Lyrics-Fensterposition |
 
 **Auto-Speichern-Auslöser**: Titelwechsel, Themawechsel, Sprachwechsel, Favoritenänderung, alle 30 Sekunden und beim Beenden (einschließlich Strg+C)
 
@@ -224,6 +230,7 @@ cargo run --release -- -o d:\Music
 | `t` | Thema wechseln |
 | `k` | API-Endpunkt konfigurieren |
 | `g` | GitHub-Token konfigurieren |
+| `z` | Desktop-Lyrics ein/aus |
 | `q` | Beenden |
 
 ### Suchansicht
@@ -549,6 +556,7 @@ src/
 ├── analyzer.rs   # Audio-Analysator (Echtzeit-RMS-Volumen, EMA-Glättung, Wellenform-Rendering)
 ├── playlist.rs   # Wiedergabelistenverwaltung (Verzeichnisscan, parallele Dauerladung, Ordnerauswahl)
 ├── lyrics.rs     # Liedtext-Analyse (LRC, lokale Suche, Kodierungserkennung, Hintergrund-Download)
+├── desktop_lyrics.rs # Desktop-Lyrics-Modul (Windows-API + Linux-Child-Prozess, Transparenz/Position/Ziehen/Tastenkürzel)
 ├── search.rs     # Online-Suche/Download (Kuwo + Kugou + NetEase-Suche, Download, Kommentarabruf, Song-Info-Streaming-Abfrage)
 ├── config.rs     # Konfigurationsverwaltung (JSON-Serialisierung, 8 persistente Elemente)
 └── ui.rs         # UI (Terminal-Rendering, Ereignisbehandlung, Multi-View-Modus, Theme/Sprach-System)
@@ -672,10 +680,48 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 Der erste Build lädt und kompiliert alle Abhängigkeiten herunter; dies ist erwartet. Spätere Builds sind deutlich schneller.
 
 ### Downloads
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605050312131911_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605050312183967_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605050312251425_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605050312355690_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260508120240809_ter-music-rust-win.zip "附件(Attached)")  [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605081202471668_ter-music-rust-mac.zip "附件(Attached)")  [ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605081203011605_ter-music-rust-linux.zip "附件(Attached)")  [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605081203119759_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## 📝 Änderungsprotokoll
+
+## Version 1.8.0 (2026-05-08)
+
+### 🎉 Neue Funktionen
+
+#### Desktop-Lyrics Floating Window
+- ✨ **Desktop-Lyrics umschalten** : Drücken Sie `z`, um das Desktop-Lyrics-Fenster ein-/auszublenden
+- ✨ **Drei Desktop-Lyrics-Modi** : Unterstützt vertikales Scrollen, horizontales Scrollen und Karaoke-Anzeige; per Rechtsklick auf das Desktop-Lyrics-Fenster können die Modi zyklisch gewechselt werden
+- ✨ **Positionswechsel** : Drücken Sie `PgUp`/`PgDn`, um zwischen unterer/oberer Bildschirmposition zu wechseln
+- ✨ **Transparenz einstellen** : Drücken Sie `↑`/`↓`, um die Hintergrundtransparenz von 10% auf 100% einzustellen; der Text ist immer 10% opaker als der Hintergrund
+- ✨ **Position per Maus ziehen** : Ziehen Sie mit der linken Maustaste, um die Fensterposition zu verschieben; die Position wird automatisch in der Konfiguration gespeichert
+- ✨ **Klick-Fokus-Steuerung** : Nach dem Klicken für den Fokus werden vollständige Tastenkombinationen unterstützt: `←`/`→` vorheriges/nächstes Lied, `Space` Pause, `[`/`]` Suchen, `,`/`.` 5s/10s Sprung, `+/-` Lautstärke, `1-5` Wiedergabemodus, `PgUp`/`PgDn` Position, `↑`/`↓` Transparenz, `T` Design wechseln
+- ✨ **Plattformübergreifende Unterstützung** : Windows verwendet native WinAPI, Linux/macOS verwenden den Child-Prozess-Ansatz (aufgrund der winit 0.30-Einschränkung)
+- ✨ **Lyrics-Scroll-Animation** : Sanfter Übergangseffekt beim Liedwechsel
+- ✨ **Karaoke-Modus** : Zeigt Lyrics in zwei Zeilen mit vier Phrasen an, hebt die aktuelle Phrase zeichenweise hervor und gruppiert nach nicht leeren Zeilen, um verfrühte Gruppenwechsel durch Leerzeilen zu vermeiden
+- ✨ **Karaoke-Gruppenwechsel-Animation** : Beim Wechsel von einer Lyrics-Gruppe zur nächsten werden Aus-/Einblenden und ein leichter Slide-Übergang hinzugefügt, damit die Erfahrung wie in vertikalen/horizontalen Modi flüssig bleibt
+- ✨ **Adaptive Anzeige langer Zeilen** : Wenn die zweite Karaoke-Zeile lang ist, wird die Startposition automatisch nach links verschoben, um möglichst vollständigen Text anzuzeigen; Auslassungspunkte werden nur verwendet, wenn die Breite des Desktop-Lyrics-Bereichs überschritten wird
+- ✨ **Einheitliche Hervorhebungsfarbe** : Die aktuelle Karaoke-Phrase verwendet dieselbe Hervorhebungsfarbe und Fettschrift wie andere Desktop-Lyrics-Modi, während die Layoutbreite stabil bleibt und keine Verschiebung entsteht
+- ✨ **Design-Synchronisation** : Desktop-Lyrics folgen dem UI-Design (Neon/Sunset/Ocean/GrayWhite)
+- ✨ **Konfigurationspersistenz** : Anzeigestatus, Position, Transparenz und Koordinaten der Lyrics werden automatisch gespeichert und wiederhergestellt
+
+### 🐞 Fehlerbehebungen
+
+- 🛠️ **Linux-Desktop-Lyrics-Designfarben korrigiert** : Behoben wurde die vertauschte RGB/BGR-Kanalreihenfolge beim Rendern der Linux-Desktop-Lyrics mit `softbuffer`, wodurch Neon/Sunset/Ocean-Farben verschoben und nicht mit der TUI übereinstimmten; GrayWhite war wegen der Graustufen zuvor kaum auffällig
+
+### 🔧 Verbesserungen
+
+- 🔍 **Neue Konfigurationselemente** : `lyrics_enabled` (anzeigen/ausblenden), `lyrics_position` (bottom/top), `lyrics_scroll` (Scrollmodus: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (Fensterkoordinaten)
+
+### 💻 Technische Details
+
+#### Abhängigkeiten aktualisieren
+- ➕ `fontdue`-Abhängigkeit hinzugefügt (Linux/macOS-Schriftrendering)
+- ➕ `softbuffer`-Abhängigkeit hinzugefügt (Linux/macOS-Software-Rendering)
+
+#### Projektstruktur aktualisieren
+- `desktop_lyrics.rs` : Desktop-Lyrics-Modul (Windows-API + Linux-Child-Prozess, Transparenz/Position/Ziehen/Tastenkürzel)
 
 ---
 

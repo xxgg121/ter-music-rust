@@ -138,6 +138,12 @@
 | `github_token` | GitHub Token（用於提交歌曲資訊討論；留空則使用預設 Token） |
 | `theme` | 主題名稱 |
 | `language` | UI 語言（`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`） |
+| `lyrics_enabled` | 是否顯示桌面歌詞 |
+| `lyrics_position` | 桌面歌詞位置（bottom/top） |
+| `lyrics_scroll` | 桌面歌詞捲動模式（`vertical` / `horizontal` / `karaoke`，預設 `vertical`） |
+| `lyrics_alpha` | 桌面歌詞透明度（10-100） |
+| `lyrics_x` | 桌面歌詞視窗 X 座標 |
+| `lyrics_y` | 桌面歌詞視窗 Y 座標 |
 
 **自動儲存觸發條件**：切換曲目、切換主題、切換語言、變更收藏、每 30 秒、退出時（包括 Ctrl+C）
 
@@ -224,6 +230,7 @@ cargo run --release -- -o d:\Music
 | `t` | 切換主題 |
 | `k` | 設定 API 端點 |
 | `g` | 設定 GitHub Token |
+| `z` | 桌面歌詞開關 |
 | `q` | 退出 |
 
 ### 搜尋檢視
@@ -543,15 +550,16 @@ registry = "https://mirrors.ustc.edu.cn/crates.io-index"
 
 ```text
 src/
-├── main.rs       # 程式入口（引數解析、初始化、設定恢復/儲存）
-├── defs.rs       # 共用定義（PlayMode/PlayState 列舉、MusicFile/Playlist 結構體）
-├── audio.rs      # 音訊控制（rodio 封裝、播放/暫停/跳轉/音量/進度）
-├── analyzer.rs   # 音訊分析器（即時 RMS 音量、EMA 平滑、波形渲染）
-├── playlist.rs   # 播放清單管理（目錄掃描、並行時長載入、資料夾選擇器）
-├── lyrics.rs     # 歌詞解析（LRC、本機搜尋、編碼偵測、背景下載）
-├── search.rs     # 線上搜尋/下載（酷我 + 酷狗 + 網易雲搜尋、下載、評論獲取、歌曲資訊串流查詢）
-├── config.rs     # 設定管理（JSON 序列化、8 個持久化項目）
-└── ui.rs         # UI（終端機渲染、事件處理、多檢視模式、主題/語言系統）
+├── main.rs           # 程式入口（引數解析、初始化、設定恢復/儲存）
+├── defs.rs           # 共用定義（PlayMode/PlayState 列舉、MusicFile/Playlist 結構體）
+├── audio.rs          # 音訊控制（rodio 封裝、播放/暫停/跳轉/音量/進度）
+├── analyzer.rs       # 音訊分析器（即時 RMS 音量、EMA 平滑、波形渲染）
+├── playlist.rs       # 播放清單管理（目錄掃描、並行時長載入、資料夾選擇器）
+├── lyrics.rs         # 歌詞解析（LRC、本機搜尋、編碼偵測、背景下載）
+├── search.rs         # 線上搜尋/下載（酷我 + 酷狗 + 網易雲搜尋、下載、評論獲取、歌曲資訊串流查詢）
+├── desktop_lyrics.rs # 桌面歌詞模組（Windows API + Linux子程序、透明度/位置/拖曳/快捷鍵）
+├── config.rs         # 設定管理（JSON 序列化、持久化項目）
+└── ui.rs             # UI（終端機渲染、事件處理、多檢視模式、主題/語言系統）
 ```
 
 ### 技術棧
@@ -571,6 +579,8 @@ src/
 | [ctrlc](https://github.com/Detegr/rust-ctrlc) | 3.4 | Ctrl+C 訊號處理 |
 | [md5](https://github.com/johannhof/md5) | 0.7 | 酷狗音樂 API MD5 簽章 |
 | [winapi](https://github.com/retep998/winapi-rs) | 0.3 | Windows 主控台 UTF-8 支援 |
+| [fontdue](https://github.com/mooman219/fontdue) | 0.7 | Linux/MacOS 字型渲染 |
+| [softbuffer](https://github.com/rust-windowing/softbuffer) | 0.3 | Linux/MacOS 軟體渲染 |
 
 ### Release 建置最佳化
 
@@ -672,14 +682,50 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次建置會下載並編譯所有依賴；這是正常現象。後續建置會快得多。
 
 ### 下載發行版
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605050312131911_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605050312183967_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605050312251425_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605050312355690_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260508120240809_ter-music-rust-win.zip "附件(Attached)")  [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605081202471668_ter-music-rust-mac.zip "附件(Attached)")  [ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605081203011605_ter-music-rust-linux.zip "附件(Attached)")  [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605081203119759_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+## 📝 更新日誌
+
+## 版本 1.8.0 (2026-05-08)
+
+### 🎉 新功能
+
+#### 桌面歌詞浮動窗
+- ✨ **桌面歌詞開關**：按 `z` 鍵開啟/關閉桌面歌詞浮動窗
+- ✨ **三種桌面歌詞**：支援垂直捲動、橫向捲動、卡拉 OK 三種顯示方式，桌面歌詞視窗點滑鼠右鍵可循環切換
+- ✨ **視窗位置切換**：按 `PgUp`/`PgDn` 切換浮動窗在螢幕底部/頂部位置
+- ✨ **透明度調節**：按 `↑`/`↓` 調整背景透明度 10%-100%，歌詞文字始終比背景高10%
+- ✨ **位置滑鼠拖曳**：左鍵拖曳移動浮動窗位置，位置自動儲存到設定
+- ✨ **點擊聚焦控制**：點擊聚焦後支援完整快捷鍵：`←`/`→`上下曲、`Space`暫停、`[`/`]`快退快進、`,`/`.`5秒/10秒跳轉、`+/-`音量、`1-5`播放模式、`PgUp`/`PgDn`位置切換、`↑`/`↓`透明度、`T`切換主題
+- ✨ **跨平台支援**：Windows 使用原生視窗 API，Linux/MacOS 透過子程序方式實現（winit 0.30 限制）
+- ✨ **歌詞捲動動畫**：切換歌曲時平滑捲動過渡效果
+- ✨ **卡拉 OK 模式**：以兩行四句方式展示歌詞，當前句逐字高亮，按非空歌詞分組避免空行導致提前切組
+- ✨ **卡拉 OK 切組動畫**：一組歌詞切換到下一組時加入淡入淡出與輕微滑動過渡，保持與垂直/橫向模式一致的平滑體驗
+- ✨ **長句自適應顯示**：卡拉 OK 第二行歌詞較長時自動向左調整起始位置，優先顯示完整內容，僅在超過桌面歌詞區域寬度時使用省略號
+- ✨ **高亮顏色一致性**：卡拉 OK 當前句使用與其他桌面歌詞模式一致的高亮色與粗體顯示，同時保持版面寬度穩定不位移
+- ✨ **主題同步**：桌面歌詞跟隨界面主題（Neon/Sunset/Ocean/GrayWhite）
+- ✨ **設定持久化**：桌面歌詞的顯示狀態、位置、透明度、座標自動儲存和還原
+
+### 🐞 錯誤修復
+
+- 🛠️ **Linux 桌面歌詞主題顏色修復**：修復 Linux 桌面歌詞使用 `softbuffer` 渲染時 RGB/BGR 通道順序寫反，導致 Neon/Sunset/Ocean 主題顏色顯示偏移、與 TUI 主界面不一致的問題；GrayWhite 因灰階色差不明顯此前不易察覺
+
+### 🔧 功能改進
+
+- 🔍 **新增設定項**：`lyrics_enabled`（是否顯示桌面歌詞）、`lyrics_position`（位置：bottom/top）、`lyrics_scroll`（捲動模式：vertical/horizontal/karaoke）、`lyrics_alpha`（透明度 10-100）、`lyrics_x`/`lyrics_y`（視窗座標）
+
+### 💻 技術細節
+
+#### 依賴更新
+- ➕ 添加 `fontdue` 依賴（Linux/MacOS 字型渲染）
+- ➕ 添加 `softbuffer` 依賴（Linux/MacOS 軟體渲染）
+
+#### 專案結構更新
+- `desktop_lyrics.rs`：桌面歌詞模組（Windows API + Linux子程序、透明度/位置/拖曳/快捷鍵）
 
 ---
 
-## 📝 更新日誌
 ## 版本 1.7.0（2026-05-05）
 
 ### 🐞 錯誤修復

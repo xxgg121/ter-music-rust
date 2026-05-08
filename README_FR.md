@@ -138,6 +138,12 @@ La configuration est stockée dans `USERPROFILE/ter-music-rust/config.json` dans
 | `github_token` | Jeton GitHub (utilisé pour soumettre des discussions sur les chansons ; laisser vide pour utiliser le jeton par défaut) |
 | `theme` | Nom du thème |
 | `language` | Langue de l'interface (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
+| `lyrics_enabled` | Afficher/masquer les paroles du bureau |
+| `lyrics_position` | Position (bottom/top) |
+| `lyrics_scroll` | Mode de défilement des paroles du bureau (`vertical` / `horizontal` / `karaoke`, par défaut `vertical`) |
+| `lyrics_alpha` | Transparence du fond (10-100) |
+| `lyrics_x` | Coordonnée X de la fenêtre |
+| `lyrics_y` | Coordonnée Y de la fenêtre |
 
 **Déclencheurs de sauvegarde automatique** : changement de piste, changement de thème, changement de langue, modification des favoris, toutes les 30 secondes, et à la sortie (y compris Ctrl+C)
 
@@ -224,6 +230,7 @@ cargo run --release -- -o d:\Music
 | `t` | Changer de thème |
 | `k` | Configurer le point de terminaison API |
 | `g` | Configurer le jeton GitHub |
+| `z` | Basculer affichage paroles sur le bureau |
 | `q` | Quitter |
 
 ### Vue de recherche
@@ -543,15 +550,16 @@ registry = "https://mirrors.ustc.edu.cn/crates.io-index"
 
 ```text
 src/
-├── main.rs       # Point d'entrée (analyse des arguments, initialisation, restauration/sauvegarde de la configuration)
-├── defs.rs       # Définitions partagées (énumérations PlayMode/PlayState, structures MusicFile/Playlist)
-├── audio.rs      # Contrôle audio (encapsulage rodio, lecture/pause/saut/volume/progression)
-├── analyzer.rs   # Analyseur audio (volume RMS en temps réel, lissage EMA, rendu de la forme d'onde)
-├── playlist.rs   # Gestion de la liste de lecture (scan de répertoire, chargement parallèle des durées, sélection de dossier)
-├── lyrics.rs     # Analyse des paroles (LRC, recherche locale, détection d'encodage, téléchargement en arrière-plan)
-├── search.rs     # Recherche/téléchargement en ligne (recherche Kuwo + Kugou + NetEase, téléchargement, récupération des commentaires, requête en flux des informations sur les chansons)
-├── config.rs     # Gestion de la configuration (sérialisation JSON, 8 éléments persistants)
-└── ui.rs         # Interface utilisateur (rendu terminal, gestion des événements, mode multi-vues, système de thèmes/langues)
+├── main.rs            # Point d'entrée (analyse des arguments, initialisation, restauration/sauvegarde de la configuration)
+├── defs.rs            # Définitions partagées (énumérations PlayMode/PlayState, structures MusicFile/Playlist)
+├── audio.rs           # Contrôle audio (encapsulage rodio, lecture/pause/saut/volume/progression)
+├── analyzer.rs        # Analyseur audio (volume RMS en temps réel, lissage EMA, rendu de la forme d'onde)
+├── playlist.rs        # Gestion de la liste de lecture (scan de répertoire, chargement parallèle des durées, sélection de dossier)
+├── lyrics.rs          # Analyse des paroles (LRC, recherche locale, détection d'encodage, téléchargement en arrière-plan)
+├── desktop_lyrics.rs  # Fenêtre flottante des paroles du bureau (API Windows + processus enfant Linux, transparence/position/glisser/raccourcis)
+├── search.rs          # Recherche/téléchargement en ligne (recherche Kuwo + Kugou + NetEase, téléchargement, récupération des commentaires, requête en flux des informations sur les chansons)
+├── config.rs          # Gestion de la configuration (sérialisation JSON, 8 éléments persistants)
+└── ui.rs              # Interface utilisateur (rendu terminal, gestion des événements, mode multi-vues, système de thèmes/langues)
 ```
 
 ### Pile technologique
@@ -672,10 +680,46 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La première compilation télécharge et compile toutes les dépendances ; c'est normal. Les compilations suivantes sont beaucoup plus rapides.
 
 ### Télécharger les versions
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605050312131911_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605050312183967_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605050312251425_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605050312355690_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260508120240809_ter-music-rust-win.zip "附件(Attached)")  [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605081202471668_ter-music-rust-mac.zip "附件(Attached)")  [ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605081203011605_ter-music-rust-linux.zip "附件(Attached)")  [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605081203119759_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## Version 1.8.0 (2026-05-08)
+
+### 🎉 Nouvelles fonctionnalités
+
+#### Fenêtre flottante des paroles du bureau
+- ✨ **Basculer les paroles du bureau** : Appuyez sur `z` pour afficher/masquer la fenêtre flottante des paroles
+- ✨ **Trois modes de paroles du bureau** : prend en charge le défilement vertical, le défilement horizontal et le mode Karaoké ; faites un clic droit sur la fenêtre des paroles du bureau pour changer de mode en boucle
+- ✨ **Changement de position** : Appuyez sur `PgUp`/`PgDn` pour basculer entre les positions inférieure/supérieure de l'écran
+- ✨ **Réglage de la transparence** : Appuyez sur `↑`/`↓` pour ajuster la transparence du fond de 10% à 100%, le texte est toujours 10% plus opaque que le fond
+- ✨ **Déplacement à la souris** : Glissez avec le bouton gauche pour déplacer la fenêtre, la position est auto-sauvegardée dans la configuration
+- ✨ **Contrôle par clic focus** : Après clic pour focus, supporte les raccourcis complets : `←`/`→` piste précédente/suivante, `Space` pause, `[`/`]` recherche, `,`/`.` saut de 5s/10s, `+/-` volume, `1-5` mode lecture, `PgUp`/`PgDn` position, `↑`/`↓` transparence, `T` changement thème
+- ✨ **Support multiplateforme** : Windows utilise l'API WinAPI native, Linux/macOS utilise l'approche par processus enfant (due à la limitation winit 0.30)
+- ✨ **Animation de défilement des paroles** : Effet de transition fluide lors du changement de chanson
+- ✨ **Mode Karaoké** : affiche les paroles en deux lignes et quatre phrases, met en surbrillance la phrase courante caractère par caractère, et regroupe les paroles par lignes non vides pour éviter un changement de groupe prématuré causé par les lignes vides
+- ✨ **Animation de changement de groupe Karaoké** : ajoute un fondu et un léger glissement lors du passage d'un groupe de paroles au suivant, pour garder une expérience fluide comme les modes vertical/horizontal
+- ✨ **Affichage adaptatif des longues lignes** : lorsque la deuxième ligne Karaoké est longue, la position de départ se décale automatiquement vers la gauche pour afficher le contenu complet autant que possible ; les points de suspension ne sont utilisés que si la largeur dépasse la zone des paroles du bureau
+- ✨ **Cohérence de la couleur de surbrillance** : la phrase courante en mode Karaoké utilise la même couleur de surbrillance et le même style gras que les autres modes, tout en gardant une largeur de mise en page stable sans décalage
+- ✨ **Synchronisation du thème** : Les paroles du bureau suivent le thème de l'interface (Neon/Sunset/Ocean/GrayWhite)
+- ✨ **Persistance de configuration** : L'état d'affichage, la position, la transparence et les coordonnées des paroles sont auto-sauvegardés et restaurés
+
+### 🐞 Corrections de bugs
+
+- 🛠️ **Correction des couleurs de thème des paroles du bureau sous Linux** : correction de l'ordre inversé des canaux RGB/BGR lors du rendu Linux avec `softbuffer`, qui faisait apparaître les thèmes Neon/Sunset/Ocean avec des couleurs décalées et incohérentes avec le TUI ; GrayWhite était difficile à remarquer car les couleurs en niveaux de gris masquaient le problème
+
+### 🔧 Améliorations
+
+- 🔍 **Nouveaux éléments de configuration** : `lyrics_enabled` (afficher/masquer), `lyrics_position` (bottom/top), `lyrics_scroll` (mode de défilement : vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordonnées de la fenêtre)
+
+### 💻 Détails techniques
+
+#### Mise à jour des dépendances
+- ➕ Ajout de la dépendance `fontdue` (rendu de police Linux/macOS)
+- ➕ Ajout de la dépendance `softbuffer` (rendu logiciel Linux/macOS)
+
+#### Mise à jour de la structure du projet
+- `desktop_lyrics.rs` : Module des paroles du bureau (Windows API + processus enfant Linux, transparence/position/glisser/raccourcis)
 
 ---
 

@@ -138,6 +138,12 @@ A configuração é armazenada em `USERPROFILE/ter-music-rust/config.json` no di
 | `github_token` | GitHub Token (usado para enviar discussões de informações da música; deixe vazio para usar o Token padrão) |
 | `theme` | Nome do tema |
 | `language` | Idioma da interface (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
+| `lyrics_enabled` | Mostrar/ocultar letras do desktop |
+| `lyrics_position` | Posição da janela (bottom/top) |
+| `lyrics_scroll` | Modo de rolagem das letras do desktop (`vertical` / `horizontal` / `karaoke`, padrão `vertical`) |
+| `lyrics_alpha` | Transparência do fundo (10-100) |
+| `lyrics_x` | Coordenada X da janela |
+| `lyrics_y` | Coordenada Y da janela |
 
 **Gatilhos de salvamento automático**: troca de faixa, troca de tema, troca de idioma, alteração de favoritos, a cada 30 segundos e ao sair (incluindo Ctrl+C)
 
@@ -224,6 +230,7 @@ cargo run --release -- -o d:\Music
 | `t` | Trocar tema |
 | `k` | Configurar endpoint da API |
 | `g` | Configurar GitHub Token |
+| `z` | Mostrar/ocultar letras do desktop |
 | `q` | Sair |
 
 ### Visualização de pesquisa
@@ -549,8 +556,9 @@ src/
 ├── analyzer.rs   # Analisador de áudio (volume RMS em tempo real, suavização EMA, renderização de forma de onda)
 ├── playlist.rs   # Gerenciamento da lista de reprodução (escaneamento de diretório, carregamento paralelo de duração, seletor de pasta)
 ├── lyrics.rs     # Análise de letras (LRC, busca local, detecção de codificação, download em segundo plano)
+├── desktop_lyrics.rs  # Módulo de letras do desktop (Windows API + processo filho Linux, transparência/posição/arraste/atalhos)
 ├── search.rs     # Pesquisa/download online (Kuwo + Kugou + NetEase, download, busca de comentários, consulta em fluxo de informações da música)
-├── config.rs     # Gerenciamento de configuração (serialização JSON, 8 itens persistentes)
+├── config.rs     # Gerenciamento de configuração (serialização JSON, 13 itens persistentes)
 └── ui.rs         # Interface (renderização no terminal, tratamento de eventos, modo multi-visualização, sistema de tema/idioma)
 ```
 
@@ -672,14 +680,50 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 A primeira compilação baixa e compila todas as dependências; isso é esperado. Compilações subsequentes são muito mais rápidas.
 
 ### Baixar releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605050312131911_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605050312183967_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605050312251425_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605050312355690_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260508120240809_ter-music-rust-win.zip "附件(Attached)")  [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605081202471668_ter-music-rust-mac.zip "附件(Attached)")  [ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605081203011605_ter-music-rust-linux.zip "附件(Attached)")  [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605081203119759_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Registro de alterações
+
+## Versão 1.8.0 (2026-05-08)
+
+### 🎉 Novas funcionalidades
+
+#### Janela flutuante de letras do desktop
+- ✨ **Alternar letras do desktop** : Pressione `z` para mostrar/ocultar a janela flutuante de letras
+- ✨ **Três modos de letras do desktop** : suporta rolagem vertical, rolagem horizontal e modo Karaoke; clique com o botão direito na janela de letras do desktop para alternar os modos em ciclo
+- ✨ **Troca de posição** : Pressione `PgUp`/`PgDn` para alternar entre posições inferior/superior da tela
+- ✨ **Ajuste de transparência** : Pressione `↑`/`↓` para ajustar a transparência do fundo de 10% a 100%, o texto é sempre 10% mais opaco que o fundo
+- ✨ **Arraste de posição com o mouse** : Arraste com o botão esquerdo para mover a posição da janela, a posição é salva automaticamente na configuração
+- ✨ **Controle de foco de clique** : Após clicar para focar, suporta atalhos completos: `←`/`→` faixa anterior/próxima, `Space` pausa, `[`/`]` busca, `,`/`.` salto de 5s/10s, `+/-` volume, `1-5` modo de reprodução, `PgUp`/`PgDn` posição, `↑`/`↓` transparência, `T` mudar tema
+- ✨ **Suporte multiplataforma** : Windows usa a API nativa WinAPI, Linux/macOS usam a abordagem de processo filho (devido à limitação winit 0.30)
+- ✨ **Animação de rolagem de letras** : Efeito de transição suave ao trocar de música
+- ✨ **Modo Karaoke** : mostra letras em duas linhas com quatro frases, destaca a frase atual caractere por caractere e agrupa as letras por linhas não vazias para evitar troca antecipada de grupo causada por linhas em branco
+- ✨ **Animação de troca de grupo Karaoke** : adiciona fade e leve deslizamento ao trocar de um grupo de letras para o próximo, mantendo a experiência suave como nos modos vertical/horizontal
+- ✨ **Exibição adaptativa de linhas longas** : quando a segunda linha do Karaoke é longa, a posição inicial se desloca automaticamente para a esquerda para mostrar o conteúdo completo sempre que possível; reticências são usadas apenas quando excede a largura da área de letras do desktop
+- ✨ **Consistência da cor de destaque** : a frase atual do Karaoke usa a mesma cor de destaque e estilo em negrito dos outros modos de letras do desktop, mantendo a largura do layout estável sem deslocamento
+- ✨ **Sincronização de tema** : As letras do desktop seguem o tema da interface (Neon/Sunset/Ocean/GrayWhite)
+- ✨ **Persistência de configuração** : O estado de exibição, posição, transparência e coordenadas das letras são salvos e restaurados automaticamente
+
+### 🐞 Correções de bugs
+
+- 🛠️ **Correção das cores de tema das letras do desktop no Linux** : corrigida a ordem invertida dos canais RGB/BGR ao renderizar letras do desktop no Linux com `softbuffer`, que fazia as cores Neon/Sunset/Ocean aparecerem deslocadas e inconsistentes com a TUI; GrayWhite era difícil de perceber porque as cores em escala de cinza mascaravam o problema
+
+### 🔧 Melhorias
+
+- 🔍 **Novos itens de configuração** : `lyrics_enabled` (mostrar/ocultar), `lyrics_position` (bottom/top), `lyrics_scroll` (modo de rolagem: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordenadas da janela)
+
+### 💻 Detalhes técnicos
+
+#### Atualizar dependências
+- ➕ Adicionada dependência `fontdue` (renderização de fonte Linux/macOS)
+- ➕ Adicionada dependência `softbuffer` (renderização de software Linux/macOS)
+
+#### Atualizar estrutura do projeto
+- `desktop_lyrics.rs` : Módulo de letras do desktop (Windows API + processo filho Linux, transparência/posição/arraste/atalhos)
+
+---
 
 ## Versão 1.7.0 (2026-05-05)
 
