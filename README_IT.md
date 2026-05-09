@@ -8,6 +8,8 @@
 
 Un lettore musicale da terminale semplice e pratico, sviluppato in Rust. Supporta ricerca/download locale e online, download e visualizzazione automatica dei testi, visualizzazione dei commenti e cambio lingua/tema, con supporto per Windows, Linux e MacOS.
 
+![preview](preview.gif)
+
 ![preview1](preview1.png)
 
 ![preview2](preview2.png)

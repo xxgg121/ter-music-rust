@@ -8,6 +8,8 @@
 
 一個簡潔實用的終端音樂播放器，使用 Rust 實現，支持本地/網絡歌曲搜尋下載、自動下載歌詞顯示、評論檢視、多語言與主題切換等功能，支持 Windows、Linux、MacOS 系統。
 
+![preview](preview.gif)
+
 ![preview1](preview1.png)
 
 ![preview2](preview2.png)

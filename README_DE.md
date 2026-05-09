@@ -8,6 +8,8 @@
 
 Ein schlanker und praktischer Terminal-Musikplayer in Rust mit lokaler/online Suche und Download von Songs, automatischem Herunterladen und Anzeigen von Liedtexten, Kommentaransicht sowie Sprach- und Theme-Umschaltung. Unterstützt Windows, Linux und MacOS.
 
+![preview](preview.gif)
+
 ![preview1](preview1.png)
 
 ![preview2](preview2.png)

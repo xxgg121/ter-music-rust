@@ -9,6 +9,8 @@
 
 Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어입니다. 로컬/온라인 곡 검색 및 다운로드, 가사 자동 다운로드 및 표시, 댓글 보기, 언어/테마 전환 기능을 제공하며 Windows, Linux, MacOS를 지원합니다。
 
+![preview](preview.gif)
+
 ![preview1](preview1.png)
 
 ![preview2](preview2.png)

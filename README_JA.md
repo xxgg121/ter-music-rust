@@ -8,6 +8,8 @@
 
 Rust で実装された、シンプルで実用的なターミナル向け音楽プレーヤーです。ローカル/ネットワークの楽曲検索とダウンロード、歌詞の自動取得と表示、コメント閲覧、言語・テーマ切り替えなどを備え、Windows・Linux・MacOS をサポートします。
 
+![preview](preview.gif)
+
 ![preview1](preview1.png)
 
 ![preview2](preview2.png)

@@ -8,6 +8,8 @@
 
 Um player de música para terminal, simples e prático, implementado em Rust. Suporta busca/download local e online, download e exibição automática de letras, visualização de comentários e troca de idioma/tema, com suporte a Windows, Linux e MacOS.
 
+![preview](preview.gif)
+
 ![preview1](preview1.png)
 
 ![preview2](preview2.png)
