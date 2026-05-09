@@ -232,6 +232,8 @@ impl DesktopLyricsHandle {
         {
             self.kill_child_process();
         }
+        self.sender = None;
+        self.event_rx = None;
     }
 
     #[cfg(not(windows))]
