@@ -703,6 +703,8 @@ La première compilation télécharge et compile toutes les dépendances ; c'est
 - ✨ **Mode Karaoké** : affiche les paroles en deux lignes et quatre phrases, met en surbrillance la phrase courante caractère par caractère, et regroupe les paroles par lignes non vides pour éviter un changement de groupe prématuré causé par les lignes vides
 - ✨ **Animation de changement de groupe Karaoké** : ajoute un fondu et un léger glissement lors du passage d'un groupe de paroles au suivant, pour garder une expérience fluide comme les modes vertical/horizontal
 - ✨ **Affichage adaptatif des longues lignes** : lorsque la deuxième ligne Karaoké est longue, la position de départ se décale automatiquement vers la gauche pour afficher le contenu complet autant que possible ; les points de suspension ne sont utilisés que si la largeur dépasse la zone des paroles du bureau
+- ✨ **Optimisation des points de suspension Karaoké** : en mode Karaoké, la deuxième phrase de la ligne supérieure gauche et la deuxième phrase de la ligne inférieure droite affichent `...` en fin de ligne lorsqu'elles dépassent la zone des paroles, évitant le débordement hors de la fenêtre
+- ✨ **Zone de paroles du bureau arrondie** : le fond des paroles du bureau prend en charge les coins arrondis, avec quatre coins transparents et nettoyage des résidus de bord pour un rendu plus doux
 - ✨ **Cohérence de la couleur de surbrillance** : la phrase courante en mode Karaoké utilise la même couleur de surbrillance et le même style gras que les autres modes, tout en gardant une largeur de mise en page stable sans décalage
 - ✨ **Synchronisation du thème** : Les paroles du bureau suivent le thème de l'interface (Neon/Sunset/Ocean/GrayWhite)
 - ✨ **Persistance de configuration** : L'état d'affichage, la position, la transparence et les coordonnées des paroles sont auto-sauvegardés et restaurés
@@ -710,10 +712,15 @@ La première compilation télécharge et compile toutes les dépendances ; c'est
 ### 🐞 Corrections de bugs
 
 - 🛠️ **Correction des couleurs de thème des paroles du bureau sous Linux** : correction de l'ordre inversé des canaux RGB/BGR lors du rendu Linux avec `softbuffer`, qui faisait apparaître les thèmes Neon/Sunset/Ocean avec des couleurs décalées et incohérentes avec le TUI ; GrayWhite était difficile à remarquer car les couleurs en niveaux de gris masquaient le problème
+- 🛠️ **Correction de la couleur de surbrillance des paroles du bureau sous Linux** : correction du fait que la ligne courante en défilement horizontal et en mode Karaoké apparaissait plus sombre que dans le mode vertical ; la luminosité de surbrillance est désormais unifiée dans les trois modes
+- 🛠️ **Correction du positionnement inférieur des paroles du bureau sous Linux** : correction du problème où, dans les environnements comme Wayland ne permettant pas d'obtenir `_NET_WORKAREA`, les paroles se plaçaient au bord inférieur de l'écran après `PgDn` au lieu du bord supérieur de la barre des tâches
+- 🛠️ **Correction de la transparence des coins arrondis des paroles du bureau** : correction des résidus de couleur de fond hors des coins arrondis et des traces d'angles droits visibles ; les zones transparentes effacent aussi le RGB et atténuent les couleurs de bord
+- 🛠️ **Correction des raccourcis avec l'IME chinois** : correction des signes `。`, `，`, `【`, `】`, `［`, `］`, `‘`, `’` en saisie chinoise qui ne déclenchaient pas le seek ou pouvaient changer de piste par erreur
 
 ### 🔧 Améliorations
 
 - 🔍 **Nouveaux éléments de configuration** : `lyrics_enabled` (afficher/masquer), `lyrics_position` (bottom/top), `lyrics_scroll` (mode de défilement : vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordonnées de la fenêtre)
+- 🎨 **Optimisation visuelle des paroles du bureau** : unification de la composition de transparence du texte sous Linux, optimisation du rayon des coins et de l'anticrénelage pour garder un rendu cohérent du fond transparent, de la surbrillance et des bords de fenêtre
 
 ### 💻 Détails techniques
 

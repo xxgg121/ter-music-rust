@@ -703,6 +703,8 @@ La primera compilación descarga y compila todas las dependencias; esto es esper
 - ✨ **Modo Karaoke** : muestra las letras en dos líneas con cuatro frases, resalta la frase actual carácter por carácter y agrupa las letras por líneas no vacías para evitar cambios de grupo prematuros causados por líneas en blanco
 - ✨ **Animación de cambio de grupo Karaoke** : añade fundido y un ligero deslizamiento al cambiar de un grupo de letras al siguiente, manteniendo una experiencia fluida como en los modos vertical/horizontal
 - ✨ **Visualización adaptativa de líneas largas** : cuando la segunda línea de Karaoke es larga, la posición inicial se desplaza automáticamente a la izquierda para mostrar el contenido completo tanto como sea posible; los puntos suspensivos solo se usan cuando supera el ancho del área de letras de escritorio
+- ✨ **Optimización de puntos suspensivos en Karaoke** : en modo Karaoke, la segunda frase de la fila superior izquierda y la segunda frase de la fila inferior derecha muestran `...` al final cuando exceden el área de letras, evitando que el texto se desborde fuera del borde de la ventana
+- ✨ **Área de letras de escritorio con esquinas redondeadas** : el fondo de letras de escritorio ahora admite esquinas redondeadas, cuatro esquinas transparentes y limpieza de residuos de borde para una apariencia de ventana más suave
 - ✨ **Consistencia del color de resaltado** : la frase actual de Karaoke usa el mismo color de resaltado y estilo en negrita que otros modos de letras de escritorio, manteniendo estable el ancho del diseño sin desplazamientos
 - ✨ **Sincronización de tema** : Las letras de escritorio siguen el tema de la interfaz (Neon/Sunset/Ocean/GrayWhite)
 - ✨ **Persistencia de configuración** : El estado de visualización, posición, transparencia y coordenadas de las letras se guardan y restauran automáticamente
@@ -710,10 +712,15 @@ La primera compilación descarga y compila todas las dependencias; esto es esper
 ### 🐞 Correcciones de errores
 
 - 🛠️ **Corrección del color del tema de letras de escritorio en Linux** : corregido el orden invertido de canales RGB/BGR al renderizar letras de escritorio en Linux con `softbuffer`, que hacía que los colores de Neon/Sunset/Ocean aparecieran desplazados e inconsistentes con la TUI; GrayWhite era difícil de notar porque los tonos grises ocultaban el problema
+- 🛠️ **Corrección del color de resaltado de letras de escritorio en Linux** : corregido que el resaltado de la línea actual en desplazamiento horizontal y modo Karaoke se viera más oscuro que en el modo vertical en Linux, unificando el brillo de resaltado en los tres modos
+- 🛠️ **Corrección de posicionamiento inferior de letras de escritorio en Linux** : corregido que, en entornos como Wayland donde no se puede obtener `_NET_WORKAREA`, las letras se pegaran al borde inferior de la pantalla tras `PgDn` en lugar de al borde superior de la barra de tareas
+- 🛠️ **Corrección de transparencia de esquinas redondeadas de letras de escritorio** : corregidos residuos de color de fondo fuera de las esquinas redondeadas y trazas visibles de ángulos rectos; las áreas transparentes también limpian RGB y atenúan los colores de borde
+- 🛠️ **Corrección de atajos con IME chino** : corregido que signos como `。`, `，`, `【`, `】`, `［`, `］`, `‘`, `’` en entrada china no hicieran seek o cambiaran de pista accidentalmente
 
 ### 🔧 Mejoras
 
 - 🔍 **Nuevos elementos de configuración** : `lyrics_enabled` (mostrar/ocultar), `lyrics_position` (bottom/top), `lyrics_scroll` (modo de desplazamiento: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordenadas de la ventana)
+- 🎨 **Optimización visual de letras de escritorio** : unificada la composición de transparencia del texto en Linux, optimizados el radio de esquinas y el antialiasing para mantener consistentes el fondo transparente, los resaltados y los bordes de la ventana
 
 ### 💻 Detalles técnicos
 

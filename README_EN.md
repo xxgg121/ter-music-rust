@@ -707,6 +707,8 @@ The first build downloads and compiles all dependencies; this is expected. Later
 - ✨ **Karaoke mode**: Shows lyrics as two rows with four phrases, highlights the current phrase character by character, and groups lyrics by non-empty lines to avoid early group switching caused by blank lines
 - ✨ **Karaoke group transition animation**: Adds fade and slight slide transitions when switching from one lyric group to the next, keeping the experience smooth like vertical/horizontal modes
 - ✨ **Long-line adaptive display**: When the second Karaoke row is long, the start position automatically shifts left to show as much complete text as possible; ellipsis is used only when it exceeds the desktop lyrics area width
+- ✨ **Karaoke ellipsis optimization**: In Karaoke mode, the second phrase on the top-left row and the second phrase on the bottom-right row show `...` at the end when they exceed the lyrics area, avoiding overflow past the window boundary
+- ✨ **Rounded desktop lyrics area**: Desktop lyrics background now supports rounded corners, with transparent corners and cleaned edge residue for a softer window appearance
 - ✨ **Highlight color consistency**: Karaoke current phrase now uses the same highlight color and bold style as other desktop lyrics modes while keeping layout width stable without shifting
 - ✨ **Theme sync**: Desktop lyrics follow UI theme (Neon/Sunset/Ocean/GrayWhite)
 - ✨ **Config persistence**: Desktop lyrics visibility, position, transparency, and coordinates are auto-saved and restored
@@ -714,10 +716,15 @@ The first build downloads and compiles all dependencies; this is expected. Later
 ### 🐞 Bug Fixes
 
 - 🛠️ **Linux desktop lyrics theme color fix**: Fixed reversed RGB/BGR channel order when Linux desktop lyrics are rendered with `softbuffer`, which caused Neon/Sunset/Ocean theme colors to appear shifted and inconsistent with the TUI; GrayWhite was previously hard to notice because grayscale colors hide the issue
+- 🛠️ **Linux desktop lyrics highlight color fix**: Fixed horizontal scrolling and Karaoke current-line highlights appearing darker than vertical scrolling on Linux, unifying current-line highlight brightness across all three modes
+- 🛠️ **Linux desktop lyrics bottom positioning fix**: Fixed desktop lyrics snapping to the screen bottom instead of the top edge of the taskbar after `PgDn` in environments such as Wayland where `_NET_WORKAREA` cannot be obtained
+- 🛠️ **Desktop lyrics rounded-corner transparency fix**: Fixed residual background color outside rounded corners causing visible right-angle artifacts by clearing RGB in transparent areas and fading edge colors
+- 🛠️ **Chinese IME shortcut fix**: Fixed Chinese IME punctuation such as `。`, `，`, `【`, `】`, `［`, `］`, `‘`, `’` not seeking correctly or accidentally triggering track switching
 
 ### 🔧 Improvements
 
 - 🔍 **New config items**: `lyrics_enabled` (show/hide), `lyrics_position` (bottom/top), `lyrics_scroll` (scroll mode: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (window coordinates)
+- 🎨 **Desktop lyrics visual optimization**: Unified Linux desktop lyrics text alpha composition, optimized rounded-corner radius and anti-aliasing, and kept transparent backgrounds, lyric highlights, and window edges visually consistent
 
 ### 💻 Technical Details
 

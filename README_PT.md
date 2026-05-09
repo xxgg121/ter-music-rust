@@ -705,6 +705,8 @@ A primeira compilação baixa e compila todas as dependências; isso é esperado
 - ✨ **Modo Karaoke** : mostra letras em duas linhas com quatro frases, destaca a frase atual caractere por caractere e agrupa as letras por linhas não vazias para evitar troca antecipada de grupo causada por linhas em branco
 - ✨ **Animação de troca de grupo Karaoke** : adiciona fade e leve deslizamento ao trocar de um grupo de letras para o próximo, mantendo a experiência suave como nos modos vertical/horizontal
 - ✨ **Exibição adaptativa de linhas longas** : quando a segunda linha do Karaoke é longa, a posição inicial se desloca automaticamente para a esquerda para mostrar o conteúdo completo sempre que possível; reticências são usadas apenas quando excede a largura da área de letras do desktop
+- ✨ **Otimização de reticências no Karaoke** : no modo Karaoke, a segunda frase da linha superior esquerda e a segunda frase da linha inferior direita mostram `...` no final quando excedem a área de letras, evitando transbordamento além da borda da janela
+- ✨ **Área de letras do desktop arredondada** : o fundo das letras do desktop agora suporta cantos arredondados, quatro cantos transparentes e limpeza de resíduos nas bordas para uma aparência de janela mais suave
 - ✨ **Consistência da cor de destaque** : a frase atual do Karaoke usa a mesma cor de destaque e estilo em negrito dos outros modos de letras do desktop, mantendo a largura do layout estável sem deslocamento
 - ✨ **Sincronização de tema** : As letras do desktop seguem o tema da interface (Neon/Sunset/Ocean/GrayWhite)
 - ✨ **Persistência de configuração** : O estado de exibição, posição, transparência e coordenadas das letras são salvos e restaurados automaticamente
@@ -712,10 +714,15 @@ A primeira compilação baixa e compila todas as dependências; isso é esperado
 ### 🐞 Correções de bugs
 
 - 🛠️ **Correção das cores de tema das letras do desktop no Linux** : corrigida a ordem invertida dos canais RGB/BGR ao renderizar letras do desktop no Linux com `softbuffer`, que fazia as cores Neon/Sunset/Ocean aparecerem deslocadas e inconsistentes com a TUI; GrayWhite era difícil de perceber porque as cores em escala de cinza mascaravam o problema
+- 🛠️ **Correção da cor de destaque das letras do desktop no Linux** : corrigido o problema em que o destaque da linha atual em rolagem horizontal e modo Karaoke no Linux parecia mais escuro que no modo vertical, unificando o brilho do destaque nos três modos
+- 🛠️ **Correção do posicionamento inferior das letras do desktop no Linux** : corrigido que, em ambientes como Wayland onde `_NET_WORKAREA` não pode ser obtido, após `PgDn` as letras ficavam grudadas na borda inferior da tela em vez da borda superior da barra de tarefas
+- 🛠️ **Correção de transparência dos cantos arredondados das letras do desktop** : corrigidos resíduos de cor de fundo fora dos cantos arredondados e marcas visíveis de ângulos retos; áreas transparentes também limpam RGB e atenuam as cores de borda
+- 🛠️ **Correção de atalhos com IME chinês** : corrigido que sinais como `。`, `，`, `【`, `】`, `［`, `］`, `‘`, `’` em entrada chinesa não faziam seek ou alternavam faixa acidentalmente
 
 ### 🔧 Melhorias
 
 - 🔍 **Novos itens de configuração** : `lyrics_enabled` (mostrar/ocultar), `lyrics_position` (bottom/top), `lyrics_scroll` (modo de rolagem: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordenadas da janela)
+- 🎨 **Otimização visual das letras do desktop** : unificada a composição de transparência do texto no Linux, otimizados o raio dos cantos e o anti-aliasing para manter consistentes o fundo transparente, os destaques e as bordas da janela
 
 ### 💻 Detalhes técnicos
 

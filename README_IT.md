@@ -704,6 +704,8 @@ La prima compilazione scarica e compila tutte le dipendenze; questo è normale. 
 - ✨ **Modalità Karaoke** : mostra le lyrics in due righe con quattro frasi, evidenzia la frase corrente carattere per carattere e raggruppa le lyrics per righe non vuote per evitare cambi di gruppo anticipati causati da righe vuote
 - ✨ **Animazione cambio gruppo Karaoke** : aggiunge dissolvenza e un leggero scorrimento quando si passa da un gruppo di lyrics al successivo, mantenendo un'esperienza fluida come nelle modalità verticale/orizzontale
 - ✨ **Visualizzazione adattiva delle righe lunghe** : quando la seconda riga Karaoke è lunga, la posizione iniziale si sposta automaticamente a sinistra per mostrare il contenuto completo il più possibile; i puntini di sospensione vengono usati solo quando supera la larghezza dell'area lyrics desktop
+- ✨ **Ottimizzazione puntini di sospensione Karaoke** : in modalità Karaoke, la seconda frase della riga in alto a sinistra e la seconda frase della riga in basso a destra mostrano `...` alla fine quando superano l'area lyrics, evitando overflow oltre il bordo della finestra
+- ✨ **Area lyrics desktop arrotondata** : lo sfondo delle lyrics desktop supporta angoli arrotondati, quattro angoli trasparenti e pulizia dei residui sui bordi per un aspetto della finestra più morbido
 - ✨ **Coerenza del colore di evidenziazione** : la frase corrente in Karaoke usa lo stesso colore di evidenziazione e stile grassetto degli altri modi lyrics desktop, mantenendo stabile la larghezza del layout senza spostamenti
 - ✨ **Sincronizzazione tema** : Le lyrics desktop seguono il tema dell'interfaccia (Neon/Sunset/Ocean/GrayWhite)
 - ✨ **Persistenza configurazione** : Lo stato di visualizzazione, la posizione, la trasparenza e le coordinate delle lyrics vengono salvati e ripristinati automaticamente
@@ -711,10 +713,15 @@ La prima compilazione scarica e compila tutte le dipendenze; questo è normale. 
 ### 🐞 Correzioni di bug
 
 - 🛠️ **Correzione colori tema lyrics desktop su Linux** : corretto l'ordine invertito dei canali RGB/BGR durante il rendering delle lyrics desktop Linux con `softbuffer`, che faceva apparire spostati i colori Neon/Sunset/Ocean e non coerenti con la TUI; GrayWhite era difficile da notare perché i colori in scala di grigi nascondevano il problema
+- 🛠️ **Correzione colore evidenziazione lyrics desktop su Linux** : corretto il problema per cui l'evidenziazione della riga corrente in scorrimento orizzontale e modalità Karaoke su Linux appariva più scura rispetto alla modalità verticale, uniformando la luminosità nei tre modi
+- 🛠️ **Correzione posizionamento inferiore lyrics desktop su Linux** : corretto il problema per cui, in ambienti come Wayland dove `_NET_WORKAREA` non è disponibile, dopo `PgDn` le lyrics si posizionavano sul bordo inferiore dello schermo invece che sopra la barra delle applicazioni
+- 🛠️ **Correzione trasparenza angoli arrotondati lyrics desktop** : corretti residui di colore dello sfondo fuori dagli angoli arrotondati e tracce visibili di angoli retti; le aree trasparenti ora azzerano anche RGB e attenuano i colori dei bordi
+- 🛠️ **Correzione scorciatoie con IME cinese** : corretto che segni come `。`, `，`, `【`, `】`, `［`, `］`, `‘`, `’` in input cinese non eseguissero il seek o causassero cambio traccia accidentale
 
 ### 🔧 Miglioramenti
 
 - 🔍 **Nuovi elementi di configurazione** : `lyrics_enabled` (mostra/nascondi), `lyrics_position` (bottom/top), `lyrics_scroll` (modalità di scorrimento: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordinate finestra)
+- 🎨 **Ottimizzazione visiva lyrics desktop** : unificata la composizione della trasparenza del testo su Linux, ottimizzati raggio degli angoli e antialiasing per mantenere coerenti sfondo trasparente, evidenziazioni e bordi finestra
 
 ### 💻 Dettagli tecnici
 

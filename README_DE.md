@@ -705,6 +705,8 @@ Der erste Build lädt und kompiliert alle Abhängigkeiten herunter; dies ist erw
 - ✨ **Karaoke-Modus** : Zeigt Lyrics in zwei Zeilen mit vier Phrasen an, hebt die aktuelle Phrase zeichenweise hervor und gruppiert nach nicht leeren Zeilen, um verfrühte Gruppenwechsel durch Leerzeilen zu vermeiden
 - ✨ **Karaoke-Gruppenwechsel-Animation** : Beim Wechsel von einer Lyrics-Gruppe zur nächsten werden Aus-/Einblenden und ein leichter Slide-Übergang hinzugefügt, damit die Erfahrung wie in vertikalen/horizontalen Modi flüssig bleibt
 - ✨ **Adaptive Anzeige langer Zeilen** : Wenn die zweite Karaoke-Zeile lang ist, wird die Startposition automatisch nach links verschoben, um möglichst vollständigen Text anzuzeigen; Auslassungspunkte werden nur verwendet, wenn die Breite des Desktop-Lyrics-Bereichs überschritten wird
+- ✨ **Karaoke-Auslassungspunkte optimiert** : Im Karaoke-Modus zeigen die zweite Phrase der oberen linken Zeile und die zweite Phrase der unteren rechten Zeile am Ende `...`, wenn sie den Lyrics-Bereich überschreiten, wodurch ein Überlaufen über die Fenstergrenze vermieden wird
+- ✨ **Abgerundeter Desktop-Lyrics-Bereich** : Der Hintergrundbereich der Desktop-Lyrics unterstützt nun abgerundete Ecken, transparente vier Ecken und bereinigte Randreste für ein weicheres Fensterbild
 - ✨ **Einheitliche Hervorhebungsfarbe** : Die aktuelle Karaoke-Phrase verwendet dieselbe Hervorhebungsfarbe und Fettschrift wie andere Desktop-Lyrics-Modi, während die Layoutbreite stabil bleibt und keine Verschiebung entsteht
 - ✨ **Design-Synchronisation** : Desktop-Lyrics folgen dem UI-Design (Neon/Sunset/Ocean/GrayWhite)
 - ✨ **Konfigurationspersistenz** : Anzeigestatus, Position, Transparenz und Koordinaten der Lyrics werden automatisch gespeichert und wiederhergestellt
@@ -712,10 +714,15 @@ Der erste Build lädt und kompiliert alle Abhängigkeiten herunter; dies ist erw
 ### 🐞 Fehlerbehebungen
 
 - 🛠️ **Linux-Desktop-Lyrics-Designfarben korrigiert** : Behoben wurde die vertauschte RGB/BGR-Kanalreihenfolge beim Rendern der Linux-Desktop-Lyrics mit `softbuffer`, wodurch Neon/Sunset/Ocean-Farben verschoben und nicht mit der TUI übereinstimmten; GrayWhite war wegen der Graustufen zuvor kaum auffällig
+- 🛠️ **Linux-Desktop-Lyrics-Hervorhebungsfarbe korrigiert** : Behoben wurde, dass die aktuelle Zeile im horizontalen Scrollen und Karaoke-Modus unter Linux dunkler wirkte als im vertikalen Modus; die Hervorhebungshelligkeit ist nun in allen drei Modi einheitlich
+- 🛠️ **Linux-Desktop-Lyrics-Position unten korrigiert** : Behoben wurde, dass Desktop-Lyrics in Umgebungen wie Wayland ohne `_NET_WORKAREA` nach `PgDn` am unteren Bildschirmrand statt an der oberen Kante der Taskleiste ausgerichtet wurden
+- 🛠️ **Transparenz abgerundeter Desktop-Lyrics-Ecken korrigiert** : Behoben wurden Rest-Hintergrundfarben außerhalb der abgerundeten Ecken und sichtbare rechte Winkel an den vier Ecken; transparente Bereiche löschen nun auch RGB und Kantenfarben werden abgeschwächt
+- 🛠️ **Tastenkürzel mit chinesischer Eingabemethode korrigiert** : Behoben wurde, dass Satzzeichen wie `。`, `，`, `【`, `】`, `［`, `］`, `‘`, `’` im chinesischen IME nicht spulten oder versehentlich den Track wechselten
 
 ### 🔧 Verbesserungen
 
 - 🔍 **Neue Konfigurationselemente** : `lyrics_enabled` (anzeigen/ausblenden), `lyrics_position` (bottom/top), `lyrics_scroll` (Scrollmodus: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (Fensterkoordinaten)
+- 🎨 **Visuelle Optimierung der Desktop-Lyrics** : Vereinheitlichte Text-Alpha-Komposition unter Linux, optimierter Eckenradius und Anti-Aliasing sorgen für konsistente transparente Hintergründe, Lyrics-Hervorhebungen und Fensterränder
 
 ### 💻 Technische Details
 
