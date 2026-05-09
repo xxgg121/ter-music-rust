@@ -125,7 +125,7 @@ impl DesktopLyricsHandle {
             child_process: None,
             active: false,
             position: DesktopLyricsPosition::Bottom,
-            alpha: 70,
+            alpha: 60,
             x: -1,
             y: -1,
             scroll_mode: DesktopLyricsScrollMode::Vertical,
@@ -479,6 +479,7 @@ mod windows_impl {
 
     const TIMER_ID: usize = 1;
     const TIMER_INTERVAL_MS: u32 = 50;
+    const WINDOW_CORNER_RADIUS: f32 = 12.0;
 
     struct WindowData {
         all_lyrics: Vec<(String, f64)>,
@@ -602,6 +603,23 @@ mod windows_impl {
          (a.2 as f32 + (b.2 as f32 - a.2 as f32) * t) as u8)
     }
 
+    fn rounded_rect_alpha(x: u32, y: u32, w: u32, h: u32, radius: f32) -> f32 {
+        let radius = radius.min(w as f32 * 0.5).min(h as f32 * 0.5);
+        if radius <= 0.0 {
+            return 1.0;
+        }
+
+        let px = x as f32 + 0.5;
+        let py = y as f32 + 0.5;
+        let right = w as f32 - radius;
+        let bottom = h as f32 - radius;
+        let cx = if px < radius { radius } else if px > right { right } else { px };
+        let cy = if py < radius { radius } else if py > bottom { bottom } else { py };
+        let dx = px - cx;
+        let dy = py - cy;
+        (radius + 0.5 - (dx * dx + dy * dy).sqrt()).clamp(0.0, 1.0)
+    }
+
     unsafe fn render(hwnd: HWND, data: &mut WindowData) {
         let mut client = std::mem::zeroed::<RECT>();
         GetClientRect(hwnd, &mut client);
@@ -658,8 +676,20 @@ mod windows_impl {
             let pg = ((px >> 8) & 0xFF) as u32;
             let pb = ((px >> 16) & 0xFF) as u32;
             let is_text = pr != bg.0 as u32 || pg != bg.1 as u32 || pb != bg.2 as u32;
-            let a = if is_text { txt_a255 } else { bg_a255 };
-            *bits_ptr.add(i) = (pb << 16) | (pg << 8) | pr | ((a as u32) << 24);
+            let base_a = if is_text { txt_a255 } else { bg_a255 };
+            let x = (i as i32 % w) as u32;
+            let y = (i as i32 / w) as u32;
+            let mask = rounded_rect_alpha(x, y, w as u32, h as u32, WINDOW_CORNER_RADIUS);
+            let a = (base_a as f32 * mask).round() as u32;
+            if a == 0 {
+                *bits_ptr.add(i) = 0;
+            } else {
+                let edge = mask.clamp(0.0, 1.0);
+                let pr = (pr as f32 * edge).round() as u32;
+                let pg = (pg as f32 * edge).round() as u32;
+                let pb = (pb as f32 * edge).round() as u32;
+                *bits_ptr.add(i) = (pb << 16) | (pg << 8) | pr | (a << 24);
+            }
         }
 
         let mut pt_src = POINT { x: 0, y: 0 };
@@ -963,23 +993,36 @@ mod windows_impl {
             }
         }
 
-        // 左上一行：两句并排
+        let row_total_width = |widths: [i32; 2]| -> i32 {
+            match (widths[0] > 0, widths[1] > 0) {
+                (true, true) => widths[0] + gap + widths[1],
+                (true, false) => widths[0],
+                (false, true) => widths[1],
+                (false, false) => 0,
+            }
+        };
+
+        let second_x = |start_x: i32, widths: [i32; 2]| -> i32 {
+            if widths[0] > 0 {
+                start_x + widths[0] + gap
+            } else {
+                start_x
+            }
+        };
+
+        // 左上一行：保持第一句完整布局，第二句超出右边界时由 DrawTextW 追加省略号。
         let top_xs = [
             left_margin,
-            left_margin + top_widths[0] + gap,
+            second_x(left_margin, top_widths),
         ];
 
-        // 右下一行：优先保持右半区布局；放不下时整体左移，只有超出整行可用宽度才省略。
-        let bot_total_width = bot_widths[0] + gap + bot_widths[1];
+        // 右下一行：按整行实际宽度右对齐，短句也贴近右侧形成视觉平衡。
+        let bot_total_width = row_total_width(bot_widths);
         let bot_max_x = w - left_margin;
-        let bot_start_x = if bot_total_width > 0 && (w / 2 + left_margin) + bot_total_width > bot_max_x {
-            (bot_max_x - bot_total_width).max(left_margin)
-        } else {
-            w / 2 + left_margin
-        };
+        let bot_start_x = (bot_max_x - bot_total_width).max(left_margin);
         let bot_xs = [
             bot_start_x,
-            bot_start_x + bot_widths[0] + gap,
+            second_x(bot_start_x, bot_widths),
         ];
 
         for (i, (text, is_current)) in lines.iter().enumerate() {
@@ -993,9 +1036,10 @@ mod windows_impl {
                 _ => continue,
             };
             let max_right = match i {
-                0 => top_xs[1] - 2,
+                0 => w - left_margin,
                 1 => w - left_margin,
-                2 => (bot_xs[1] - 2).min(w - left_margin),
+                2 if bot_widths[1] > 0 => (bot_xs[1] - 2).min(w - left_margin),
+                2 => w - left_margin,
                 3 => w - left_margin,
                 _ => w - left_margin,
             };
@@ -1005,7 +1049,7 @@ mod windows_impl {
                 _ => 0,
             };
 
-            if *is_current && line_char_progress > 0.0 && line_char_progress < 1.0 && x + text_width <= max_right {
+            if *is_current && line_char_progress > 0.0 && x + text_width <= max_right {
                 let chars: Vec<char> = text.chars().collect();
                 let total_chars = chars.len().max(1);
                 let nf = create_font(fs, true);
@@ -1333,7 +1377,7 @@ mod windows_impl {
 
             let work = get_work_area();
             let sw = work.right - work.left;
-            let ww = ((sw as f32 * 0.58) as i32).min(1115).max(500);
+            let ww = ((sw as f32 * 0.58) as i32).min(1110).max(500);
             let wh: i32 = 100;
 
             let (ix, iy) = if x >= 0 && y >= 0 { (x, y) } else {
@@ -1407,6 +1451,8 @@ pub mod unix_impl {
     const TIMER_INTERVAL_MS: u64 = 16;
     const WINDOW_HEIGHT: u32 = 100;
     const SCROLL_ANIMATION_STEP: f32 = 0.08;
+    const FALLBACK_BOTTOM_PANEL_HEIGHT: u32 = 48;
+    const WINDOW_CORNER_RADIUS: f32 = 12.0;
 
     fn theme_colors(name: &str) -> ((u8, u8, u8), (u8, u8, u8), (u8, u8, u8)) {
         match name {
@@ -1483,6 +1529,10 @@ pub mod unix_impl {
                 let s = c.as_str();
                 match s {
                     "-" | "=" | "[" | "]" | "," | "." | "1" | "2" | "3" | "4" | "5" => s.to_string(),
+                    "【" | "［" => "[".into(),
+                    "】" | "］" | "’" | "‘" => "]".into(),
+                    "，" | "、" => ",".into(),
+                    "。" => ".".into(),
                     "t" | "T" => "T".into(),
                     _ => String::new(),
                 }
@@ -1525,9 +1575,64 @@ pub mod unix_impl {
         center_y - (min_y + max_y) * 0.5
     }
 
-    fn fill_buffer(buf: &mut [u32], bg: (u8, u8, u8), bg_alpha: u8) {
-        let bgc = ((bg.0 as u32) << 16) | ((bg.1 as u32) << 8) | (bg.2 as u32) | ((bg_alpha as u32) << 24);
-        for p in buf.iter_mut() { *p = bgc; }
+    fn rounded_rect_alpha(x: u32, y: u32, w: u32, h: u32, radius: f32) -> f32 {
+        let radius = radius.min(w as f32 * 0.5).min(h as f32 * 0.5);
+        if radius <= 0.0 {
+            return 1.0;
+        }
+
+        let px = x as f32 + 0.5;
+        let py = y as f32 + 0.5;
+        let right = w as f32 - radius;
+        let bottom = h as f32 - radius;
+        let cx = if px < radius { radius } else if px > right { right } else { px };
+        let cy = if py < radius { radius } else if py > bottom { bottom } else { py };
+        let dx = px - cx;
+        let dy = py - cy;
+        (radius + 0.5 - (dx * dx + dy * dy).sqrt()).clamp(0.0, 1.0)
+    }
+
+    fn fill_buffer(buf: &mut [u32], w: u32, h: u32, bg: (u8, u8, u8), bg_alpha: u8) {
+        for y in 0..h {
+            for x in 0..w {
+                let mask = rounded_rect_alpha(x, y, w, h, WINDOW_CORNER_RADIUS);
+                let idx = (y * w + x) as usize;
+                let alpha = (bg_alpha as f32 * mask).round() as u32;
+                if alpha == 0 {
+                    buf[idx] = 0;
+                } else {
+                    let edge = mask.clamp(0.0, 1.0);
+                    let r = (bg.0 as f32 * edge).round() as u32;
+                    let g = (bg.1 as f32 * edge).round() as u32;
+                    let b = (bg.2 as f32 * edge).round() as u32;
+                    buf[idx] = (r << 16) | (g << 8) | b | (alpha << 24);
+                }
+            }
+        }
+    }
+
+    fn clip_to_rounded_rect(buf: &mut [u32], w: u32, h: u32) {
+        for y in 0..h {
+            for x in 0..w {
+                let mask = rounded_rect_alpha(x, y, w, h, WINDOW_CORNER_RADIUS);
+                if mask >= 1.0 {
+                    continue;
+                }
+                let idx = (y * w + x) as usize;
+                let px = buf[idx];
+                let alpha = ((px >> 24) & 0xFF) as f32;
+                let alpha = (alpha * mask).round() as u32;
+                if alpha == 0 {
+                    buf[idx] = 0;
+                } else {
+                    let edge = mask.clamp(0.0, 1.0);
+                    let r = (((px >> 16) & 0xFF) as f32 * edge).round() as u32;
+                    let g = (((px >> 8) & 0xFF) as f32 * edge).round() as u32;
+                    let b = ((px & 0xFF) as f32 * edge).round() as u32;
+                    buf[idx] = (r << 16) | (g << 8) | b | (alpha << 24);
+                }
+            }
+        }
     }
 
     fn render_to_buffer(buf: &mut [u32], w: u32, h: u32, state: &mut RenderState) {
@@ -1536,7 +1641,7 @@ pub mod unix_impl {
         let txt_pct = (state.alpha as u32 + 10).min(100);
         let txt_a = ((txt_pct * 255 + 50) / 100).min(255) as u8;
 
-        fill_buffer(buf, bg, bg_a);
+        fill_buffer(buf, w, h, bg, bg_a);
 
         match state.scroll_mode {
             DesktopLyricsScrollMode::Vertical => {
@@ -1549,6 +1654,8 @@ pub mod unix_impl {
                 render_to_buffer_karaoke(buf, w, h, state, bg, fg_bright, fg_dim, txt_a);
             }
         }
+
+        clip_to_rounded_rect(buf, w, h);
     }
 
     fn render_to_buffer_vertical(buf: &mut [u32], w: u32, h: u32, state: &RenderState,
@@ -1696,7 +1803,7 @@ pub mod unix_impl {
                             let rr = (bg.0 as f32 + (color.0 as f32 - bg.0 as f32) * blend) as u32;
                             let gg = (bg.1 as f32 + (color.1 as f32 - bg.1 as f32) * blend) as u32;
                             let bb = (bg.2 as f32 + (color.2 as f32 - bg.2 as f32) * blend) as u32;
-                            let ca = (txt_a as f32 * blend) as u32;
+                            let ca = txt_a as u32;
                             if ca == 0 { continue; }
                             let idx = (py as u32 * w + px as u32) as usize;
                             buf[idx] = (rr << 16) | (gg << 8) | bb | (ca << 24);
@@ -1751,7 +1858,7 @@ pub mod unix_impl {
                         let rr = (bg.0 as f32 + (color.0 as f32 - bg.0 as f32) * blend) as u32;
                         let gg = (bg.1 as f32 + (color.1 as f32 - bg.1 as f32) * blend) as u32;
                         let bb = (bg.2 as f32 + (color.2 as f32 - bg.2 as f32) * blend) as u32;
-                        let ca = (txt_a as f32 * blend) as u32;
+                        let ca = txt_a as u32;
                         if ca == 0 { continue; }
                         let idx = (py as u32 * w + px as u32) as usize;
                         buf[idx] = (rr << 16) | (gg << 8) | bb | (ca << 24);
@@ -1846,24 +1953,36 @@ pub mod unix_impl {
             }
         }
 
-        // 左上一行：两句并排的x坐标
+        let row_total_width = |widths: [f32; 2]| -> f32 {
+            match (widths[0] > 0.0, widths[1] > 0.0) {
+                (true, true) => widths[0] + gap + widths[1],
+                (true, false) => widths[0],
+                (false, true) => widths[1],
+                (false, false) => 0.0,
+            }
+        };
+
+        let second_x = |start_x: f32, widths: [f32; 2]| -> f32 {
+            if widths[0] > 0.0 {
+                start_x + widths[0] + gap
+            } else {
+                start_x
+            }
+        };
+
+        // 左上一行：保持第一句完整布局，第二句超出右边界时手动追加省略号。
         let top_xs = [
             left_margin,
-            left_margin + top_widths[0] + gap,
+            second_x(left_margin, top_widths),
         ];
 
-        // 右下一行：优先保持右半区布局；放不下时整体左移，只有超出整行可用宽度才裁剪。
-        let bot_total_width = bot_widths[0] + gap + bot_widths[1];
+        // 右下一行：按整行实际宽度右对齐，短句也贴近右侧形成视觉平衡。
+        let bot_total_width = row_total_width(bot_widths);
         let bot_max_x = w as f32 - left_margin;
-        let preferred_bot_start_x = w as f32 / 2.0 + left_margin;
-        let bot_start_x = if bot_total_width > 0.0 && preferred_bot_start_x + bot_total_width > bot_max_x {
-            (bot_max_x - bot_total_width).max(left_margin)
-        } else {
-            preferred_bot_start_x
-        };
+        let bot_start_x = (bot_max_x - bot_total_width).max(left_margin);
         let bot_xs = [
             bot_start_x,
-            bot_start_x + bot_widths[0] + gap,
+            second_x(bot_start_x, bot_widths),
         ];
 
         for (i, (text, is_current)) in lines.iter().enumerate() {
@@ -1876,10 +1995,15 @@ pub mod unix_impl {
                 3 => (bot_xs[1], bottom_y + y_offset),
                 _ => continue,
             };
+            let max_right = match i {
+                0 | 1 => w as f32 - left_margin,
+                2 if bot_widths[1] > 0.0 => (bot_xs[1] - gap * 0.5).min(w as f32 - left_margin),
+                2 | 3 => w as f32 - left_margin,
+                _ => w as f32 - left_margin,
+            };
 
             // 逐字符渲染，带字间距，使用颜色高亮而不改变字体
             let chars: Vec<char> = text.chars().collect();
-            let total_chars = chars.len().max(1);
             // Pre-calculate character widths using regular font
             let mut char_widths = Vec::with_capacity(chars.len());
             for ch in &chars {
@@ -1887,12 +2011,44 @@ pub mod unix_impl {
                 let width = quads.last().map(|q| q.x + q.width as f32).unwrap_or(0.0);
                 char_widths.push(width);
             }
+            let full_width = char_widths.iter().sum::<f32>() + char_spacing * chars.len().saturating_sub(1) as f32;
+            let max_width = (max_right - x).max(0.0);
+            let should_ellipsize = matches!(i, 1 | 3);
+            let (chars, char_widths) = if !should_ellipsize || full_width <= max_width {
+                (chars, char_widths)
+            } else {
+                let ellipsis: Vec<char> = "...".chars().collect();
+                let ellipsis_widths: Vec<f32> = ellipsis
+                    .iter()
+                    .map(|ch| {
+                        let quads = rasterize_font_text(&state.font, &state.font_latin, &ch.to_string(), fs);
+                        quads.last().map(|q| q.x + q.width as f32).unwrap_or(0.0)
+                    })
+                    .collect();
+                let ellipsis_total = ellipsis_widths.iter().sum::<f32>() + char_spacing * ellipsis.len().saturating_sub(1) as f32;
+                let available = (max_width - ellipsis_total).max(0.0);
+                let mut clipped_chars = Vec::new();
+                let mut clipped_widths = Vec::new();
+                let mut used = 0.0;
+                for (ch, width) in chars.into_iter().zip(char_widths.into_iter()) {
+                    let next = used + if clipped_chars.is_empty() { 0.0 } else { char_spacing } + width;
+                    if next > available {
+                        break;
+                    }
+                    used = next;
+                    clipped_chars.push(ch);
+                    clipped_widths.push(width);
+                }
+                clipped_chars.extend(ellipsis.iter().copied());
+                clipped_widths.extend(ellipsis_widths);
+                (clipped_chars, clipped_widths)
+            };
+            let total_chars = chars.len().max(1);
             let mut draw_x = x;
             let (reg_font, reg_latin) = (&state.font, &state.font_latin);
             for (j, ch) in chars.iter().enumerate() {
                 let is_highlighted = *is_current
                     && line_char_progress > 0.0
-                    && line_char_progress < 1.0
                     && (j as f64) < (line_char_progress * total_chars as f64);
                 let color = if *is_current {
                     if is_highlighted { fg_bright } else { lerp_color(fg_bright, bg, 0.25) }
@@ -1916,7 +2072,7 @@ pub mod unix_impl {
                             let rr = (bg.0 as f32 + (color.0 as f32 - bg.0 as f32) * blend) as u32;
                             let gg = (bg.1 as f32 + (color.1 as f32 - bg.1 as f32) * blend) as u32;
                             let bb = (bg.2 as f32 + (color.2 as f32 - bg.2 as f32) * blend) as u32;
-                            let ca = (txt_a as f32 * alpha * blend) as u32;
+                            let ca = (txt_a as f32 * alpha) as u32;
                             if ca == 0 { continue; }
                             let idx = (py as u32 * w + px as u32) as usize;
                             buf[idx] = (rr << 16) | (gg << 8) | bb | (ca << 24);
@@ -2116,10 +2272,13 @@ pub mod unix_impl {
                 return work;
             }
         }
-        // 回退：使用完整显示器尺寸（无任务栏偏移）
+        // Wayland 下通常无法从 X11 的 _NET_WORKAREA 取到任务栏区域，保留一个常见面板高度，
+        // 避免 PgDn 定位时贴到屏幕底边并覆盖底部任务栏。
         let mpos = monitor.position();
         let sz = monitor.size();
-        (mpos.x, mpos.y, sz.width, sz.height)
+        let panel_h = ((FALLBACK_BOTTOM_PANEL_HEIGHT as f64 * monitor.scale_factor()).round() as u32)
+            .min(sz.height / 4);
+        (mpos.x, mpos.y, sz.width, sz.height.saturating_sub(panel_h))
     }
 
     #[cfg(target_os = "linux")]
@@ -2248,7 +2407,7 @@ pub mod unix_impl {
                 .with_transparent(true)
                 .with_window_level(WindowLevel::AlwaysOnTop)
                 .with_resizable(false)
-                .with_inner_size(LogicalSize::new(1115.0, WINDOW_HEIGHT as f64));
+                .with_inner_size(LogicalSize::new(1110.0, WINDOW_HEIGHT as f64));
 
             let window = match event_loop.create_window(wa) {
                 Ok(w) => w,
@@ -2267,7 +2426,7 @@ pub mod unix_impl {
                 }
             };
             let (work_x, work_y, work_w, work_h) = get_linux_work_area(&monitor);
-            let ww = ((work_w as f32 * 0.58) as u32).min(1115).max(500);
+            let ww = ((work_w as f32 * 0.58) as u32).min(1110).max(500);
 
             let _ = window.request_inner_size(LogicalSize::new(ww as f64, WINDOW_HEIGHT as f64));
 

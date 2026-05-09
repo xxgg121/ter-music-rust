@@ -681,10 +681,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260509031250430_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605090312582172_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605090313063565_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605090313136368_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605090949394710_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605090950148659_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605090950302081_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605090950383775_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 

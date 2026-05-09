@@ -3022,10 +3022,10 @@ impl UserInterface {
             }
             "-" => { self.audio_player.lock().unwrap().volume_down(); }
             "=" => { self.audio_player.lock().unwrap().volume_up(); }
-            "[" => self.seek_relative(-5.0),
-            "]" => self.seek_relative(5.0),
-            "," => self.seek_relative(-10.0),
-            "." => self.seek_relative(10.0),
+            "[" | "【" | "［" => self.seek_relative(-5.0),
+            "]" | "】" | "］" | "’" | "‘" => self.seek_relative(5.0),
+            "," | "，" | "、" => self.seek_relative(-10.0),
+            "." | "。" => self.seek_relative(10.0),
             "1" => self.set_play_mode(crate::defs::PlayMode::Single),
             "2" => self.set_play_mode(crate::defs::PlayMode::RepeatOne),
             "3" => self.set_play_mode(crate::defs::PlayMode::Sequence),
@@ -3643,19 +3643,19 @@ impl UserInterface {
                 // 下一曲
                 self.play_next();
             }
-            KeyCode::Char('[') => {
+            KeyCode::Char('[') | KeyCode::Char('【') | KeyCode::Char('［') => {
                 // 快退 5 秒
                 self.seek_relative(-5.0);
             }
-            KeyCode::Char(']') => {
+            KeyCode::Char(']') | KeyCode::Char('】') | KeyCode::Char('］') | KeyCode::Char('’') | KeyCode::Char('‘') => {
                 // 快进 5 秒
                 self.seek_relative(5.0);
             }
-            KeyCode::Char(',') => {
+            KeyCode::Char(',') | KeyCode::Char('，') | KeyCode::Char('、') => {
                 // 快退 10 秒
                 self.seek_relative(-10.0);
             }
-            KeyCode::Char('.') => {
+            KeyCode::Char('.') | KeyCode::Char('。') => {
                 // 快进 10 秒
                 self.seek_relative(10.0);
             }
