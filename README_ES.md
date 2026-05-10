@@ -31,7 +31,7 @@ Un reproductor de música para terminal, simple y práctico, implementado en Rus
 - **Barra de progreso**: haz clic en la barra de progreso para saltar con precisión
 - **Control de volumen**: ajuste en tiempo real de 0 a 100, haz clic en la barra de volumen para establecer
 
-### 🔄 5 Modos de reproducción
+### 🔄 Modos de reproducción
 | Tecla | Modo | Descripción |
 |------|------|------|
 | `1` | Reproducción simple | Detener al terminar la pista actual |
@@ -153,7 +153,16 @@ La configuración se almacena en `USERPROFILE/ter-music-rust/config.json` en el 
 
 ## 🚀 Inicio rápido
 
-### 1. Instalar Rust
+### 1. Instalación directa（recomendado）
+
+Si Rust ya está instalado, puedes instalar directamente desde crates.io y ejecutar:
+
+```powershell
+cargo install ter-music-rust
+ter-music-rust
+```
+
+### 2. Instalar Rust（opcional）
 
 ```powershell
 # Método 1: winget (recomendado)
@@ -170,10 +179,12 @@ rustc --version
 cargo --version
 ```
 
-### 2. Compilar el proyecto
+### 3. Compilar el proyecto
 
 ```powershell
-cd <directorio-del-proyecto>
+# Clonar el repositorio
+git clone https://github.com/xxgg121/ter-music-rust.git
+cd ter-music-rust
 
 # Método 1: script de compilación (recomendado)
 build-win.bat
@@ -182,7 +193,7 @@ build-win.bat
 cargo build --release
 ```
 
-### 3. Ejecutar
+### 4. Ejecutar
 
 ```powershell
 # Método 1: cargo run

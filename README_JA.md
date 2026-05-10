@@ -31,7 +31,7 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 - **進捗バーシーク**: 進捗バーをクリックして任意位置へジャンプ
 - **音量調整**: 0-100 のリアルタイム調整、音量バーのクリックにも対応
 
-### 🔄 5 つの再生モード
+### 🔄 再生モード
 | キー | モード | 説明 |
 |------|------|------|
 | `1` | 単曲再生 | 現在の曲が終了したら停止 |
@@ -153,7 +153,16 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 
 ## 🚀 クイックスタート
 
-### 1. Rust のインストール
+### 1. 直接インストール（推奨）
+
+Rust が既にインストールされている場合、crates.io から直接インストール実行できます:
+
+```powershell
+cargo install ter-music-rust
+ter-music-rust
+```
+
+### 2. Rust のインストール（オプション）
 
 ```powershell
 # 方法 1: winget（推奨）
@@ -170,10 +179,12 @@ rustc --version
 cargo --version
 ```
 
-### 2. プロジェクトをビルド
+### 3. プロジェクトをビルド
 
 ```powershell
-cd <project-directory>
+# リポジトリをクローン
+git clone https://github.com/xxgg121/ter-music-rust.git
+cd ter-music-rust
 
 # 方法 1: ビルドスクリプト（推奨）
 build-win.bat
@@ -182,7 +193,7 @@ build-win.bat
 cargo build --release
 ```
 
-### 3. 実行
+### 4. 実行
 
 ```powershell
 # 方法 1: cargo run

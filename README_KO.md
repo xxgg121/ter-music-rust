@@ -32,7 +32,7 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 - **진행 바 이동**: 진행 바 클릭으로 원하는 위치로 정확히 이동
 - **볼륨 조절**: 0-100 실시간 조절, 볼륨 바 클릭 지원
 
-### 🔄 5가지 재생 모드
+### 🔄 지 재생 모드
 | 키 | 모드 | 설명 |
 |------|------|------|
 | `1` | 단일 재생 | 현재 곡이 끝나면 정지 |
@@ -154,7 +154,18 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 
 ## 🚀 빠른 시작
 
-### 1. Rust 설치
+### 1. 직접 설치（권장）
+
+Rust가 이미 설치되어 있다면, crates.io에서 직접 설치 실행할 수 있습니다:
+
+```powershell
+cargo install ter-music-rust
+ter-music-rust
+```
+
+
+
+### 2. Rust 설치（옵션）
 
 ```powershell
 # 방법 1: winget (권장)
@@ -171,10 +182,12 @@ rustc --version
 cargo --version
 ```
 
-### 2. 프로젝트 빌드
+### 3. 프로젝트 빌드
 
 ```powershell
-cd <project-directory>
+# 저장소 복제
+git clone https://github.com/xxgg121/ter-music-rust.git
+cd ter-music-rust
 
 # 방법 1: 빌드 스크립트(권장)
 build-win.bat
@@ -183,7 +196,7 @@ build-win.bat
 cargo build --release
 ```
 
-### 3. 실행
+### 4. 실행
 
 ```powershell
 # 방법 1: cargo run

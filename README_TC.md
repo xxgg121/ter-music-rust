@@ -31,7 +31,7 @@
 - **進度條跳轉**：點擊進度條精確跳轉
 - **音量控制**：即時調整 0-100，點擊音量條設定
 
-### 🔄 5 種播放模式
+### 🔄 播放模式
 | 按鍵 | 模式 | 說明 |
 |------|------|------|
 | `1` | 單曲播放 | 當前曲目結束後停止 |
@@ -153,7 +153,16 @@
 
 ## 🚀 快速開始
 
-### 1. 安裝 Rust
+### 1. 直接安裝（推薦）
+
+如果您已安裝 Rust，可以直接從 crates.io 安裝執行：
+
+```powershell
+cargo install ter-music-rust
+ter-music-rust
+```
+
+### 2. 安裝 Rust（可選）
 
 ```powershell
 # 方法一：winget（推薦）
@@ -170,10 +179,12 @@ rustc --version
 cargo --version
 ```
 
-### 2. 建置專案
+### 3. 建置專案
 
 ```powershell
-cd <專案目錄>
+# 複製倉庫
+git clone https://github.com/xxgg121/ter-music-rust.git
+cd ter-music-rust
 
 # 方法一：建置腳本（推薦）
 build-win.bat
@@ -182,7 +193,7 @@ build-win.bat
 cargo build --release
 ```
 
-### 3. 執行
+### 4. 執行
 
 ```powershell
 # 方法一：cargo run

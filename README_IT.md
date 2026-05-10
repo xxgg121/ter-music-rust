@@ -31,7 +31,7 @@ Un lettore musicale da terminale semplice e pratico, sviluppato in Rust. Support
 - **Barra di avanzamento**: clicca sulla barra di avanzamento per saltare con precisione
 - **Controllo del volume**: regolazione in tempo reale da 0 a 100, clicca sulla barra del volume per impostare
 
-### 🔄 5 Modalità di riproduzione
+### 🔄 Modalità di riproduzione
 | Tasto | Modalità | Descrizione |
 |------|------|------|
 | `1` | Riproduzione singola | Si ferma dopo il termine della traccia corrente |
@@ -153,7 +153,16 @@ La configurazione è memorizzata in `USERPROFILE/ter-music-rust/config.json` nel
 
 ## 🚀 Avvio rapido
 
-### 1. Installare Rust
+### 1. Installazione diretta（consigliato）
+
+Se Rust è già installato, puoi installare direttamente da crates.io ed eseguire:
+
+```powershell
+cargo install ter-music-rust
+ter-music-rust
+```
+
+### 2. Installare Rust（opzionale）
 
 ```powershell
 # Metodo 1: winget (consigliato)
@@ -170,10 +179,12 @@ rustc --version
 cargo --version
 ```
 
-### 2. Compilare il progetto
+### 3. Compilare il progetto
 
 ```powershell
-cd <directory-del-progetto>
+# Clona il repository
+git clone https://github.com/xxgg121/ter-music-rust.git
+cd ter-music-rust
 
 # Metodo 1: script di compilazione (consigliato)
 build-win.bat
@@ -182,7 +193,7 @@ build-win.bat
 cargo build --release
 ```
 
-### 3. Eseguire
+### 4. Eseguire
 
 ```powershell
 # Metodo 1: cargo run
