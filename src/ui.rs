@@ -1,199 +1,83 @@
 // 用户界面模块
 
+#[path = "ui/input.rs"]
+mod input;
+#[path = "ui/layout.rs"]
+mod interaction_layout;
+#[path = "ui/mouse.rs"]
+mod mouse;
+#[path = "ui/render.rs"]
+mod render;
+#[path = "ui/terminal.rs"]
+mod terminal_guard;
+mod theme;
+#[path = "ui/format.rs"]
+mod ui_format;
+mod view_model;
+
 use std::collections::VecDeque;
-use std::io::{self, Write};
+use std::io;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chrono::Local;
 use crossterm::{
     cursor,
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind},
-    execute, queue, style,
+    event::{
+        self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    },
+    execute, style,
     terminal::{self, ClearType},
 };
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color as TuiColor, Modifier, Style as TuiStyle},
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
+    Frame, Terminal,
+};
+use serde::{Deserialize, Serialize};
 
 use crate::audio::AudioPlayer;
 use crate::defs::{PlayMode, PlayState, Playlist};
 use crate::desktop_lyrics::{DesktopLyricsHandle, DesktopLyricsPosition};
-use crate::langs::{UiLanguage, LangTexts};
+use crate::langs::{LangTexts, UiLanguage};
 use crate::lyrics::{Lyrics, LyricsDownloadResult};
-use crate::search::{OnlineSong, OnlinePlaylist, SearchDownloadResult, PlaylistSearchResult, PlaylistSongsResult, DownloadProgress, SongCommentItem, SongCommentsResult, GitHubDiscussionResult};
+use crate::search::{
+    DownloadProgress, GitHubDiscussionResult, OnlinePlaylist, OnlineSong, PlaylistSearchResult,
+    PlaylistSongsResult, SearchDownloadResult, SongCommentItem, SongCommentsResult,
+};
 
-const DEFAULT_GITHUB_TOKEN: &str = "github_xxxxxx";
+use interaction_layout::{LyricsAreaLayout, PlaylistLayout, ProgressBarLayout, VolumeBarLayout};
+use terminal_guard::TerminalGuard;
+use theme::{ThemeColors, UiTheme};
+use ui_format::{
+    format_duration_ms, format_progress, slice_at_display_offset, term_char_width,
+    term_display_width, truncate_to_width, wrap_text_to_width,
+};
+use view_model::{
+    CommentsListView, ControlsView, HighlightedTextRow, LyricsPanelView, PlaylistPanelView,
+    PlaylistRowView, SearchResultsView, SelectableListView, SelectableTextRow, TextPanelView,
+};
 
-// 主题色定义（使用显式 RGB，避免不同系统终端默认色表差异）
-#[derive(Debug, Clone, Copy)]
-struct ThemeColors {
-    header_title: style::Color,
-    section_title: style::Color,
-    song_normal: style::Color,
-    song_playing: style::Color,
-    lyric_highlight: style::Color,
-    status_text: style::Color,
-    progress_text: style::Color,
-    info_text: style::Color,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PlayHistoryRecord {
+    name: String,
+    path: String,
+    last_played: String,
+    play_count: u64,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum UiTheme {
-    GrayWhite,
-    Neon,
-    Sunset,
-    Ocean,
-}
-
-impl UiTheme {
-    fn next(self) -> Self {
-        match self {
-            UiTheme::GrayWhite => UiTheme::Neon,
-            UiTheme::Neon => UiTheme::Sunset,
-            UiTheme::Sunset => UiTheme::Ocean,
-            UiTheme::Ocean => UiTheme::GrayWhite,
-        }
-    }
-
-    fn config_key(self) -> &'static str {
-        match self {
-            UiTheme::GrayWhite => "GrayWhite",
-            UiTheme::Neon => "Neon",
-            UiTheme::Sunset => "Sunset",
-            UiTheme::Ocean => "Ocean",
-        }
-    }
-
-    fn from_config_key(s: &str) -> Self {
-        if s.eq_ignore_ascii_case("graywhite")
-            || s.eq_ignore_ascii_case("gray")
-            || s == "灰白"
-            || s == "灰白色"
-        {
-            UiTheme::GrayWhite
-        } else if s.eq_ignore_ascii_case("neon") {
-            UiTheme::Neon
-        } else if s.eq_ignore_ascii_case("sunset") {
-            UiTheme::Sunset
-        } else if s.eq_ignore_ascii_case("ocean") {
-            UiTheme::Ocean
-        } else {
-            UiTheme::GrayWhite
-        }
-    }
-
-    fn colors(self) -> ThemeColors {
-        match self {
-            UiTheme::GrayWhite => ThemeColors {
-                header_title: style::Color::Rgb { r: 238, g: 242, b: 246 },
-                section_title: style::Color::Rgb { r: 223, g: 229, b: 235 },
-                // 普通歌曲：中性灰
-                song_normal: style::Color::Rgb { r: 188, g: 194, b: 202 },
-                // 正在播放：更亮一点的冷白灰
-                song_playing: style::Color::Rgb { r: 246, g: 250, b: 255 },
-                // 歌词高亮：轻微偏蓝白，和播放列表形成层次
-                lyric_highlight: style::Color::Rgb { r: 224, g: 233, b: 246 },
-                status_text: style::Color::Rgb { r: 232, g: 237, b: 244 },
-                progress_text: style::Color::Rgb { r: 210, g: 217, b: 226 },
-                info_text: style::Color::Rgb { r: 216, g: 223, b: 232 },
-            },
-            UiTheme::Neon => ThemeColors {
-                header_title: style::Color::Rgb { r: 0, g: 215, b: 255 },
-                section_title: style::Color::Rgb { r: 255, g: 235, b: 80 },
-                song_normal: style::Color::Rgb { r: 0, g: 255, b: 120 },
-                song_playing: style::Color::Rgb { r: 0, g: 255, b: 120 },
-                lyric_highlight: style::Color::Rgb { r: 255, g: 235, b: 80 },
-                status_text: style::Color::Rgb { r: 255, g: 235, b: 80 },
-                progress_text: style::Color::Rgb { r: 0, g: 170, b: 255 },
-                info_text: style::Color::Rgb { r: 0, g: 215, b: 255 },
-            },
-            UiTheme::Sunset => ThemeColors {
-                header_title: style::Color::Rgb { r: 255, g: 186, b: 73 },
-                section_title: style::Color::Rgb { r: 255, g: 221, b: 124 },
-                song_normal: style::Color::Rgb { r: 255, g: 197, b: 120 },
-                song_playing: style::Color::Rgb { r: 255, g: 238, b: 176 },
-                lyric_highlight: style::Color::Rgb { r: 255, g: 246, b: 120 },
-                status_text: style::Color::Rgb { r: 255, g: 212, b: 96 },
-                progress_text: style::Color::Rgb { r: 255, g: 170, b: 84 },
-                info_text: style::Color::Rgb { r: 255, g: 205, b: 138 },
-            },
-            UiTheme::Ocean => ThemeColors {
-                header_title: style::Color::Rgb { r: 102, g: 226, b: 255 },
-                section_title: style::Color::Rgb { r: 126, g: 250, b: 228 },
-                song_normal: style::Color::Rgb { r: 116, g: 243, b: 204 },
-                song_playing: style::Color::Rgb { r: 166, g: 255, b: 234 },
-                lyric_highlight: style::Color::Rgb { r: 168, g: 255, b: 245 },
-                status_text: style::Color::Rgb { r: 134, g: 235, b: 255 },
-              
-              
-                progress_text: style::Color::Rgb { r: 108, g: 188, b: 255 },
-                info_text: style::Color::Rgb { r: 120, g: 224, b: 255 },
-            },
-        }
-    }
-}
-
-/// 进度条布局信息（用于鼠标点击定位）
-#[derive(Debug, Clone, Copy)]
-struct ProgressBarLayout {
-    /// 进度条所在行
-    row: u16,
-    /// 进度条方括号内的起始列（0-based）
-    bar_start_col: usize,
-    /// 进度条方括号内的宽度（字符数）
-    bar_width: usize,
-}
-
-/// 音量条布局信息（用于鼠标点击定位）
-#[derive(Debug, Clone, Copy)]
-struct VolumeBarLayout {
-    /// 音量条所在行
-    row: u16,
-    /// 音量条方括号内的起始列（0-based）
-    bar_start_col: usize,
-    /// 音量条方括号内的宽度（字符数，固定20）
-    bar_width: usize,
-}
-
-/// 播放列表布局信息（用于鼠标交互）
-#[derive(Debug, Clone, Copy)]
-struct PlaylistLayout {
-    /// 列表起始行（0-based）
-    start_row: u16,
-    /// 可见歌曲行数
-    visible_count: usize,
-    /// 左侧栏宽度
-    left_width: u16,
-}
-
-/// 歌词区域布局信息（用于鼠标拖动跳转）
 #[derive(Debug, Clone)]
-struct LyricsAreaLayout {
-    /// 歌词区域起始行（0-based）
-    start_row: u16,
-    /// 歌词区域起始列（0-based）
+struct RecommendationItem {
+    name: String,
     start_col: usize,
-    /// 歌词区域宽度
-    width: usize,
-    /// 当前可见歌词行对应的时间戳
-    line_times: Vec<Duration>,
+    end_col: usize,
 }
 
-/// 终端保护器，确保在 Drop 时恢复终端
-struct TerminalGuard;
-
-impl TerminalGuard {
-    fn new() -> io::Result<Self> {
-        terminal::enable_raw_mode()?;
-        execute!(io::stdout(), terminal::EnterAlternateScreen, cursor::Hide, EnableMouseCapture)?;
-        Ok(TerminalGuard)
-    }
-}
-
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
-        let _ = execute!(io::stdout(), DisableMouseCapture, terminal::LeaveAlternateScreen, cursor::Show);
-        let _ = terminal::disable_raw_mode();
-    }
-}
+const DEFAULT_GITHUB_TOKEN: &str =
+    "github_xxxxxx";
 
 /// 用户界面
 pub struct UserInterface {
@@ -218,10 +102,12 @@ pub struct UserInterface {
     /// 当前歌词对应的文件路径（用于判断是否需要更新）
     lyrics_file_path: Option<std::path::PathBuf>,
     /// 波形动画帧计数器
+    #[allow(dead_code)]
     wave_frame: u32,
     /// 缓存的歌词标题（用于避免闪烁）
     cached_lyrics_title: Option<String>,
     /// 缓存的窗口宽度（用于检测窗口大小变化）
+    #[allow(dead_code)]
     cached_terminal_width: u16,
     /// 进度条布局信息（用于鼠标点击定位）
     progress_bar_layout: Option<ProgressBarLayout>,
@@ -265,6 +151,8 @@ pub struct UserInterface {
     comments_loading: bool,
     /// 是否显示评论详情（按 Enter 切换）
     comments_detail_mode: bool,
+    /// 评论面板内部区域起始行（用于鼠标点击定位）
+    comment_panel_inner_y: Option<u16>,
     /// 是否显示 AI 歌曲信息视图（false=歌词视图）
     song_info_mode: bool,
     /// 是否显示帮助信息视图（false=歌词视图）
@@ -344,6 +232,7 @@ pub struct UserInterface {
     /// 音乐目录的滚动偏移
     dir_history_scroll_offset: usize,
     /// 上一帧的模式状态（用于检测模式切换，避免右侧标题闪烁）
+    #[allow(dead_code)]
     prev_mode_state: (bool, bool, bool, bool, bool, bool, bool, bool),
     /// 是否处于网络搜索模式
     online_search_mode: bool,
@@ -399,6 +288,28 @@ pub struct UserInterface {
     need_startup_dialog: bool,
     /// 桌面歌词句柄
     desktop_lyrics: DesktopLyricsHandle,
+    /// 今日推荐歌曲开关
+    recommand: bool,
+    /// 推荐歌曲列表
+    recommendations: Vec<String>,
+    /// 推荐歌曲点击区域
+    recommendation_items: Vec<RecommendationItem>,
+    /// 推荐歌曲生成中
+    recommendations_loading: bool,
+    /// 推荐歌曲流式返回临时内容
+    recommendations_content: String,
+    /// 推荐歌曲 AI 返回接收器
+    recommendations_rx: Option<std::sync::mpsc::Receiver<crate::search::SongInfoChunk>>,
+    /// 推荐歌曲搜索接收器（点击推荐后用聚合搜索获取下载项）
+    recommendation_search_rx: Option<std::sync::mpsc::Receiver<SearchDownloadResult>>,
+    /// 是否正在下载推荐歌曲
+    recommendation_downloading: bool,
+    /// 推荐歌曲下载进度百分比（0-100）
+    recommendation_download_percent: u8,
+    /// 正在下载的推荐歌曲名称
+    recommendation_downloading_name: Option<String>,
+    /// 推荐歌曲水平滚动偏移
+    recommendation_scroll_offset: usize,
 }
 
 impl UserInterface {
@@ -442,6 +353,7 @@ impl UserInterface {
             comments_rx: None,
             comments_loading: false,
             comments_detail_mode: false,
+            comment_panel_inner_y: None,
             song_info_mode: false,
             song_info_file_path: None,
             song_info_content: String::new(),
@@ -509,6 +421,17 @@ impl UserInterface {
             online_auto_skip_times: VecDeque::new(),
             need_startup_dialog: false,
             desktop_lyrics: DesktopLyricsHandle::new(),
+            recommand: false,
+            recommendations: Vec::new(),
+            recommendation_items: Vec::new(),
+            recommendations_loading: false,
+            recommendations_content: String::new(),
+            recommendations_rx: None,
+            recommendation_search_rx: None,
+            recommendation_downloading: false,
+            recommendation_download_percent: 0,
+            recommendation_downloading_name: None,
+            recommendation_scroll_offset: 0,
         }
     }
 
@@ -527,7 +450,12 @@ impl UserInterface {
     }
 
     /// 同时钳制选中索引与滚动偏移，避免越界与残影
-    fn clamp_selected_and_scroll(selected: &mut usize, scroll_offset: &mut usize, total: usize, visible_count: usize) {
+    fn clamp_selected_and_scroll(
+        selected: &mut usize,
+        scroll_offset: &mut usize,
+        total: usize,
+        visible_count: usize,
+    ) {
         if total == 0 {
             *selected = 0;
             *scroll_offset = 0;
@@ -544,6 +472,386 @@ impl UserInterface {
         }
 
         Self::adjust_scroll_offset(*selected, scroll_offset, visible_count);
+    }
+
+    fn url_at_display_col(line: &str, col: usize) -> Option<String> {
+        let start_byte = match (line.find("https://"), line.find("http://")) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
+        }?;
+        let tail = &line[start_byte..];
+        let mut end_len = tail.find(char::is_whitespace).unwrap_or_else(|| tail.len());
+        let trim_chars = ['.', ',', ';', ':', ')', ']', '}', '>', '。', '，', '；'];
+        while end_len > 0 {
+            let candidate = &tail[..end_len];
+            let Some(ch) = candidate.chars().next_back() else {
+                break;
+            };
+            if trim_chars.contains(&ch) {
+                end_len -= ch.len_utf8();
+            } else {
+                break;
+            }
+        }
+        if end_len == 0 {
+            return None;
+        }
+
+        let url = &tail[..end_len];
+        let start_col = term_display_width(&line[..start_byte]);
+        let end_col = start_col + term_display_width(url);
+        if col >= start_col && col < end_col {
+            Some(url.to_string())
+        } else {
+            None
+        }
+    }
+
+    fn display_url_line(url: &str, width: u16) -> String {
+        let max_width = width.saturating_sub(1) as usize;
+        let mut line = truncate_to_width(url.trim_end(), max_width);
+        let display_width = term_display_width(&line);
+        if display_width < max_width {
+            line.push_str(&" ".repeat(max_width - display_width));
+        }
+        line
+    }
+
+    fn split_at_display_width(text: &str, max_width: usize) -> (String, String) {
+        if term_display_width(text) <= max_width {
+            return (text.to_string(), String::new());
+        }
+
+        let mut head = String::new();
+        let mut width = 0;
+        let mut split_byte = text.len();
+        for (idx, ch) in text.char_indices() {
+            let ch_width = term_char_width(ch);
+            if width + ch_width > max_width {
+                split_byte = idx;
+                break;
+            }
+            head.push(ch);
+            width += ch_width;
+        }
+
+        (head, text[split_byte..].to_string())
+    }
+
+    fn restore_mouse_capture() {
+        let _ = terminal::enable_raw_mode();
+        let _ = execute!(
+            io::stdout(),
+            cursor::Hide,
+            crossterm::event::EnableMouseCapture
+        );
+    }
+
+    fn open_url(&mut self, url: &str) {
+        let result = {
+            #[cfg(target_os = "windows")]
+            {
+                std::process::Command::new("rundll32")
+                    .args(["url.dll,FileProtocolHandler", url])
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+            }
+            #[cfg(target_os = "macos")]
+            {
+                std::process::Command::new("open")
+                    .arg(url)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+            }
+            #[cfg(all(unix, not(target_os = "macos")))]
+            {
+                std::process::Command::new("xdg-open")
+                    .arg(url)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+            }
+        };
+
+        if result.is_err() {
+            self.update_status(url);
+        }
+
+        Self::restore_mouse_capture();
+    }
+
+    fn clear_online_download_state(&mut self) {
+        self.online_downloading = false;
+        self.online_download_rx = None;
+        self.online_download_percent = 0;
+        self.online_downloading_index = None;
+    }
+
+    fn history_path() -> std::path::PathBuf {
+        crate::config::get_app_config_dir().join("history.json")
+    }
+
+    fn load_play_history() -> Vec<PlayHistoryRecord> {
+        let path = Self::history_path();
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Vec<PlayHistoryRecord>>(&text).ok())
+            .unwrap_or_default()
+    }
+
+    fn save_play_history(records: &[PlayHistoryRecord]) {
+        let path = Self::history_path();
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(json) = serde_json::to_string_pretty(records) {
+            let _ = std::fs::write(path, json);
+        }
+    }
+
+    fn record_play_history(&self, name: &str, path: &std::path::Path) {
+        let path_text = path.to_string_lossy().to_string();
+        let mut records = Self::load_play_history();
+        if let Some(record) = records.iter_mut().find(|record| record.path == path_text) {
+            record.name = name.to_string();
+            record.last_played = Local::now().to_rfc3339();
+            record.play_count = record.play_count.saturating_add(1);
+        } else {
+            records.push(PlayHistoryRecord {
+                name: name.to_string(),
+                path: path_text,
+                last_played: Local::now().to_rfc3339(),
+                play_count: 1,
+            });
+        }
+        Self::save_play_history(&records);
+    }
+
+    fn recent_history_for_recommendation() -> Vec<PlayHistoryRecord> {
+        let mut records = Self::load_play_history();
+        records.sort_by(|a, b| {
+            b.play_count
+                .cmp(&a.play_count)
+                .then_with(|| b.last_played.cmp(&a.last_played))
+        });
+        records.truncate(30);
+        records
+    }
+
+    fn build_recommendation_prompt(&mut self, history: &[PlayHistoryRecord]) -> String {
+        let history_text = history
+            .iter()
+            .map(|record| {
+                format!(
+                    "{} | count={} | last={}",
+                    record.name, record.play_count, record.last_played
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!(
+            "{}{}",
+            self.t().recommendation_prompt_template,
+            history_text
+        )
+    }
+
+    fn start_recommendations_if_enabled(&mut self) {
+        if !self.recommand || self.recommendations_loading || self.recommendations_rx.is_some() {
+            return;
+        }
+        let history = Self::recent_history_for_recommendation();
+        if history.is_empty() {
+            return;
+        }
+        let prompt = Self::build_recommendation_prompt(self, &history);
+        let config = crate::search::AiQueryConfig {
+            api_base_url: self.api_base_url.clone(),
+            api_key: self.resolved_api_key().unwrap_or_default(),
+            api_model: self.api_model.clone(),
+        };
+        self.recommendations.clear();
+        self.recommendations_content.clear();
+        self.recommendations_loading = true;
+        self.recommendations_rx = Some(crate::search::fetch_song_info_streaming(prompt, config));
+    }
+
+    fn parse_recommendations(text: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for line in text.lines() {
+            let name = line
+                .trim()
+                .trim_start_matches(|ch: char| {
+                    ch.is_ascii_digit() || ch == '.' || ch == '-' || ch == '、'
+                })
+                .trim()
+                .trim_matches('"')
+                .trim_matches('“')
+                .trim_matches('”')
+                .to_string();
+            if !name.is_empty() && !out.iter().any(|existing| existing == &name) {
+                out.push(name);
+            }
+            if out.len() >= 10 {
+                break;
+            }
+        }
+        out
+    }
+
+    fn check_recommendation_result(&mut self) {
+        if let Some(ref rx) = self.recommendations_rx {
+            loop {
+                match rx.try_recv() {
+                    Ok(chunk) => {
+                        if chunk.error.is_some() {
+                            self.recommendations_loading = false;
+                            self.recommendations_rx = None;
+                            break;
+                        }
+                        self.recommendations_content.push_str(&chunk.delta);
+                        if chunk.done {
+                            self.recommendations_loading = false;
+                            self.recommendations_rx = None;
+                            self.recommendations =
+                                Self::parse_recommendations(&self.recommendations_content);
+                            break;
+                        }
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        self.recommendations_loading = false;
+                        self.recommendations_rx = None;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(ref rx) = self.recommendation_search_rx {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.recommendation_search_rx = None;
+                    if let Some(song) = result.songs.into_iter().next() {
+                        self.online_auto_skip_times.clear();
+                        self.start_download_song(song);
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.recommendation_search_rx = None;
+                }
+            }
+        }
+    }
+
+    fn start_recommendation_download(&mut self, name: &str) {
+        self.recommendation_downloading = true;
+        self.recommendation_download_percent = 0;
+        self.recommendation_downloading_name = Some(name.to_string());
+        self.recommendation_search_rx =
+            Some(crate::search::search_juhe_background(name.to_string(), 1));
+    }
+
+    fn song_info_lines(&self, width: u16) -> Vec<String> {
+        let content = if self.song_info_loading && self.song_info_content.is_empty() {
+            self.t().querying_song_info.to_string()
+        } else if self.song_info_content.trim().is_empty() {
+            self.t().no_query_result.to_string()
+        } else {
+            self.song_info_content.clone()
+        };
+
+        let mut lines = wrap_text_to_width(&content, width.saturating_sub(1) as usize);
+
+        if !self.github_discussion_status.is_empty() {
+            let (discussion_prefix, discussion_url) = if let Some(url_start) = self
+                .github_discussion_status
+                .find("http://")
+                .or_else(|| self.github_discussion_status.find("https://"))
+            {
+                let prefix = self.github_discussion_status[..url_start].to_string();
+                let url = self.github_discussion_status[url_start..]
+                    .trim_end()
+                    .to_string();
+                (prefix, Some(url))
+            } else {
+                (self.github_discussion_status.clone(), None)
+            };
+
+            lines.push(String::new());
+            if !discussion_prefix.trim().is_empty() {
+                lines.extend(wrap_text_to_width(
+                    &discussion_prefix,
+                    width.saturating_sub(1) as usize,
+                ));
+            }
+            if let Some(url) = discussion_url {
+                lines.push(Self::display_url_line(&url, width));
+            }
+        }
+
+        lines
+    }
+
+    fn current_body_layout(&self) -> Option<(Rect, Rect)> {
+        if self.terminal_height < 10 || self.terminal_width < 40 {
+            return None;
+        }
+
+        let area = Rect::new(0, 0, self.terminal_width, self.terminal_height);
+        let root = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(8),
+                Constraint::Length(5),
+            ])
+            .split(area);
+        let body = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(root[1]);
+        Some((body[0], body[1]))
+    }
+
+    fn open_clicked_right_panel_url(&mut self, col: usize, row: u16) -> bool {
+        let Some((_, right_panel)) = self.current_body_layout() else {
+            return false;
+        };
+        let inner = Self::inner_area(right_panel);
+        let col = col as u16;
+        if col < inner.x || col >= inner.right() || row < inner.y || row >= inner.bottom() {
+            return false;
+        }
+
+        let line_idx = (row - inner.y) as usize;
+        let visible_count = inner.height as usize;
+        let lines = if self.help_mode {
+            self.help_view(visible_count).lines
+        } else if self.song_info_mode {
+            self.song_info_view(inner.width, visible_count).lines
+        } else {
+            return false;
+        };
+
+        let Some(line) = lines.get(line_idx) else {
+            return false;
+        };
+        let relative_col = (col - inner.x) as usize;
+        if let Some(url) = Self::url_at_display_col(line, relative_col) {
+            self.open_url(&url);
+            true
+        } else {
+            false
+        }
     }
 
     fn t(&self) -> &'static LangTexts {
@@ -608,6 +916,7 @@ impl UserInterface {
         self.t().now_playing_prefix
     }
 
+    #[allow(dead_code)]
     fn format_playlist_play_count(&self, count: Option<usize>) -> String {
         let Some(n) = count else {
             return "--".to_string();
@@ -626,8 +935,12 @@ impl UserInterface {
         }
     }
 
+    #[allow(dead_code)]
     fn is_now_playing_message(&self, message: &str) -> bool {
-        self.t().now_playing_prefixes.iter().any(|p| message.starts_with(p))
+        self.t()
+            .now_playing_prefixes
+            .iter()
+            .any(|p| message.starts_with(p))
     }
 
     pub fn update_now_playing_status(&mut self, song_name: &str) {
@@ -666,11 +979,7 @@ impl UserInterface {
                     self.t().search_online.to_string()
                 };
                 if self.terminal_width >= 80 {
-                    format!(
-                        "{}: {}",
-                        search_label,
-                        self.t().tip_online_wide.to_string()
-                    )
+                    format!("{}: {}", search_label, self.t().tip_online_wide.to_string())
                 } else if self.terminal_width >= 60 {
                     format!(
                         "{}: {}",
@@ -753,36 +1062,6 @@ impl UserInterface {
             current_width += ch_width;
         }
         format!("{}...", truncated)
-    }
-
-    /// 按显示宽度分割字符串，返回 (不超宽部分, 溢出部分)
-    fn split_at_display_width(text: &str, max_width: usize) -> (&str, &str) {
-        let mut current_width = 0;
-        for (i, ch) in text.char_indices() {
-            let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-            if current_width + ch_width > max_width {
-                return (&text[..i], &text[i..]);
-            }
-            current_width += ch_width;
-        }
-        (text, "")
-    }
-
-    /// 清除列表区域下方的残留行
-    fn clear_remaining_rows<W: Write>(
-        stdout: &mut W,
-        start_row: u16,
-        used_rows: usize,
-        total_rows: usize,
-    ) -> io::Result<()> {
-        for row in used_rows..total_rows {
-            queue!(
-                stdout,
-                cursor::MoveTo(0, start_row + row as u16),
-                terminal::Clear(ClearType::UntilNewLine),
-            )?;
-        }
-        Ok(())
     }
 
     /// 根据鼠标位置获取歌词拖动目标时间
@@ -937,9 +1216,7 @@ impl UserInterface {
             return;
         }
 
-        if !self.comments_loading
-            && self.comments_rx.is_none()
-            && self.current_comments.is_empty()
+        if !self.comments_loading && self.comments_rx.is_none() && self.current_comments.is_empty()
         {
             if let Some(file) = current_file {
                 self.comments_song_name = file.name.trim().to_string();
@@ -988,6 +1265,7 @@ impl UserInterface {
                             let delta = chunk.delta.replace("**", "").replace("*", "");
                             let delta = delta.replace("##", "").replace("#", "");
                             self.song_info_content.push_str(&delta);
+                            self.song_info_force_scroll = true;
                         }
                         if chunk.done {
                             self.song_info_loading = false;
@@ -1016,17 +1294,11 @@ impl UserInterface {
                     self.github_discussion_loading = false;
                     self.song_info_force_scroll = true;
                     if let Some(url) = result.url {
-                        self.github_discussion_status = format!(
-                            "{} {}",
-                            self.t().discussion_created,
-                            url
-                        );
+                        self.github_discussion_status =
+                            format!("{} {}", self.t().discussion_created, url);
                     } else if let Some(err) = result.error {
-                        self.github_discussion_status = format!(
-                            "{} {}",
-                            self.t().discussion_failed,
-                            err
-                        );
+                        self.github_discussion_status =
+                            format!("{} {}", self.t().discussion_failed, err);
                     }
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
@@ -1059,1942 +1331,1071 @@ impl UserInterface {
         self.github_discussion_loading = true;
         self.github_discussion_status = self.t().creating_discussion.to_string();
 
-        self.github_discussion_rx = Some(
-            crate::search::create_github_discussion_background(token, repo, name, content)
-        );
+        self.github_discussion_rx = Some(crate::search::create_github_discussion_background(
+            token, repo, name, content,
+        ));
     }
 
-    /// 绘制 AI 歌曲信息（右侧）
-    fn draw_song_info<W: Write>(
-        &mut self,
-        stdout: &mut W,
-        start_x: u16,
-        width: u16,
-        visible_count: usize,
-    ) -> io::Result<()> {
-        // AI 信息视图不使用歌词拖动布局
-        self.lyrics_area_layout = None;
-
-        let current_file = {
-            let audio_player = self.audio_player.lock().unwrap();
-            audio_player.get_current_file()
-        };
-
-        self.check_song_info_result();
-
-        if self.song_info_file_path != current_file.as_ref().map(|f| f.path.clone()) {
-            self.song_info_file_path = current_file.as_ref().map(|f| f.path.clone());
-            self.song_info_content.clear();
-            self.song_info_loading = false;
-            self.song_info_rx = None;
-            self.song_info_scroll_offset = 0;
-            // 切歌时清除 Discussion 状态和歌名
-            self.github_discussion_status.clear();
-            self.github_discussion_rx = None;
-            self.github_discussion_loading = false;
-            self.song_info_force_scroll = false;
-            if let Some(file) = current_file.as_ref() {
-                self.song_info_name = file.name.trim().to_string();
-                self.start_fetch_song_info_for_current_song(&file.name);
-            } else {
-                self.song_info_name.clear();
-            }
-        }
-
-        for i in 0..visible_count {
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, (i + 6) as u16),
-                terminal::Clear(ClearType::UntilNewLine),
-            )?;
-        }
-
-        if current_file.is_none() {
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, 8),
-                style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.t().select_song_to_play),
-                style::ResetColor,
-            )?;
-            return Ok(());
-        }
-
-        // 流式输出：加载中但已有内容时，显示已有内容（而非等待全部完成）
-        if self.song_info_content.trim().is_empty() && self.song_info_loading {
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, 8),
-                style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.t().querying_song_info),
-                style::ResetColor,
-            )?;
-            return Ok(());
-        }
-
-        let content = if self.song_info_content.trim().is_empty() {
-            self.t().no_query_result.to_string()
-        } else {
-            self.song_info_content.clone()
-        };
-
-        let wrapped_lines = wrap_text_to_width(&content, width.saturating_sub(1) as usize);
-
-        // 追加 GitHub Discussion 状态行
-        // 拆分为前缀和 URL 两部分，URL 用 OSC 8 可点击，前缀为普通文本
-        let (discussion_prefix, discussion_url) = if !self.github_discussion_status.is_empty() {
-            if let Some(url_start) = self.github_discussion_status.find("http://").or_else(|| self.github_discussion_status.find("https://")) {
-                let prefix = self.github_discussion_status[..url_start].to_string();
-                let url = self.github_discussion_status[url_start..].trim_end().to_string();
-                (prefix, Some(url))
-            } else {
-                (self.github_discussion_status.clone(), None)
-            }
-        } else {
-            (String::new(), None)
-        };
-
-        let discussion_lines = if !discussion_prefix.is_empty() {
-            let mut lines = Vec::new();
-            // 空一行分隔
-            lines.push(String::new());
-            // 前缀行
-            if !discussion_prefix.trim().is_empty() {
-                lines.extend(wrap_text_to_width(&discussion_prefix, width.saturating_sub(1) as usize));
-            }
-            // URL 单独一行（OSC 8 处理，不换行截断）
-            if let Some(ref url) = discussion_url {
-                lines.push(url.clone());
-            }
-            lines
-        } else {
-            Vec::new()
-        };
-
-        let total_lines = wrapped_lines.len() + discussion_lines.len();
-        let max_offset = total_lines.saturating_sub(visible_count);
-        // 流式输出时自动滚动到底部，确保新内容可见；内容变化时一次性滚动
-        if self.song_info_loading || self.song_info_force_scroll {
-            self.song_info_scroll_offset = max_offset;
-            self.song_info_force_scroll = false;
-        } else if self.song_info_scroll_offset > max_offset {
-            self.song_info_scroll_offset = max_offset;
-        }
-
-        // 计算可见范围内的行
-        let skip = self.song_info_scroll_offset;
-        let all_lines_count = wrapped_lines.len() + discussion_lines.len();
-        for (screen_row, line_idx) in (skip..all_lines_count).take(visible_count).enumerate() {
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, (screen_row + 6) as u16),
-                terminal::Clear(ClearType::UntilNewLine),
-            )?;
-
-            if line_idx < wrapped_lines.len() {
-                // 普通歌曲信息行
-                queue!(
-                    stdout,
-                    style::SetForegroundColor(self.theme_colors.song_normal),
-                    style::Print(truncate_to_width(&wrapped_lines[line_idx], width.saturating_sub(1) as usize)),
-                    style::ResetColor,
-                )?;
-            } else {
-                // Discussion 状态行
-                let disc_idx = line_idx - wrapped_lines.len();
-                let line = &discussion_lines[disc_idx];
-                // URL 行用 OSC 8 超链接，前缀行为普通文本
-                if discussion_url.as_ref() == Some(line) {
-                    // OSC 8 超链接格式: \x1b]8;;URL\x1b\\TEXT\x1b]8;;\x1b\\
-                    let hyperlink = format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", line, line);
-                    queue!(
-                        stdout,
-                        style::SetForegroundColor(self.theme_colors.song_normal),
-                        style::Print(&hyperlink),
-                        style::ResetColor,
-                    )?;
-                } else {
-                    queue!(
-                        stdout,
-                        style::SetForegroundColor(self.theme_colors.song_normal),
-                        style::Print(truncate_to_width(line, width.saturating_sub(1) as usize)),
-                        style::ResetColor,
-                    )?;
-                }
-            }
-        }
-
+    /// 绘制界面（Ratatui Frame 渲染入口）
+    fn draw(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
+        terminal.draw(|frame| self.render(frame))?;
         Ok(())
     }
 
-    /// 绘制界面
-    fn draw(&mut self) -> io::Result<()> {
-        let mut stdout = io::stdout();
+    fn render(&mut self, frame: &mut Frame<'_>) {
+        let area = frame.area();
+        self.terminal_width = area.width;
+        self.terminal_height = area.height;
+        self.playlist_layout = None;
+        self.lyrics_area_layout = None;
+        self.comments_row_map.clear();
 
-        // 更新终端大小
-        let window_size_changed = if let Ok((width, height)) = terminal::size() {
-            let changed = self.terminal_width != width || self.terminal_height != height;
-            self.terminal_width = width;
-            self.terminal_height = height;
-            changed
-        } else {
-            false
-        };
-
-        // 如果窗口大小改变，清屏以避免残留内容
-        if window_size_changed {
-            queue!(stdout, terminal::Clear(ClearType::All))?;
+        if area.height < 10 || area.width < 40 {
+            let warning = Paragraph::new(self.t().app_title)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Ter Music Rust"),
+                )
+                .style(self.tui_style(self.theme_colors.info_text));
+            frame.render_widget(warning, area);
+            return;
         }
 
-        // 绘制开始时隐藏光标，避免在绘制过程中光标在各位置闪烁
-        queue!(stdout, cursor::Hide, cursor::MoveTo(0, 0))?;
+        let root = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(8),
+                Constraint::Length(5),
+            ])
+            .split(area);
 
-        // 绘制标题
-        self.draw_header(&mut stdout)?;
+        self.render_header(frame, root[0]);
 
-        // 绘制播放列表
-        self.draw_playlist(&mut stdout)?;
+        let body = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(root[1]);
+        self.render_left_panel(frame, body[0]);
+        self.render_right_panel(frame, body[1]);
+        self.render_controls(frame, root[2]);
+        self.render_cursor(frame, body[0], body[1]);
+    }
 
-        // 绘制控制栏
-        self.draw_controls(&mut stdout)?;
+    fn render_header(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        self.recommendation_items.clear();
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(self.tui_style(self.theme_colors.header_title))
+            .title(Line::from(Span::styled(
+                self.t().app_title,
+                self.tui_style(self.theme_colors.header_title)
+                    .add_modifier(Modifier::BOLD),
+            )))
+            .title_alignment(Alignment::Center);
+        frame.render_widget(block, area);
 
-        // 绘制状态栏
-        self.draw_status(&mut stdout)?;
+        if self.recommand {
+            let mut text = if self.recommendations_loading {
+                format!(
+                    "{}{}",
+                    self.t().recommendation_title,
+                    self.t().recommendation_loading
+                )
+            } else if self.recommendations.is_empty() {
+                format!(
+                    "{}{}",
+                    self.t().recommendation_title,
+                    self.t().recommendation_no_data
+                )
+            } else {
+                self.t().recommendation_title.to_string()
+            };
+            let mut col = area.x as usize + 1 + term_display_width(&text);
+            for name in &self.recommendations {
+                if !text.ends_with('：') {
+                    text.push('、');
+                    col += 1;
+                }
+                let start_col = col;
+                text.push_str(name);
+                col += term_display_width(name);
+                if self.recommendation_downloading
+                    && self.recommendation_downloading_name.as_ref() == Some(name)
+                {
+                    let progress_text = format!(" [{}%]", self.recommendation_download_percent);
+                    text.push_str(&progress_text);
+                    col += term_display_width(&progress_text);
+                }
+                self.recommendation_items.push(RecommendationItem {
+                    name: name.clone(),
+                    start_col,
+                    end_col: col,
+                });
+            }
+            let max_width = area.width.saturating_sub(2) as usize;
+            let full_width = term_display_width(&text);
+            let max_offset = full_width.saturating_sub(max_width);
+            self.recommendation_scroll_offset = self.recommendation_scroll_offset.min(max_offset);
+            let scroll = self.recommendation_scroll_offset;
+            for item in &mut self.recommendation_items {
+                item.start_col = item.start_col.saturating_sub(scroll);
+                item.end_col = item.end_col.saturating_sub(scroll);
+            }
+            let line = slice_at_display_offset(&text, scroll, max_width);
+            frame.render_widget(
+                Paragraph::new(line).style(self.tui_style(self.theme_colors.info_text)),
+                Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), 1),
+            );
+        }
+    }
 
-        // 输入模式下，将光标定位到输入位置
+    fn render_left_panel(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        let inner = Self::inner_area(area);
+        let visible_count = inner.height as usize;
+        self.playlist_layout = Some(PlaylistLayout {
+            start_row: inner.y,
+            visible_count,
+            left_width: area.width,
+        });
+
+        if self.dir_history_mode {
+            self.render_dir_history(frame, area, visible_count);
+        } else if self.favorites_mode {
+            self.render_favorites(frame, area, visible_count);
+        } else if self.search_mode {
+            self.render_search_results(frame, area, visible_count);
+        } else {
+            self.render_playlist_panel(frame, area, visible_count);
+        }
+    }
+
+    fn render_playlist_panel(&mut self, frame: &mut Frame<'_>, area: Rect, visible_count: usize) {
+        let view = self.playlist_panel_view(visible_count);
+        let items: Vec<ListItem> = if view.is_empty {
+            vec![ListItem::new(self.t().playlist_no_dir_hint)
+                .style(self.tui_style(self.theme_colors.info_text))]
+        } else {
+            view.rows
+                .into_iter()
+                .map(|row| {
+                    let mut style = if row.playing {
+                        self.tui_style(self.theme_colors.song_playing)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        self.tui_style(self.theme_colors.song_normal)
+                    };
+                    if row.selected {
+                        style = style.bg(TuiColor::DarkGray);
+                    }
+                    ListItem::new(row.text).style(style)
+                })
+                .collect()
+        };
+        self.render_list(frame, area, &view.title, items);
+    }
+
+    fn playlist_panel_view(&mut self, visible_count: usize) -> PlaylistPanelView {
+        let (files, current_index, directory) = {
+            let playlist = self.playlist.lock().unwrap();
+            (
+                playlist.files.clone(),
+                playlist.current_index,
+                playlist.directory.clone(),
+            )
+        };
+        let title = self
+            .t()
+            .fmt_playlist_title
+            .replacen("{}", directory.as_deref().unwrap_or(""), 1)
+            .replacen("{}", &files.len().to_string(), 1);
+        Self::clamp_selected_and_scroll(
+            &mut self.selected_index,
+            &mut self.scroll_offset,
+            files.len(),
+            visible_count.max(1),
+        );
+        let rows = files
+            .iter()
+            .enumerate()
+            .skip(self.scroll_offset)
+            .take(visible_count)
+            .map(|(idx, file)| {
+                let selected = idx == self.selected_index;
+                let playing = current_index == Some(idx);
+                let favorite = self
+                    .favorites
+                    .iter()
+                    .any(|p| p == &file.path.to_string_lossy());
+                let prefix = if playing {
+                    "▶"
+                } else if selected {
+                    ">"
+                } else {
+                    " "
+                };
+                let star = if favorite { "*" } else { " " };
+                PlaylistRowView {
+                    text: format!(
+                        "{}{} {:02}. {}  [{}]",
+                        prefix,
+                        star,
+                        idx + 1,
+                        file.name,
+                        file.format_duration()
+                    ),
+                    selected,
+                    playing,
+                }
+            })
+            .collect();
+        PlaylistPanelView {
+            title,
+            rows,
+            is_empty: files.is_empty(),
+        }
+    }
+
+    fn render_dir_history(&mut self, frame: &mut Frame<'_>, area: Rect, visible_count: usize) {
+        let view = self.dir_history_view(visible_count);
+        let items = if let Some(hint) = view.empty_hint {
+            vec![ListItem::new(hint).style(self.tui_style(self.theme_colors.info_text))]
+        } else {
+            view.rows
+                .into_iter()
+                .map(|row| ListItem::new(row.text).style(self.selection_style(row.selected)))
+                .collect()
+        };
+        self.render_list(frame, area, &view.title, items);
+    }
+
+    fn dir_history_view(&mut self, visible_count: usize) -> SelectableListView {
+        Self::clamp_selected_and_scroll(
+            &mut self.dir_history_selected_index,
+            &mut self.dir_history_scroll_offset,
+            self.dir_history.len(),
+            visible_count.max(1),
+        );
+        let current_dir = self.playlist.lock().unwrap().directory.clone();
+        let rows = self
+            .dir_history
+            .iter()
+            .enumerate()
+            .skip(self.dir_history_scroll_offset)
+            .take(visible_count)
+            .map(|(idx, dir)| {
+                let selected = idx == self.dir_history_selected_index;
+                let marker = if current_dir.as_ref() == Some(dir) {
+                    ">>"
+                } else {
+                    "  "
+                };
+                SelectableTextRow {
+                    text: format!("{} {}", marker, dir),
+                    selected,
+                }
+            })
+            .collect();
+        let title = self
+            .t()
+            .fmt_dir_title
+            .replace("{}", &self.dir_history.len().to_string());
+        SelectableListView {
+            title,
+            rows,
+            empty_hint: if self.dir_history.is_empty() {
+                Some(self.t().dir_empty_hint)
+            } else {
+                None
+            },
+        }
+    }
+
+    fn render_favorites(&mut self, frame: &mut Frame<'_>, area: Rect, visible_count: usize) {
+        let view = self.favorites_view(visible_count);
+        let items = if let Some(hint) = view.empty_hint {
+            vec![ListItem::new(hint).style(self.tui_style(self.theme_colors.info_text))]
+        } else {
+            view.rows
+                .into_iter()
+                .map(|row| ListItem::new(row.text).style(self.selection_style(row.selected)))
+                .collect()
+        };
+        self.render_list(frame, area, &view.title, items);
+    }
+
+    fn favorites_view(&mut self, visible_count: usize) -> SelectableListView {
+        Self::clamp_selected_and_scroll(
+            &mut self.favorites_selected_index,
+            &mut self.favorites_scroll_offset,
+            self.favorites.len(),
+            visible_count.max(1),
+        );
+        let rows = self
+            .favorites
+            .iter()
+            .enumerate()
+            .skip(self.favorites_scroll_offset)
+            .take(visible_count)
+            .map(|(idx, path)| {
+                let selected = idx == self.favorites_selected_index;
+                let name = std::path::Path::new(path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(path);
+                SelectableTextRow {
+                    text: format!("* {}", name),
+                    selected,
+                }
+            })
+            .collect();
+        let title = self
+            .t()
+            .fmt_favorites_title
+            .replace("{}", &self.favorites.len().to_string());
+        SelectableListView {
+            title,
+            rows,
+            empty_hint: if self.favorites.is_empty() {
+                Some(self.t().favorites_empty_hint)
+            } else {
+                None
+            },
+        }
+    }
+
+    fn render_search_results(&mut self, frame: &mut Frame<'_>, area: Rect, visible_count: usize) {
+        let result_visible = visible_count.saturating_sub(1);
+        let view = self.search_results_view(result_visible);
+
+        let block = render::panel_block(&view.title, self.theme_colors);
+        let inner = render::inner_area(area);
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(0)])
+            .split(inner);
+
+        let input_line = format!("> {}", self.search_query);
+        let input_style = if self.search_input_focused {
+            self.tui_style(self.theme_colors.song_playing)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            TuiStyle::default().fg(TuiColor::DarkGray)
+        };
+        frame.render_widget(Paragraph::new(input_line).style(input_style), chunks[0]);
+
+        let items: Vec<ListItem> = if let Some(hint_str) = view.empty_hint {
+            vec![ListItem::new(hint_str).style(self.tui_style(self.theme_colors.info_text))]
+        } else {
+            view.rows
+                .into_iter()
+                .map(|row| ListItem::new(row.text).style(self.selection_style(row.selected)))
+                .collect()
+        };
+        frame.render_widget(
+            List::new(items).style(self.tui_style(self.theme_colors.song_normal)),
+            chunks[1],
+        );
+
+        frame.render_widget(block, area);
+    }
+
+    fn search_results_view(&mut self, visible_count: usize) -> SearchResultsView {
+        let prompt = if self.online_search_mode {
+            if self.playlist_search_mode {
+                self.t().search_prompt_playlist
+            } else if self.juhe_search_mode {
+                self.t().search_prompt_juhe
+            } else {
+                self.t().search_prompt_online
+            }
+        } else {
+            self.t().search_prompt_local
+        };
+        let title = prompt
+            .trim_end_matches(": ")
+            .trim_end_matches(':')
+            .to_string();
+
+        let rows: Vec<SelectableTextRow> = if self.online_search_mode {
+            if self.playlist_search_mode && self.current_playlist.is_none() {
+                Self::clamp_selected_and_scroll(
+                    &mut self.online_selected_index,
+                    &mut self.online_scroll_offset,
+                    self.playlist_search_results.len(),
+                    visible_count.max(1),
+                );
+                self.playlist_search_results
+                    .iter()
+                    .enumerate()
+                    .skip(self.online_scroll_offset)
+                    .take(visible_count)
+                    .map(|(idx, playlist)| {
+                        let selected = idx == self.online_selected_index;
+                        let count = playlist
+                            .song_count
+                            .map(|n| n.to_string())
+                            .unwrap_or_else(|| "--".to_string());
+                        let plays = self.format_playlist_play_count(playlist.play_count);
+                        let text = format!(
+                            "{} {}  [🎵 {} 🎧 {}]",
+                            if selected { ">" } else { " " },
+                            playlist.name,
+                            count,
+                            plays
+                        );
+                        SelectableTextRow { text, selected }
+                    })
+                    .collect()
+            } else {
+                Self::clamp_selected_and_scroll(
+                    &mut self.online_selected_index,
+                    &mut self.online_scroll_offset,
+                    self.online_search_results.len(),
+                    visible_count.max(1),
+                );
+                self.online_search_results
+                    .iter()
+                    .enumerate()
+                    .skip(self.online_scroll_offset)
+                    .take(visible_count)
+                    .map(|(idx, song)| {
+                        let selected = idx == self.online_selected_index;
+                        let duration = song
+                            .duration_ms
+                            .map(format_duration_ms)
+                            .unwrap_or_else(|| "--:--".to_string());
+                        let download = if self.online_downloading
+                            && self.online_downloading_index == Some(idx)
+                        {
+                            format!("  [{}%]", self.online_download_percent)
+                        } else {
+                            String::new()
+                        };
+                        let text = format!(
+                            "{} {} - {} [{}]{download}",
+                            if selected { ">" } else { " " },
+                            song.name,
+                            song.artist,
+                            duration
+                        );
+                        SelectableTextRow { text, selected }
+                    })
+                    .collect()
+            }
+        } else {
+            Self::clamp_selected_and_scroll(
+                &mut self.search_selected_index,
+                &mut self.search_scroll_offset,
+                self.search_results.len(),
+                visible_count.max(1),
+            );
+            let files = self.playlist.lock().unwrap().files.clone();
+            self.search_results
+                .iter()
+                .enumerate()
+                .skip(self.search_scroll_offset)
+                .take(visible_count)
+                .filter_map(|(result_idx, &orig_idx)| {
+                    files.get(orig_idx).map(|file| {
+                        let selected = result_idx == self.search_selected_index;
+                        let text = format!("{} {}", if selected { ">" } else { " " }, file.name);
+                        SelectableTextRow { text, selected }
+                    })
+                })
+                .collect()
+        };
+
+        let empty_hint = if rows.is_empty() {
+            Some(if self.online_search_mode {
+                if self.online_searching {
+                    self.t().querying_song_info
+                } else if self.juhe_search_mode {
+                    self.t().juhe_enter_hint
+                } else if self.playlist_search_mode {
+                    self.t().playlist_empty_hint
+                } else {
+                    self.t().online_enter_hint
+                }
+            } else if self.search_query.is_empty() {
+                self.t().local_search_empty_hint
+            } else {
+                self.t().local_search_empty_hint
+            })
+        } else {
+            None
+        };
+        SearchResultsView {
+            title,
+            rows,
+            empty_hint,
+        }
+    }
+
+    fn render_right_panel(&mut self, frame: &mut Frame<'_>, area: Rect) {
         if self.api_key_input_mode {
-            let prompt_text = match self.api_input_step {
+            self.render_api_input_panel(frame, area);
+        } else if self.github_token_input_mode {
+            self.render_github_token_input_panel(frame, area);
+        } else if self.help_mode {
+            self.render_help_panel(frame, area);
+        } else if self.song_info_mode {
+            self.render_song_info_panel(frame, area);
+        } else if self.comments_mode {
+            self.render_comments_panel(frame, area);
+        } else {
+            self.render_lyrics_panel(frame, area);
+        }
+    }
+
+    fn render_api_input_panel(&self, frame: &mut Frame<'_>, area: Rect) {
+        let prompt = match self.api_input_step {
+            0 => self.t().input_api_url,
+            1 => self.t().input_api_key,
+            2 => self.t().input_model_name,
+            _ => "",
+        };
+        let step_text = match self.api_input_step {
+            0 => "1/3",
+            1 => "2/3",
+            2 => "3/3",
+            _ => "",
+        };
+        let value = if self.api_input_step == 1 {
+            "*".repeat(self.api_key_input_value.chars().count().min(64))
+        } else {
+            self.api_key_input_value.clone()
+        };
+        let lines = vec![
+            Line::from(Span::styled(
+                format!("API 配置 {}", step_text),
+                self.tui_style(self.theme_colors.section_title)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled(prompt, self.tui_style(self.theme_colors.info_text)),
+                Span::styled(value, self.tui_style(self.theme_colors.song_playing)),
+            ]),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Enter 保存并继续 | Esc 取消",
+                TuiStyle::default().fg(TuiColor::DarkGray),
+            )),
+        ];
+        self.render_paragraph(frame, area, "配置", lines);
+    }
+
+    fn render_github_token_input_panel(&self, frame: &mut Frame<'_>, area: Rect) {
+        let value = "*".repeat(self.github_token_input_value.chars().count().min(64));
+        let lines = vec![
+            Line::from(Span::styled(
+                "GitHub Token",
+                self.tui_style(self.theme_colors.section_title)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled(
+                    self.t().input_github_token,
+                    self.tui_style(self.theme_colors.info_text),
+                ),
+                Span::styled(value, self.tui_style(self.theme_colors.song_playing)),
+            ]),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Enter 保存 | Esc 取消",
+                TuiStyle::default().fg(TuiColor::DarkGray),
+            )),
+        ];
+        self.render_paragraph(frame, area, "配置", lines);
+    }
+
+    fn render_help_panel(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        let view = self.help_view(Self::inner_area(area).height as usize);
+        let text = view.lines.into_iter().map(Line::from).collect::<Vec<_>>();
+        self.render_paragraph(frame, area, &view.title, text);
+    }
+
+    fn help_view(&mut self, visible_count: usize) -> TextPanelView {
+        let lines = self.get_help_lines();
+        let max_offset = lines.len().saturating_sub(visible_count);
+        self.help_scroll_offset = self.help_scroll_offset.min(max_offset);
+        TextPanelView {
+            title: self.t().help_label.to_string(),
+            lines: lines
+                .into_iter()
+                .skip(self.help_scroll_offset)
+                .take(visible_count)
+                .collect(),
+        }
+    }
+
+    fn render_song_info_panel(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        self.check_song_info_result();
+        let inner = Self::inner_area(area);
+        let view = self.song_info_view(inner.width, inner.height as usize);
+        let lines = view.lines.into_iter().map(Line::from).collect::<Vec<_>>();
+        self.render_paragraph(frame, area, &view.title, lines);
+    }
+
+    fn song_info_view(&mut self, width: u16, visible_count: usize) -> TextPanelView {
+        let mut wrapped = self.song_info_lines(width);
+        let max_offset = wrapped.len().saturating_sub(visible_count);
+        if self.song_info_force_scroll {
+            self.song_info_scroll_offset = max_offset;
+            self.song_info_force_scroll = false;
+        } else {
+            self.song_info_scroll_offset = self.song_info_scroll_offset.min(max_offset);
+        }
+        wrapped = wrapped
+            .into_iter()
+            .skip(self.song_info_scroll_offset)
+            .take(visible_count)
+            .collect();
+        TextPanelView {
+            title: self.t().song_info_label.to_string(),
+            lines: wrapped,
+        }
+    }
+
+    fn render_comments_panel(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        let current_file = self.audio_player.lock().unwrap().get_current_file();
+        self.ensure_comments_up_to_date(current_file.as_ref());
+        let inner = Self::inner_area(area);
+        self.comment_panel_inner_y = Some(inner.y);
+        self.comments_row_map.clear();
+        let title = self
+            .t()
+            .fmt_comments_title
+            .replacen("{}", &self.comments_total.to_string(), 1)
+            .replacen("{}", &self.comments_page.to_string(), 1);
+
+        if self.comments_detail_mode {
+            let comment = self.current_comments.get(self.comments_selected_index);
+            let text = comment
+                .map(|c| {
+                    let mut s = format!(
+                        "{}\n{}\n",
+                        c.nickname,
+                        c.time_text.clone().unwrap_or_default()
+                    );
+                    s.push_str(&c.content);
+                    if let Some(reply) = &c.reply {
+                        s.push_str("\n\n---\n");
+                        s.push_str(&format!("{}: {}", reply.nickname, reply.content));
+                    }
+                    s
+                })
+                .unwrap_or_else(|| self.t().no_comments.to_string());
+            let lines = wrap_text_to_width(&text, inner.width.saturating_sub(1) as usize)
+                .into_iter()
+                .take(inner.height as usize)
+                .map(Line::from)
+                .collect::<Vec<_>>();
+            self.render_paragraph(frame, area, &title, lines);
+            return;
+        }
+
+        Self::clamp_selected_and_scroll(
+            &mut self.comments_selected_index,
+            &mut self.comments_scroll_offset,
+            self.current_comments.len(),
+            inner.height.max(1) as usize,
+        );
+        let view = self.comments_list_view(inner.width, inner.height as usize, &title);
+        self.comments_row_map = view.row_map;
+        let items: Vec<ListItem> = view
+            .rows
+            .into_iter()
+            .map(|row| ListItem::new(row.text).style(self.selection_style(row.selected)))
+            .collect();
+        let items = if let Some(hint) = view.empty_hint {
+            vec![ListItem::new(hint).style(self.tui_style(self.theme_colors.info_text))]
+        } else {
+            items
+        };
+        self.render_list(frame, area, &view.title, items);
+    }
+
+    fn comments_list_view(
+        &self,
+        width: u16,
+        visible_count: usize,
+        title: &str,
+    ) -> CommentsListView {
+        let comment_rows: Vec<(usize, SongCommentItem)> = self
+            .current_comments
+            .iter()
+            .cloned()
+            .enumerate()
+            .skip(self.comments_scroll_offset)
+            .take(visible_count)
+            .collect();
+        let row_map = comment_rows.iter().map(|(idx, _)| Some(*idx)).collect();
+        let rows = comment_rows
+            .into_iter()
+            .map(|(idx, comment)| {
+                let selected = idx == self.comments_selected_index;
+                let preview = Self::truncate_with_ellipsis(
+                    &comment.content,
+                    width.saturating_sub(8) as usize,
+                );
+                SelectableTextRow {
+                    text: format!(
+                        "{} {}: {}",
+                        if selected { ">" } else { " " },
+                        comment.nickname,
+                        preview
+                    ),
+                    selected,
+                }
+            })
+            .collect::<Vec<_>>();
+        let empty_hint = if self.comments_loading {
+            Some(self.t().querying_song_info)
+        } else if rows.is_empty() {
+            Some(self.t().no_comments)
+        } else {
+            None
+        };
+        CommentsListView {
+            title: title.to_string(),
+            rows,
+            row_map,
+            empty_hint,
+        }
+    }
+
+    fn render_lyrics_panel(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        self.refresh_current_lyrics();
+        let inner = Self::inner_area(area);
+        let view = self.lyrics_panel_view(inner.height as usize);
+        self.lyrics_area_layout = Some(LyricsAreaLayout {
+            start_row: inner.y,
+            start_col: inner.x as usize,
+            width: inner.width as usize,
+            line_times: view.line_times,
+        });
+        let lines = view
+            .rows
+            .into_iter()
+            .map(|row| {
+                let style = if row.highlighted {
+                    self.tui_style(self.theme_colors.lyric_highlight)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    self.tui_style(self.theme_colors.song_normal)
+                };
+                Line::from(Span::styled(row.text, style))
+            })
+            .collect::<Vec<_>>();
+        self.render_paragraph(frame, area, &view.title, lines);
+    }
+
+    fn lyrics_panel_view(&self, visible_count: usize) -> LyricsPanelView {
+        let (current_file, current_time) = {
+            let player = self.audio_player.lock().unwrap();
+            (player.get_current_file(), player.get_progress().0)
+        };
+        let title = current_file
+            .as_ref()
+            .map(|file| format!("{}{}", self.t().lyrics_label_with_song, file.name))
+            .unwrap_or_else(|| self.t().lyrics_label_no_song.to_string());
+
+        let mut line_times = Vec::new();
+        let rows = if let Some(lyrics) = &self.current_lyrics {
+            let (_, visible, highlight_idx) = lyrics.get_visible_lines(current_time, visible_count);
+            visible
+                .iter()
+                .enumerate()
+                .map(|(idx, lyric)| {
+                    line_times.push(lyric.time);
+                    let is_highlighted = Some(idx) == highlight_idx;
+                    let prefix = if is_highlighted { "> " } else { "  " };
+                    let text = format!("{}{}", prefix, lyric.text);
+                    HighlightedTextRow {
+                        text,
+                        highlighted: is_highlighted,
+                    }
+                })
+                .collect::<Vec<_>>()
+        } else {
+            let message = if self.lyrics_downloading || self.juhe_lyrics_loading {
+                self.t().downloading_lyrics
+            } else if current_file.is_some() {
+                self.t().no_lyrics_found
+            } else {
+                self.t().select_song_for_lyrics
+            };
+            vec![HighlightedTextRow {
+                text: message.to_string(),
+                highlighted: false,
+            }]
+        };
+        LyricsPanelView {
+            title,
+            rows,
+            line_times,
+        }
+    }
+
+    fn render_controls(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        let view = self.controls_view();
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
+            ])
+            .split(area);
+
+        let (tip, tip_tail) = Self::split_at_display_width(&view.tip, chunks[0].width as usize);
+        frame.render_widget(
+            Paragraph::new(tip).style(TuiStyle::default().fg(TuiColor::DarkGray)),
+            chunks[0],
+        );
+
+        let status_prefix = if tip_tail.is_empty() {
+            String::new()
+        } else {
+            format!("{} ", tip_tail)
+        };
+        let volume_prefix = format!(
+            "{} | {}:{:3}% ",
+            view.play_status_text,
+            self.t().volume_label,
+            view.volume_percent
+        );
+        let full_volume_prefix = format!("{}{}", status_prefix, volume_prefix);
+        let volume_width = chunks[1]
+            .width
+            .saturating_sub(term_display_width(&full_volume_prefix) as u16 + 2)
+            .max(1) as usize;
+        let volume_filled = (view.volume_percent as usize * volume_width / 100).min(volume_width);
+        let volume_bar = format!(
+            "[{}{}]",
+            "█".repeat(volume_filled),
+            "░".repeat(volume_width.saturating_sub(volume_filled))
+        );
+        let mut volume_line = Vec::new();
+        if !status_prefix.is_empty() {
+            volume_line.push(Span::styled(
+                status_prefix,
+                TuiStyle::default().fg(TuiColor::DarkGray),
+            ));
+        }
+        volume_line.push(Span::styled(
+            format!("{}{}", volume_prefix, volume_bar),
+            self.tui_style(self.theme_colors.info_text),
+        ));
+        frame.render_widget(Paragraph::new(Line::from(volume_line)), chunks[1]);
+        self.volume_bar_layout = Some(VolumeBarLayout {
+            row: chunks[1].y,
+            bar_start_col: chunks[1].x as usize + term_display_width(&full_volume_prefix) + 1,
+            bar_width: volume_width,
+        });
+
+        let rms_prefix = format!("{} ", view.now_playing_text);
+        let rms_width = chunks[2]
+            .width
+            .saturating_sub(term_display_width(&rms_prefix) as u16 + 2)
+            .max(1) as usize;
+        let rms_filled = (view.realtime_percent as usize * rms_width / 100).min(rms_width);
+        let rms_bar = format!(
+            "[{}{}]",
+            "█".repeat(rms_filled),
+            "░".repeat(rms_width.saturating_sub(rms_filled))
+        );
+        frame.render_widget(
+            Paragraph::new(format!("{}{}", rms_prefix, rms_bar))
+                .style(self.tui_style(self.theme_colors.status_text)),
+            chunks[2],
+        );
+
+        let progress_prefix = format!("{} ", view.progress_label);
+        let progress_width = chunks[3]
+            .width
+            .saturating_sub(term_display_width(&progress_prefix) as u16 + 2)
+            .max(1) as usize;
+        let progress_filled =
+            ((view.progress_ratio * progress_width as f64).round() as usize).min(progress_width);
+        let progress_bar = format!(
+            "[{}{}]",
+            "█".repeat(progress_filled),
+            "░".repeat(progress_width.saturating_sub(progress_filled))
+        );
+        frame.render_widget(
+            Paragraph::new(format!("{}{}", progress_prefix, progress_bar))
+                .style(self.tui_style(self.theme_colors.progress_text)),
+            chunks[3],
+        );
+        self.progress_bar_layout = Some(ProgressBarLayout {
+            row: chunks[3].y,
+            bar_start_col: chunks[3].x as usize + term_display_width(&progress_prefix) + 1,
+            bar_width: progress_width,
+        });
+
+        let separator = "─".repeat(chunks[4].width as usize);
+        frame.render_widget(
+            Paragraph::new(separator).style(self.tui_style(self.theme_colors.section_title)),
+            chunks[4],
+        );
+    }
+
+    fn controls_view(&self) -> ControlsView {
+        let (state, volume, mode, progress, total, realtime) = {
+            let player = self.audio_player.lock().unwrap();
+            let (progress, total) = player.get_progress();
+            (
+                player.get_state(),
+                player.get_volume(),
+                player.get_play_mode(),
+                progress,
+                total,
+                player.get_realtime_volume(),
+            )
+        };
+        let current_song_name = {
+            let player = self.audio_player.lock().unwrap();
+            player.get_current_file().map(|file| file.name)
+        };
+        let progress_ratio = total
+            .map(|t| {
+                let total_secs = t.as_secs_f64();
+                if total_secs > 0.0 {
+                    progress.as_secs_f64() / total_secs
+                } else {
+                    0.0
+                }
+            })
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0);
+        let progress_text = format_progress(progress, total);
+        let now_playing_text = if state == PlayState::Stopped {
+            format!("{}{}", self.now_playing_prefix(), progress_text)
+        } else if let Some(song_name) = current_song_name {
+            format!("{}{}", self.now_playing_prefix(), song_name)
+        } else {
+            self.t().state_stopped_msg.to_string()
+        };
+        ControlsView {
+            tip: self.get_help_tip_text(),
+            play_status_text: format!(
+                "{}: {} | {}: {}",
+                self.t().play_status_label,
+                self.play_state_text(state),
+                self.t().play_mode_label,
+                self.play_mode_text(mode),
+            ),
+            now_playing_text,
+            progress_label: format!("{}{}", self.t().progress_label, progress_text),
+            progress_ratio,
+            volume_percent: volume,
+            realtime_percent: (realtime * 100.0).round() as u8,
+        }
+    }
+
+    fn render_cursor(&self, frame: &mut Frame<'_>, left: Rect, right: Rect) {
+        if self.api_key_input_mode {
+            let prompt = match self.api_input_step {
                 0 => self.t().input_api_url,
                 1 => self.t().input_api_key,
                 2 => self.t().input_model_name,
                 _ => "",
             };
-            let prompt_len = unicode_width::UnicodeWidthStr::width(prompt_text);
-            let value_len = unicode_width::UnicodeWidthStr::width(self.api_key_input_value.as_str());
-            let left_width = (self.terminal_width as f32 * 0.50) as u16;
-            let target_col = left_width + 1 + (prompt_len + value_len) as u16;
-            queue!(
-                stdout,
-                cursor::MoveTo(target_col, 4),
-                cursor::Show,
-            )?;
+            let x = right.x
+                + 1
+                + (term_display_width(prompt) + term_display_width(&self.api_key_input_value))
+                    as u16;
+            frame.set_cursor_position((x.min(right.right().saturating_sub(1)), right.y + 3));
         } else if self.github_token_input_mode {
-            let prompt_text = self.t().input_github_token;
-            let prompt_len = unicode_width::UnicodeWidthStr::width(prompt_text);
-            let value_len = unicode_width::UnicodeWidthStr::width(self.github_token_input_value.as_str());
-            let left_width = (self.terminal_width as f32 * 0.50) as u16;
-            let target_col = left_width + 1 + (prompt_len + value_len) as u16;
-            queue!(
-                stdout,
-                cursor::MoveTo(target_col, 4),
-                cursor::Show,
-            )?;
+            let x = right.x
+                + 1
+                + (term_display_width(self.t().input_github_token)
+                    + term_display_width(&self.github_token_input_value)) as u16;
+            frame.set_cursor_position((x.min(right.right().saturating_sub(1)), right.y + 3));
         } else if self.search_mode
             && self.search_input_focused
-            && !(self.playlist_search_mode && self.current_playlist.is_some()) {
-            let prompt_text = if self.online_search_mode {
-                if self.playlist_search_mode {
-                    self.t().search_prompt_playlist
-                } else if self.juhe_search_mode {
-                    self.t().search_prompt_juhe
-                } else {
-                    self.t().search_prompt_online
-                }
-            } else {
-                self.t().search_prompt_local
-            };
-            let search_prompt_len = unicode_width::UnicodeWidthStr::width(prompt_text);
-            let query_len = unicode_width::UnicodeWidthStr::width(self.search_query.as_str());
-            let target_col = (search_prompt_len + query_len) as u16;
-
-            // 移动光标到搜索输入位置，然后显示光标
-            // （draw 开始时光标已被隐藏，所以不会在绘制过程中出现闪烁）
-            queue!(
-                stdout,
-                cursor::MoveTo(target_col, 4),
-                cursor::Show,
-            )?;
+            && !(self.playlist_search_mode && self.current_playlist.is_some())
+        {
+            let x = left.x + 1 + 2 + term_display_width(&self.search_query) as u16;
+            frame.set_cursor_position((x.min(left.right().saturating_sub(1)), left.y + 1));
         }
-        // 非输入模式/搜索模式下光标保持隐藏（draw 开始时已隐藏）
-
-        stdout.flush()?;
-
-        Ok(())
     }
 
-    /// 绘制标题
-    fn draw_header<W: Write>(&self, stdout: &mut W) -> io::Result<()> {
-        // 根据终端宽度生成标题
-        let width = self.terminal_width as usize;
-        let title = self.t().app_title;
-
-        // 计算标题居中位置（使用显示宽度而非字符数）
-        let title_len = unicode_width::UnicodeWidthStr::width(title);
-        let total_space = width.saturating_sub(title_len + 2); // +2 for "║" and "║"
-        let left_padding = total_space / 2;
-        let right_padding = total_space.saturating_sub(left_padding);
-        let title_line = format!(
-            "║{}{}{}║",
-            " ".repeat(left_padding),
-            title,
-            " ".repeat(right_padding)
-        );
-
-        // 生成分隔线
-        let separator = "═".repeat(width.saturating_sub(2));
-        let top_line = format!("╔{}╗", separator);
-        let bottom_line = format!("╚{}╝", separator);
-
-        queue!(
-            stdout,
-            cursor::MoveTo(0, 0),
-            style::SetForegroundColor(self.theme_colors.header_title),
-            style::Print(top_line),
-            cursor::MoveTo(0, 1),
-            style::Print(title_line),
-            cursor::MoveTo(0, 2),
-            style::Print(bottom_line),
-            style::ResetColor,
-        )?;
-        Ok(())
-    }
-
-    /// 绘制播放列表（左右分栏：左侧歌曲列表，右侧歌词）
-    fn draw_playlist<W: Write>(&mut self, stdout: &mut W) -> io::Result<()> {
-        // 提前获取需要的信息，避免长时间持有锁
-        let (current_file, play_state) = {
-            let audio_player = self.audio_player.lock().unwrap();
-            (audio_player.get_current_file(), audio_player.get_state())
+    fn refresh_current_lyrics(&mut self) {
+        self.check_lyrics_download_result();
+        let current_file = self.audio_player.lock().unwrap().get_current_file();
+        let needs_update = match (&current_file, &self.lyrics_file_path) {
+            (Some(file), Some(cached_path)) => cached_path != &file.path.with_extension("lrc"),
+            (Some(_), None) => true,
+            (None, _) => false,
         };
-
-        let playlist = self.playlist.lock().unwrap();
-
-        // 计算左右分栏的宽度
-        let left_width = (self.terminal_width as f32 * 0.50) as u16;
-        let right_width = self.terminal_width.saturating_sub(left_width + 1);
-
-        // 绘制播放列表标题（左侧）
-        let visible_count = (self.terminal_height as usize).saturating_sub(12).max(5);
-
-        if self.dir_history_mode {
-            // 音乐目录模式：标题显示音乐目录
-            let dir_title = self.t().fmt_dir_title.replace("{}", &self.dir_history.len().to_string());
-            let dir_title_width = unicode_width::UnicodeWidthStr::width(dir_title.as_str());
-            let padding = left_width as usize - dir_title_width;
-            queue!(
-                stdout,
-                cursor::MoveTo(0, 4),
-                style::SetForegroundColor(self.theme_colors.section_title),
-                style::Print(dir_title),
-                style::Print(" ".repeat(padding)),
-                style::ResetColor,
-            )?;
-
-            // 保存播放列表布局信息
-            self.playlist_layout = Some(PlaylistLayout {
-                start_row: 6,
-                visible_count,
-                left_width,
-            });
-
-            // 绘制分割线（左侧）
-            queue!(
-                stdout,
-                cursor::MoveTo(0, 5),
-                style::SetForegroundColor(self.theme_colors.section_title),
-                style::Print("─".repeat(left_width as usize)),
-                style::ResetColor,
-            )?;
-
-            let total = self.dir_history.len();
-
-            // 调整音乐目录滚动偏移
-            Self::adjust_scroll_offset(self.dir_history_selected_index, &mut self.dir_history_scroll_offset, visible_count);
-
-            // 显示音乐目录列表
-            for i in self.dir_history_scroll_offset..std::cmp::min(self.dir_history_scroll_offset + visible_count, total) {
-                let dir_path = &self.dir_history[i];
-                let is_selected = i == self.dir_history_selected_index;
-
-                // 提取目录名（最后一级目录名，备用）
-                let _dir_name = std::path::Path::new(dir_path)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| dir_path.clone());
-
-                // 检查是否为当前正在播放的目录
-                let is_current = playlist.directory.as_ref().map(|d| d == dir_path).unwrap_or(false);
-
-                let selector = if is_selected { ">" } else { " " };
-                let current_marker = if is_current { ">>" } else { " " };
-
-                // 构建显示内容：● 目录名 路径
-                let display_line = format!("{} {}", current_marker, dir_path);
-                let max_width = left_width.saturating_sub(2) as usize;
-                let display_text = Self::truncate_with_ellipsis(&display_line, max_width);
-
-                let row_pos = (i - self.dir_history_scroll_offset + 6) as u16;
-                if is_selected {
-                    // 用空格填充左面板宽度，限制蓝色背景不超出左面板区域
-                    queue!(
-                        stdout,
-                        cursor::MoveTo(0, row_pos),
-                        style::SetBackgroundColor(style::Color::DarkBlue),
-                        style::Print(" ".repeat(left_width as usize)),
-                        cursor::MoveTo(0, row_pos),
-                    )?;
-                } else {
-                    queue!(
-                        stdout,
-                        cursor::MoveTo(0, row_pos),
-                        terminal::Clear(ClearType::UntilNewLine),
-                    )?;
-                }
-                if is_current {
-                    queue!(stdout, style::SetForegroundColor(self.theme_colors.song_playing))?;
-                } else {
-                    queue!(stdout, style::SetForegroundColor(self.theme_colors.song_normal))?;
-                }
-
-                // 确保显示行不超过左面板宽度
-                let full_line = format!("{} {}", selector, display_text);
-                let display_line = truncate_to_width(&full_line, left_width as usize);
-                queue!(
-                    stdout,
-                    style::Print(&display_line),
-                    style::ResetColor,
-                )?;
-            }
-
-            // 如果没有音乐目录
-            if total == 0 {
-                queue!(
-                    stdout,
-                    cursor::MoveTo(1, 7),
-                    style::SetForegroundColor(self.theme_colors.info_text),
-                    style::Print(self.t().dir_empty_hint),
-                    style::ResetColor,
-                )?;
-            }
-
-            // 清除音乐目录列表下方的残留行
-            let used_rows = std::cmp::min(total, visible_count);
-            Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
-        } else if self.favorites_mode {
-            // 收藏列表模式：标题显示收藏列表
-            let fav_title = self.t().fmt_favorites_title.replace("{}", &self.favorites.len().to_string());
-            let fav_title_width = unicode_width::UnicodeWidthStr::width(fav_title.as_str());
-            let padding = left_width as usize - fav_title_width;
-            queue!(
-                stdout,
-                cursor::MoveTo(0, 4),
-                style::SetForegroundColor(self.theme_colors.section_title),
-                style::Print(fav_title),
-                style::Print(" ".repeat(padding)),
-                style::ResetColor,
-            )?;
-
-            // 保存播放列表布局信息
-            self.playlist_layout = Some(PlaylistLayout {
-                start_row: 6,
-                visible_count,
-                left_width,
-            });
-
-            // 绘制分割线（左侧）
-            queue!(
-                stdout,
-                cursor::MoveTo(0, 5),
-                style::SetForegroundColor(self.theme_colors.section_title),
-                style::Print("─".repeat(left_width as usize)),
-                style::ResetColor,
-            )?;
-
-            // 构建收藏列表的歌曲信息（包含当前播放列表中找不到的歌曲）
-            let fav_files: Vec<(Option<usize>, String, String)> = self.favorites.iter()
-                .map(|path| {
-                    // 尝试在当前播放列表中查找
-                    if let Some((idx, file)) = playlist.files.iter().enumerate()
-                        .find(|(_, f)| f.path.to_string_lossy() == *path)
-                    {
-                        (Some(idx), file.name.clone(), file.format_duration())
-                    } else {
-                        // 不在当前播放列表中，用文件名显示
-                        let name = std::path::Path::new(path)
-                            .file_stem()
-                            .map(|n| n.to_string_lossy().to_string())
-                            .unwrap_or_else(|| path.clone());
-                        (None, name, "--:--".to_string())
-                    }
-                })
-                .collect();
-
-            let total = fav_files.len();
-
-            // 调整收藏列表滚动偏移
-            Self::adjust_scroll_offset(self.favorites_selected_index, &mut self.favorites_scroll_offset, visible_count);
-
-            // 显示收藏列表
-            let end = std::cmp::min(self.favorites_scroll_offset + visible_count, total);
-            for (i, (orig_idx, song_name, duration_str)) in fav_files
-                .iter()
-                .enumerate()
-                .skip(self.favorites_scroll_offset)
-                .take(end - self.favorites_scroll_offset)
-            {
-                let is_selected = i == self.favorites_selected_index;
-                let in_current_dir = orig_idx.is_some();
-                // 检查是否正在播放（通过路径匹配）
-                let fav_path = &self.favorites[i];
-                let is_playing = current_file
-                    .as_ref()
-                    .map(|f| f.path.to_string_lossy() == *fav_path)
-                    .unwrap_or(false);
-
-                let prefix = if is_playing {
-                    match play_state {
-                        PlayState::Playing => ">> ",
-                        PlayState::Paused => "|| ",
-                        PlayState::Stopped => "[] ",
-                    }
-                } else {
-                    "   "
-                };
-
-                let selector = if is_selected { ">" } else { " " };
-                let star = "*"; // 收藏列表中全部显示*
-
-                // 动态计算固定部分宽度，使用最大值确保播放状态切换时歌曲名空间不变
-                let fixed_width = 1 // selector 宽度 (>)
-                    + 1 // star 宽度 (*)
-                    + 3 // prefix 宽度 (统一为3)
-                    + term_display_width(duration_str.as_str())
-                    + 4; // 4个分隔空格
-                let max_width = left_width.saturating_sub(fixed_width as u16) as usize;
-                let safe_song_name = Self::sanitize_single_line_text(song_name);
-                let name = Self::truncate_with_ellipsis(&safe_song_name, max_width);
-
-                let row_pos = (i - self.favorites_scroll_offset + 6) as u16;
-                if is_selected {
-                    queue!(
-                        stdout,
-                        cursor::MoveTo(0, row_pos),
-                        style::SetBackgroundColor(style::Color::DarkBlue),
-                        style::Print(" ".repeat(left_width as usize)),
-                        cursor::MoveTo(0, row_pos),
-                    )?;
-                } else {
-                    queue!(
-                        stdout,
-                        cursor::MoveTo(0, row_pos),
-                        terminal::Clear(ClearType::UntilNewLine),
-                    )?;
-                }
-                if is_playing {
-                    queue!(stdout, style::SetForegroundColor(self.theme_colors.song_playing))?;
-                } else if in_current_dir {
-                    queue!(stdout, style::SetForegroundColor(self.theme_colors.song_normal))?;
-                } else {
-                    queue!(stdout, style::SetForegroundColor(self.theme_colors.info_text))?;
-                }
-
-                // 确保显示行不超过左面板宽度
-                let full_line = format!("{} {} {} {} {}", selector, star, prefix, name, duration_str);
-                let display_line = truncate_to_width(&full_line, left_width as usize);
-                queue!(
-                    stdout,
-                    style::Print(&display_line),
-                    style::ResetColor,
-                )?;
-            }
-
-            // 如果没有收藏
-            if total == 0 {
-                queue!(
-                    stdout,
-                    cursor::MoveTo(1, 7),
-                    style::SetForegroundColor(style::Color::DarkGrey),
-                    style::Print(self.t().favorites_empty_hint),
-                    style::ResetColor,
-                )?;
-            }
-
-            // 清除收藏列表下方的残留行
-            let used_rows = std::cmp::min(total, visible_count);
-            Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
-        } else if self.search_mode {
-            // 搜索模式：标题显示搜索栏
-            let search_prompt = if self.playlist_search_mode && self.current_playlist.is_some() {
-                if let Some(ref pl) = self.current_playlist {
-                    let count = pl.song_count.map(|n| n.to_string()).unwrap_or_else(|| "?".to_string());
-                    let play_text = self.format_playlist_play_count(pl.play_count);
-                    format!(
-                        "{} [🎵{} 🎧{}]",
-                        pl.name,
-                        count,
-                        play_text,
-                    )
-                } else {
-                    self.search_query.clone()
-                }
-            } else if self.online_search_mode {
-                if self.playlist_search_mode {
-                    format!(
-                        "{}{}",
-                        self.t().search_prompt_playlist,
-                        self.search_query
-                    )
-                } else if self.juhe_search_mode {
-                    format!(
-                        "{}{}",
-                        self.t().search_prompt_juhe,
-                        self.search_query
-                    )
-                } else {
-                    format!(
-                        "{}{}",
-                        self.t().search_prompt_online,
-                        self.search_query
-                    )
-                }
-            } else {
-                format!(
-                    "{}{}",
-                    self.t().search_prompt_local,
-                    self.search_query
-                )
-            };
-            // 搜索栏标题统一做宽度裁剪，避免超长歌单名溢出到右侧歌词标题区域
-            let safe_search_prompt = Self::sanitize_single_line_text(&search_prompt);
-            let search_prompt_display = Self::truncate_with_ellipsis(&safe_search_prompt, left_width.saturating_sub(2) as usize);
-            let search_width = unicode_width::UnicodeWidthStr::width(search_prompt_display.as_str());
-            let padding = (left_width as usize).saturating_sub(search_width);
-            queue!(
-                stdout,
-                cursor::MoveTo(0, 4),
-                style::SetForegroundColor(self.theme_colors.section_title),
-                style::Print(&search_prompt_display),
-                style::Print(" ".repeat(padding)),
-                style::ResetColor,
-            )?;
-
-            // 保存播放列表布局信息
-            self.playlist_layout = Some(PlaylistLayout {
-                start_row: 6,
-                visible_count,
-                left_width,
-            });
-
-            // 绘制分割线（左侧）
-            queue!(
-                stdout,
-                cursor::MoveTo(0, 5),
-                style::SetForegroundColor(self.theme_colors.section_title),
-                style::Print("─".repeat(left_width as usize)),
-                style::ResetColor,
-            )?;
-
-            if self.online_search_mode {
-                if self.playlist_search_mode && self.current_playlist.is_none() {
-                    // 歌单搜索结果列表
-                    let total = self.playlist_search_results.len();
-                    Self::clamp_selected_and_scroll(
-                        &mut self.online_selected_index,
-                        &mut self.online_scroll_offset,
-                        total,
-                        visible_count,
-                    );
-
-                    for i in self.online_scroll_offset..std::cmp::min(self.online_scroll_offset + visible_count, total) {
-                        let pl = &self.playlist_search_results[i];
-                        let is_selected = i == self.online_selected_index;
-                        let count_text = pl.song_count.map(|n| n.to_string()).unwrap_or_else(|| "--".to_string());
-                        let play_text = self.format_playlist_play_count(pl.play_count);
-
-                        let safe_playlist_name = Self::sanitize_single_line_text(&pl.name);
-                        let display = format!("{} [🎵{} 🎧{}]", safe_playlist_name, count_text, play_text);
-                        let name = Self::truncate_with_ellipsis(&display, left_width.saturating_sub(4) as usize);
-
-                        let row_pos = (i - self.online_scroll_offset + 6) as u16;
-                        if is_selected {
-                            queue!(
-                                stdout,
-                                cursor::MoveTo(0, row_pos),
-                                style::SetBackgroundColor(style::Color::DarkBlue),
-                                style::Print(" ".repeat(left_width as usize)),
-                                cursor::MoveTo(0, row_pos),
-                            )?;
-                        } else {
-                            queue!(
-                                stdout,
-                                cursor::MoveTo(0, row_pos),
-                                terminal::Clear(ClearType::UntilNewLine),
-                            )?;
-                        }
-                        queue!(
-                            stdout,
-                            style::SetForegroundColor(self.theme_colors.song_normal),
-                            // 确保显示行不超过左面板宽度
-                            style::Print(truncate_to_width(&format!("  {}", name), left_width as usize)),
-                            style::ResetColor,
-                        )?;
-                    }
-
-                    if total == 0 {
-                        let hint = if self.search_query.is_empty() {
-                            self.t().playlist_empty_hint
-                        } else {
-                            self.t().playlist_no_result
-                        };
-                        queue!(
-                            stdout,
-                            cursor::MoveTo(1, 7),
-                            style::SetForegroundColor(self.theme_colors.info_text),
-                            style::Print(hint),
-                            style::ResetColor,
-                        )?;
-                    }
-                    let used_rows = std::cmp::min(total, visible_count);
-                    Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
-                } else {
-                    // 网络歌曲结果列表（普通/聚合/歌单内歌曲）
-                    let total = self.online_search_results.len();
-                    Self::clamp_selected_and_scroll(
-                        &mut self.online_selected_index,
-                        &mut self.online_scroll_offset,
-                        total,
-                        visible_count,
-                    );
-
-                    // 渲染搜索结果列表
-                    for i in self.online_scroll_offset..std::cmp::min(self.online_scroll_offset + visible_count, total) {
-                        let song = &self.online_search_results[i];
-                        let is_selected = i == self.online_selected_index;
-                        let is_downloading = self.online_downloading && self.online_downloading_index == Some(i);
-
-                        let song_keys = Self::online_song_match_keys(song);
-                        let is_playing = current_file
-                            .as_ref()
-                            .map(|f| {
-                                let current_key = Self::normalize_song_key(&f.name);
-                                song_keys.iter().any(|k| {
-                                    *k == current_key
-                                        || self
-                                            .downloaded_online_song_cache
-                                            .get(k)
-                                            .map(|p| *p == f.path)
-                                            .unwrap_or(false)
-                                })
-                            })
-                            .unwrap_or(false)
-                            && play_state != PlayState::Stopped;
-
-                        let duration_str = song.duration_ms
-                            .map(|ms| {
-                                let secs = ms / 1000;
-                                let mins = secs / 60;
-                                let secs = secs % 60;
-                                format!("{:02}:{:02}", mins, secs)
-                            })
-                            .unwrap_or_else(|| "--:--".to_string());
-
-                        let display_name = if song.artist.is_empty() {
-                            song.name.clone()
-                        } else {
-                            format!("{} - {}", song.artist, song.name)
-                        };
-                        let display_name = Self::sanitize_single_line_text(&display_name);
-
-                        // 下载中时在时长后面追加进度百分比
-                        let progress_suffix = if is_downloading {
-                            format!(" [{}%]", self.online_download_percent)
-                        } else {
-                            String::new()
-                        };
-
-                        // 与本地播放列表保持一致：selector + star + prefix + name + duration
-                        let prefix = if is_playing {
-                            match play_state {
-                                PlayState::Playing => ">> ",
-                                PlayState::Paused => "|| ",
-                                PlayState::Stopped => "[] ",
-                            }
-                        } else {
-                            "   "
-                        };
-                        let selector = if is_selected { ">" } else { " " };
-                        let star = " ";
-
-                        // 动态计算固定部分宽度，使用最大值确保播放状态切换时歌曲名空间不变
-                        let fixed_width = 1 // selector 宽度 (>)
-                            + 1 // star 宽度 (固定为空格)
-                            + 3 // prefix 宽度 (统一为3)
-                            + term_display_width(duration_str.as_str())
-                            + term_display_width(progress_suffix.as_str())
-                            + 4; // 4个分隔空格
-                        let max_width = left_width.saturating_sub(fixed_width as u16) as usize;
-                        let full_display = display_name.clone();
-                        let name = Self::truncate_with_ellipsis(&full_display, max_width);
-
-                        let row_pos = (i - self.online_scroll_offset + 6) as u16;
-                        if is_selected {
-                            queue!(
-                                stdout,
-                                cursor::MoveTo(0, row_pos),
-                                style::SetBackgroundColor(style::Color::DarkBlue),
-                                style::Print(" ".repeat(left_width as usize)),
-                                cursor::MoveTo(0, row_pos),
-                            )?;
-                        } else {
-                            queue!(
-                                stdout,
-                                cursor::MoveTo(0, row_pos),
-                                terminal::Clear(ClearType::UntilNewLine),
-                            )?;
-                        }
-
-                        if is_playing {
-                            queue!(stdout, style::SetForegroundColor(self.theme_colors.song_playing))?;
-                        } else if is_downloading {
-                            queue!(stdout, style::SetForegroundColor(self.theme_colors.section_title))?;
-                        } else {
-                            queue!(stdout, style::SetForegroundColor(self.theme_colors.song_normal))?;
-                        }
-
-                        // 确保显示行不超过左面板宽度
-                        let full_line = format!("{} {} {} {} {}{}", selector, star, prefix, name, duration_str, progress_suffix);
-                        let display_line = truncate_to_width(&full_line, left_width as usize);
-                        queue!(
-                            stdout,
-                            style::Print(&display_line),
-                            style::ResetColor,
-                        )?;
-                    }
-
-                    // 如果没有搜索结果
-                    if total == 0 {
-                        let hint: String = if self.search_query.is_empty() {
-                            if self.juhe_search_mode {
-                                self.t().juhe_enter_hint.to_string()
-                            } else {
-                                self.t().online_enter_hint.to_string()
-                            }
-                        } else if self.online_search_page > 1 {
-                            self.t().fmt_page_no_result.replace("{}", &self.online_search_page.to_string())
-                        } else {
-                            self.t().online_no_result.to_string()
-                        };
-                        queue!(
-                            stdout,
-                            cursor::MoveTo(1, 7),
-                            style::SetForegroundColor(self.theme_colors.info_text),
-                            style::Print(&hint),
-                            style::ResetColor,
-                        )?;
-                    } else if total > 0 {
-                        // 在结果列表底部显示页码信息
-                        let page_info = self.t().fmt_page_info.replace("{}", &self.online_search_page.to_string());
-                        let info_row = std::cmp::min(total, visible_count);
-                        if info_row < visible_count {
-                            queue!(
-                                stdout,
-                                cursor::MoveTo(1, (info_row + 6) as u16),
-                                style::SetForegroundColor(self.theme_colors.info_text),
-                                style::Print(&page_info),
-                                style::ResetColor,
-                            )?;
-                        }
-                    }
-
-                    // 清除下方残留行
-                    let used_rows = std::cmp::min(total, visible_count);
-                    Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
-                }
-            } else {
-                // 本地搜索结果列表
-                let total = self.search_results.len();
-                Self::adjust_scroll_offset(self.search_selected_index, &mut self.search_scroll_offset, visible_count);
-
-                // 显示搜索结果列表
-                for i in self.search_scroll_offset..std::cmp::min(self.search_scroll_offset + visible_count, total) {
-                    let orig_idx = self.search_results[i];
-                    if let Some(file) = playlist.files.get(orig_idx) {
-                        let is_selected = i == self.search_selected_index;
-                        let is_playing = current_file
-                            .as_ref()
-                            .map(|f| f.path == file.path)
-                            .unwrap_or(false);
-                        let is_favorite = self.favorites.contains(&file.path.to_string_lossy().to_string());
-
-                        let prefix = if is_playing {
-                            match play_state {
-                                PlayState::Playing => ">> ",
-                                PlayState::Paused => "|| ",
-                                PlayState::Stopped => "[] ",
-                            }
-                        } else {
-                            "   "
-                        };
-
-                        let selector = if is_selected { ">" } else { " " };
-                        let star = if is_favorite { "*" } else { " " };
-
-                        let duration_str = file.format_duration();
-                        // 动态计算固定部分宽度，使用最大值确保播放状态切换时歌曲名空间不变
-                        let fixed_width = 1 // selector 宽度 (>)
-                            + 1 // star 宽度 (*)
-                            + 3 // prefix 宽度 (统一为3)
-                            + term_display_width(duration_str.as_str())
-                            + 4; // 4个分隔空格
-                        let max_width = left_width.saturating_sub(fixed_width as u16) as usize;
-                        let safe_file_name = Self::sanitize_single_line_text(&file.name);
-                        let name = Self::truncate_with_ellipsis(&safe_file_name, max_width);
-
-                        let row_pos = (i - self.search_scroll_offset + 6) as u16;
-                        if is_selected {
-                            queue!(
-                                stdout,
-                                cursor::MoveTo(0, row_pos),
-                                style::SetBackgroundColor(style::Color::DarkBlue),
-                                style::Print(" ".repeat(left_width as usize)),
-                                cursor::MoveTo(0, row_pos),
-                            )?;
-                        } else {
-                            queue!(
-                                stdout,
-                                cursor::MoveTo(0, row_pos),
-                                terminal::Clear(ClearType::UntilNewLine),
-                            )?;
-                        }
-                        if is_playing {
-                            queue!(stdout, style::SetForegroundColor(self.theme_colors.song_playing))?;
-                        } else if is_favorite {
-                            queue!(stdout, style::SetForegroundColor(self.theme_colors.section_title))?;
-                        } else {
-                            queue!(stdout, style::SetForegroundColor(self.theme_colors.song_normal))?;
-                        }
-
-                        // 确保显示行不超过左面板宽度
-                        let full_line = format!("{} {} {} {} {}", selector, star, prefix, name, duration_str);
-                        let display_line = truncate_to_width(&full_line, left_width as usize);
-                        queue!(
-                            stdout,
-                            style::Print(&display_line),
-                            style::ResetColor,
-                        )?;
-                    }
-                }
-
-                // 如果没有搜索结果
-                if total == 0 {
-                    let hint = if self.search_query.is_empty() {
-                        self.t().local_search_empty_hint
-                    } else {
-                        self.t().local_search_no_result_hint
-                    };
-                    queue!(
-                        stdout,
-                        cursor::MoveTo(1, 7),
-                        style::SetForegroundColor(self.theme_colors.info_text),
-                        style::Print(hint),
-                        style::ResetColor,
-                    )?;
-                }
-
-                // 清除搜索结果列表下方的残留行
-                let used_rows = std::cmp::min(total, visible_count);
-                Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
-            }
-        } else {
-            // 正常模式：显示播放列表
-            let total = playlist.len();
-
-            // 保存播放列表布局信息（用于鼠标交互）
-            self.playlist_layout = Some(PlaylistLayout {
-                start_row: 6,
-                visible_count,
-                left_width,
-            });
-
-            // 调整滚动偏移
-            Self::adjust_scroll_offset(self.selected_index, &mut self.scroll_offset, visible_count);
-
-            // 显示范围信息（如果有滚动）
-            let range_info = if total > visible_count {
-                self.t().fmt_current_range
-                    .replacen("{}", &(self.scroll_offset + 1).to_string(), 1)
-                    .replacen("{}", &std::cmp::min(self.scroll_offset + visible_count, total).to_string(), 1)
-            } else {
-                String::new()
-            };
-
-            let title_text = self.t().fmt_playlist_title
-                .replacen("{}", &range_info, 1)
-                .replacen("{}", &playlist.len().to_string(), 1);
-            let title_width = unicode_width::UnicodeWidthStr::width(title_text.as_str());
-            let title_padding = (left_width as usize).saturating_sub(title_width);
-            queue!(
-                stdout,
-                cursor::MoveTo(0, 4),
-                style::SetForegroundColor(self.theme_colors.section_title),
-                style::Print(&title_text),
-                style::Print(" ".repeat(title_padding)),
-                style::ResetColor,
-            )?;
-
-            // 绘制分割线（左侧）
-            queue!(
-                stdout,
-                cursor::MoveTo(0, 5),
-                style::SetForegroundColor(self.theme_colors.section_title),
-                style::Print("─".repeat(left_width as usize)),
-                style::ResetColor,
-            )?;
-
-            // 显示歌曲列表（左侧）
-            for i in self.scroll_offset..std::cmp::min(self.scroll_offset + visible_count, total) {
-                if let Some(file) = playlist.files.get(i) {
-                    let is_selected = i == self.selected_index;
-                    let is_playing = current_file
-                        .as_ref()
-                        .map(|f| f.path == file.path)
-                        .unwrap_or(false);
-                    let is_favorite = self.favorites.contains(&file.path.to_string_lossy().to_string());
-
-                    // 构建显示字符串
-                    let prefix = if is_playing {
-                        match play_state {
-                            PlayState::Playing => ">> ",
-                            PlayState::Paused => "|| ",
-                            PlayState::Stopped => "[] ",
-                        }
-                    } else {
-                        "   "
-                    };
-
-                    let selector = if is_selected { ">" } else { " " };
-                    let star = if is_favorite { "*" } else { " " };
-
-                    // 调整宽度为左侧栏宽度减去边距
-                    let duration_str = file.format_duration();
-                    // 动态计算固定部分宽度，使用最大值确保播放状态切换时歌曲名空间不变
-                    let fixed_width = 1 // selector 宽度 (>)
-                        + 1 // star 宽度 (*)
-                        + 3 // prefix 宽度 (统一为3)
-                        + term_display_width(duration_str.as_str())
-                        + 4; // 4个分隔空格
-                    let max_width = left_width.saturating_sub(fixed_width as u16) as usize;
-                    let safe_file_name = Self::sanitize_single_line_text(&file.name);
-                    let name = Self::truncate_with_ellipsis(&safe_file_name, max_width);
-
-                    let row_pos = (i - self.scroll_offset + 6) as u16;
-                    if is_selected {
-                        // 用空格填充左面板宽度，限制蓝色背景不超出左面板区域
-                        queue!(
-                            stdout,
-                            cursor::MoveTo(0, row_pos),
-                            style::SetBackgroundColor(style::Color::DarkBlue),
-                            style::Print(" ".repeat(left_width as usize)),
-                            cursor::MoveTo(0, row_pos),
-                        )?;
-                    } else {
-                        queue!(
-                            stdout,
-                            cursor::MoveTo(0, row_pos),
-                            terminal::Clear(ClearType::UntilNewLine),
-                        )?;
-                    }
-                    if is_playing {
-                        queue!(stdout, style::SetForegroundColor(self.theme_colors.song_playing))?;
-                    } else if is_favorite {
-                        queue!(stdout, style::SetForegroundColor(self.theme_colors.section_title))?;
-                    } else {
-                        queue!(stdout, style::SetForegroundColor(self.theme_colors.song_normal))?;
-                    }
-
-                    // 确保显示行不超过左面板宽度
-                    let full_line = format!("{} {} {} {} {}", selector, star, prefix, name, duration_str);
-                    let display_line = truncate_to_width(&full_line, left_width as usize);
-                    queue!(
-                        stdout,
-                        style::Print(&display_line),
-                        style::ResetColor,
-                    )?;
-                }
-            }
-
-            // 清除歌曲列表下方的残留行（从搜索模式切回时可能有残留）
-            let used_rows = std::cmp::min(total.saturating_sub(self.scroll_offset), visible_count);
-            Self::clear_remaining_rows(stdout, 6, used_rows, visible_count)?;
-
-            // 播放列表为空时显示提示（必须在 clear_remaining_rows 之后，否则会被清除）
-            // 与歌词区域提示保持一致的样式：DarkGrey 颜色，第8行位置
-            if total == 0 {
-                queue! {
-                    stdout,
-                    cursor::MoveTo(0, 8),
-                    style::SetForegroundColor(style::Color::DarkGrey),
-                    style::Print(self.t().playlist_no_dir_hint),
-                    style::ResetColor,
-                }?;
-            }
+        if !needs_update {
+            return;
         }
-
-        // 绘制中间竖线分隔符
-        for row in 4..self.terminal_height.saturating_sub(6) {
-            queue!(
-                stdout,
-                cursor::MoveTo(left_width, row),
-                style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print("│"),
-                style::ResetColor,
-            )?;
-        }
-
-        // 绘制右侧标题（歌词/评论/API 配置输入/GitHub Token 输入）
-        let lyrics_title = if self.api_key_input_mode {
-            let prompt = match self.api_input_step {
-                0 => self.t().input_api_url
-                .to_string(),
-                1 => self.t().input_api_key
-                .to_string(),
-                2 => self.t().input_model_name
-                .to_string(),
-                _ => String::new(),
-            };
-            let prompt_width = unicode_width::UnicodeWidthStr::width(prompt.as_str());
-            let value_max_width = (right_width.saturating_sub(1) as usize).saturating_sub(prompt_width);
-            let visible_value = tail_to_width(self.api_key_input_value.as_str(), value_max_width);
-            format!("{}{}", prompt, visible_value)
-        } else if self.github_token_input_mode {
-            let prompt = self.t().input_github_token.to_string();
-            let prompt_width = unicode_width::UnicodeWidthStr::width(prompt.as_str());
-            let value_max_width = (right_width.saturating_sub(1) as usize).saturating_sub(prompt_width);
-            let visible_value = tail_to_width(self.github_token_input_value.as_str(), value_max_width);
-            format!("{}{}", prompt, visible_value)
-        } else if self.comments_mode {
-            self.t().fmt_comments_title
-                .replacen("{}", &self.comments_total.to_string(), 1)
-                .replacen("{}", &self.comments_page.to_string(), 1)
-        } else if self.song_info_mode {
-            let label = self.t().song_info_label;
-            if let Some(ref file) = current_file {
-                let clean_name = file.name.trim_end_matches(".mp3").trim_end_matches(".flac").trim_end_matches(".wav").trim_end_matches(".ogg").trim_end_matches(".m4a").trim_end_matches(".aac").trim_end_matches(".wma");
-                format!("{} {}", label, clean_name)
-            } else {
-                label.to_string()
+        if let Some(file) = current_file {
+            let lrc_path = file.path.with_extension("lrc");
+            if let Some(lyrics) = Lyrics::from_local_lrc(&file.path) {
+                self.current_lyrics = Some(lyrics);
+            } else if lrc_path.exists() {
+                self.current_lyrics = None;
+            } else if !self.juhe_lyrics_loading && !self.lyrics_downloading {
+                let file_stem = file.path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                let (artist, title) = crate::lyrics::Lyrics::parse_artist_title(file_stem)
+                    .unwrap_or_else(|| (String::new(), file_stem.to_string()));
+                self.juhe_lyrics_loading = true;
+                self.juhe_lyrics_rx = Some(crate::search::search_and_get_juhe_lyrics_background(
+                    artist,
+                    title,
+                    file.path.clone(),
+                ));
+                self.current_lyrics = None;
             }
-        } else if self.help_mode {
-            self.t().help_label.to_string()
-        } else if let Some(ref file) = current_file {
-            format!(
-                "{}{}",
-                self.t().lyrics_label_with_song,
-                Self::sanitize_single_line_text(&file.name)
-            )
-        } else {
-            self.t().lyrics_label_no_song.to_string()
-        };
-        
-        // 截断标题以适应右侧宽度
-        let title = truncate_to_width(&lyrics_title, right_width.saturating_sub(1) as usize);
-
-        // 检查是否需要重绘歌词标题（标题改变、窗口大小改变、或模式切换时强制重绘）
-        let window_size_changed = self.cached_terminal_width != self.terminal_width;
-        let title_changed = self.cached_lyrics_title.as_ref() != Some(&title);
-        let current_mode_state = (
-            self.search_mode,
-            self.favorites_mode,
-            self.dir_history_mode,
-            self.online_search_mode,
-            self.comments_mode,
-            self.song_info_mode,
-            self.api_key_input_mode,
-            self.help_mode,
-        );
-        let mode_changed = self.prev_mode_state != current_mode_state;
-        self.prev_mode_state = current_mode_state;
-
-        if title_changed || window_size_changed || mode_changed {
-            self.cached_lyrics_title = Some(title.clone());
-            if window_size_changed {
-                self.cached_terminal_width = self.terminal_width;
-            }
-            
-            queue!(
-                stdout,
-                cursor::MoveTo(left_width + 1, 4),
-                terminal::Clear(ClearType::UntilNewLine),
-                style::SetForegroundColor(self.theme_colors.section_title),
-                style::Print(&title),
-                style::ResetColor,
-            )?;
+            self.lyrics_file_path = Some(lrc_path);
         }
-
-        // 绘制右侧分割线
-        queue!(
-            stdout,
-            cursor::MoveTo(left_width + 1, 5),
-            style::SetForegroundColor(self.theme_colors.section_title),
-            style::Print("─".repeat(right_width as usize)),
-            style::ResetColor,
-        )?;
-
-        // 显示右侧内容（歌词/评论）
-        drop(playlist); // 释放 playlist 锁
-        if self.comments_mode {
-            self.draw_comments(stdout, left_width + 1, right_width, visible_count)?;
-        } else if self.song_info_mode {
-            self.draw_song_info(stdout, left_width + 1, right_width, visible_count)?;
-        } else if self.help_mode {
-            self.draw_help(stdout, left_width + 1, right_width, visible_count)?;
-        } else {
-            self.draw_lyrics(stdout, left_width + 1, right_width, visible_count)?;
-        }
-
-        Ok(())
     }
 
-    /// 绘制帮助信息（右侧）
-    fn draw_help<W: Write>(
-        &mut self,
-        stdout: &mut W,
-        start_x: u16,
-        width: u16,
-        visible_count: usize,
-    ) -> io::Result<()> {
-        // 帮助视图不使用歌词拖动布局
-        self.lyrics_area_layout = None;
+    fn render_list(&self, frame: &mut Frame<'_>, area: Rect, title: &str, items: Vec<ListItem>) {
+        render::render_list(frame, area, title, items, self.theme_colors);
+    }
 
-        let help_lines = self.get_help_lines();
-        let total_lines = help_lines.len();
-        let max_offset = total_lines.saturating_sub(visible_count);
-        if self.help_scroll_offset > max_offset {
-            self.help_scroll_offset = max_offset;
-        }
+    fn render_paragraph(
+        &self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        title: &str,
+        lines: Vec<Line<'_>>,
+    ) {
+        render::render_paragraph(frame, area, title, lines, self.theme_colors);
+    }
 
-        for i in 0..visible_count {
-            let line_idx = i + self.help_scroll_offset;
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, (i + 6) as u16),
-                terminal::Clear(ClearType::UntilNewLine),
-            )?;
+    fn inner_area(area: Rect) -> Rect {
+        render::inner_area(area)
+    }
 
-            if line_idx < help_lines.len() {
-                let line = &help_lines[line_idx];
-                if line.starts_with('§') {
-                    // 标题行（§ 前缀标记），去掉前缀字符
-                    let display_text = &line['§'.len_utf8()..];
-                    queue!(
-                        stdout,
-                        style::SetForegroundColor(self.theme_colors.section_title),
-                        style::Print(truncate_to_width(display_text, width as usize)),
-                        style::ResetColor,
-                    )?;
-                } else if line.starts_with('→') {
-                    // 快捷键行
-                    queue!(
-                        stdout,
-                        style::SetForegroundColor(self.theme_colors.song_normal),
-                        style::Print(truncate_to_width(line, width as usize)),
-                        style::ResetColor,
-                    )?;
-                } else {
-                    // 普通文本行（URL 使用 OSC 8 超链接，参考 Discussion 状态行）
-                    if let Some(url_start) = line.find("http://").or_else(|| line.find("https://")) {
-                        let prefix = &line[..url_start];
-                        let url = line[url_start..].trim_end();
+    fn selection_style(&self, selected: bool) -> TuiStyle {
+        render::selection_style(selected, self.theme_colors)
+    }
 
-                        let max_width = width as usize;
-                        let prefix_text = truncate_to_width(prefix, max_width);
-                        let prefix_width = unicode_width::UnicodeWidthStr::width(prefix_text.as_str());
-
-                        queue!(
-                            stdout,
-                            style::SetForegroundColor(self.theme_colors.song_normal),
-                            style::Print(&prefix_text),
-                        )?;
-
-                        if prefix_width < max_width && !url.is_empty() {
-                            let remain_width = max_width - prefix_width;
-                            let url_text = truncate_to_width(url, remain_width);
-                            let hyperlink = format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", url, url_text);
-                            queue!(
-                                stdout,
-                                style::Print(&hyperlink),
-                            )?;
-                        }
-
-                        queue!(stdout, style::ResetColor)?;
-                    } else {
-                        queue!(
-                            stdout,
-                            style::SetForegroundColor(self.theme_colors.song_normal),
-                            style::Print(truncate_to_width(line, width as usize)),
-                            style::ResetColor,
-                        )?;
-                    }
-                }
-            }
-        }
-
-        Ok(())
+    fn tui_style(&self, color: style::Color) -> TuiStyle {
+        theme::tui_style(color)
     }
 
     /// 获取帮助信息文本行
     fn get_help_lines(&self) -> Vec<String> {
-        self.t().help_lines.iter().map(|s| (*s).to_string()).collect()
+        self.t()
+            .help_lines
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect()
     }
-    /// 绘制歌词（右侧）
-    fn draw_lyrics<W: Write>(
-        &mut self,
-        stdout: &mut W,
-        start_x: u16,
-        width: u16,
-        visible_count: usize,
-    ) -> io::Result<()> {
-        // 提前获取需要的信息后立即释放锁
-        let (current_file, current_time) = {
-            let audio_player = self.audio_player.lock().unwrap();
-            (audio_player.get_current_file(), audio_player.get_progress().0)
-        };
-
-        // 每帧重建歌词区域布局（用于鼠标拖动跳转）
-        self.lyrics_area_layout = None;
-
-        // 检查常规歌词后台下载结果（作为聚合失败后的兜底）
-        self.check_lyrics_download_result();
-
-        // 检查是否需要更新歌词
-        let needs_update = match (&current_file, &self.lyrics_file_path) {
-            (Some(file), Some(cached_path)) => {
-                let lrc_path = file.path.with_extension("lrc");
-                cached_path != &lrc_path
-            }
-            (Some(_), None) => true,
-            (None, _) => false,
-        };
-
-        // 更新歌词（如果需要）
-        if needs_update {
-            if let Some(ref file) = current_file {
-                let lrc_path = file.path.with_extension("lrc");
-
-                // 先尝试从本地加载（不阻塞）
-                if let Some(lyrics) = Lyrics::from_local_lrc(&file.path) {
-                    self.current_lyrics = Some(lyrics);
-                } else if lrc_path.exists() {
-                    // 本地已存在歌词文件（即使解析失败）也不再触发网络下载
-                    self.current_lyrics = None;
-                } else if !self.juhe_lyrics_loading && !self.lyrics_downloading {
-                    // 本地不存在歌词文件：先走聚合搜索歌词，常规下载作为兜底
-                    let file_stem = file.path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("");
-                    let (artist, title) = crate::lyrics::Lyrics::parse_artist_title(file_stem)
-                        .unwrap_or_else(|| ("".to_string(), file_stem.to_string()));
-                    self.juhe_lyrics_loading = true;
-                    self.juhe_lyrics_rx = Some(
-                        crate::search::search_and_get_juhe_lyrics_background(
-                            artist, title, file.path.clone()
-                        )
-                    );
-                    // 暂时清空歌词，显示下载提示
-                    self.current_lyrics = None;
-                }
-                self.lyrics_file_path = Some(lrc_path);
-            }
-        }
-
-        // 清除歌词区域所有行（避免切换歌曲时残留旧歌词）
-        for i in 0..visible_count {
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, (i + 6) as u16),
-                terminal::Clear(ClearType::UntilNewLine),
-            )?;
-        }
-
-        // 绘制歌词
-        if let Some(ref lyrics) = self.current_lyrics {
-            if !lyrics.is_empty() {
-                let (_, visible_lines, highlight_idx) =
-                    lyrics.get_visible_lines(current_time, visible_count);
-
-                self.lyrics_area_layout = Some(LyricsAreaLayout {
-                    start_row: 6,
-                    start_col: start_x as usize,
-                    width: width as usize,
-                    line_times: visible_lines.iter().map(|line| line.time).collect(),
-                });
-
-                for (i, line) in visible_lines.iter().enumerate() {
-                    let is_highlight = highlight_idx.map(|h| h == i).unwrap_or(false);
-
-                    // 截断过长的歌词
-                    let safe_line = Self::sanitize_single_line_text(&line.text);
-                    let text = truncate_to_width(&safe_line, width.saturating_sub(2) as usize);
-
-                    queue!(
-                        stdout,
-                        cursor::MoveTo(start_x, (i + 6) as u16),
-                        terminal::Clear(ClearType::UntilNewLine),
-                    )?;
-
-                    if is_highlight {
-                        queue!(
-                            stdout,
-                            style::SetForegroundColor(self.theme_colors.lyric_highlight),
-                            style::Print(format!("> {}", text)),
-                            style::ResetColor,
-                        )?;
-                    } else {
-                        queue!(
-                            stdout,
-                            style::SetForegroundColor(self.theme_colors.song_normal),
-                            style::Print(format!("  {}", text)),
-                            style::ResetColor,
-                        )?;
-                    }
-                }
-            } else {
-                // 没有歌词内容
-                queue!(
-                    stdout,
-                    cursor::MoveTo(start_x, 8),
-                    style::SetForegroundColor(style::Color::DarkGrey),
-                    style::Print(self.t().instrumental_no_lyrics),
-                    style::ResetColor,
-                )?;
-            }
-        } else if self.lyrics_downloading || self.juhe_lyrics_loading {
-            // 正在后台下载（常规下载或聚合搜索下载）
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, 8),
-                terminal::Clear(ClearType::UntilNewLine),
-                style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.t().downloading_lyrics),
-                style::ResetColor,
-            )?;
-        } else if current_file.is_some() {
-            // 没有找到歌词文件
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, 8),
-                style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.t().no_lyrics_found),
-                style::ResetColor,
-            )?;
-        } else {
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, 8),
-                style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.t().select_song_for_lyrics),
-                style::ResetColor,
-            )?;
-        }
-
-        Ok(())
-    }
-
-    /// 绘制评论（右侧）
-    fn draw_comments<W: Write>(
-        &mut self,
-        stdout: &mut W,
-        start_x: u16,
-        width: u16,
-        visible_count: usize,
-    ) -> io::Result<()> {
-        // 评论视图不使用歌词拖动布局
-        self.lyrics_area_layout = None;
-
-        let current_file = {
-            let audio_player = self.audio_player.lock().unwrap();
-            audio_player.get_current_file()
-        };
-
-        self.ensure_comments_up_to_date(current_file.as_ref());
-
-        self.comments_row_map = vec![None; visible_count];
-
-        for i in 0..visible_count {
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, (i + 6) as u16),
-                terminal::Clear(ClearType::UntilNewLine),
-            )?;
-        }
-
-        // 仅在无当前歌曲且无存储评论时显示"请选择歌曲播放"
-        // 评论模式下即使歌曲已停止/切换，仍可查看之前加载的评论
-        if current_file.is_none() && self.comments_song_name.is_empty() {
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, 8),
-                style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.t().select_song_to_play),
-                style::ResetColor,
-            )?;
-            return Ok(());
-        }
-
-        if self.current_comments.is_empty() {
-            if self.comments_loading {
-                return Ok(());
-            }
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, 8),
-                style::SetForegroundColor(style::Color::DarkGrey),
-                style::Print(self.t().no_comments),
-                style::ResetColor,
-            )?;
-            return Ok(());
-        }
-
-        if self.comments_selected_index >= self.current_comments.len() {
-            self.comments_selected_index = self.current_comments.len().saturating_sub(1);
-        }
-
-        // 详情模式：展示选中评论的完整内容（含回复）
-        if self.comments_detail_mode {
-            let selected = &self.current_comments[self.comments_selected_index];
-            let mut lines: Vec<String> = Vec::new();
-
-            // 语义顺序：有 beReplied 时，先显示被回复的原评论，再显示当前这条回复
-            if let Some(reply) = &selected.reply {
-                lines.push(self.t().fmt_comment_name.replace("{}", &reply.nickname));
-                let origin_comment_line = reply.content.to_string();
-                lines.extend(wrap_text_to_width(
-                    &origin_comment_line,
-                    width.saturating_sub(1) as usize,
-                ));
-                // 时间统一显示在"评论内容"下面，不显示在"回复评论"下面
-                if let Some(time_text) = reply.time_text.as_ref().or(selected.time_text.as_ref()) {
-                    lines.push(time_text.clone());
-                }
-
-                lines.push(String::new());
-                lines.push(self.t().fmt_comment_name.replace("{}", &selected.nickname));
-                let reply_comment_line = selected.content.to_string();
-                lines.extend(wrap_text_to_width(
-                    &reply_comment_line,
-                    width.saturating_sub(1) as usize,
-                ));
-            } else {
-                // 非回复场景：仅显示当前评论
-                lines.push(self.t().fmt_comment_name.replace("{}", &selected.nickname));
-                let content_line = selected.content.to_string();
-                lines.extend(wrap_text_to_width(
-                    &content_line,
-                    width.saturating_sub(1) as usize,
-                ));
-                if let Some(time_text) = &selected.time_text {
-                    lines.push(time_text.to_string());
-                }
-            }
-
-            for (row, line) in lines.iter().take(visible_count).enumerate() {
-                queue!(
-                    stdout,
-                    cursor::MoveTo(start_x, (row + 6) as u16),
-                    terminal::Clear(ClearType::UntilNewLine),
-                    style::SetForegroundColor(self.theme_colors.song_normal),
-                    style::Print(truncate_to_width(line, width.saturating_sub(1) as usize)),
-                    style::ResetColor,
-                )?;
-            }
-
-            return Ok(());
-        }
-
-        // 列表模式：仅显示摘要，按 Enter 查看全文
-        Self::adjust_scroll_offset(
-            self.comments_selected_index,
-            &mut self.comments_scroll_offset,
-            visible_count.max(1),
-        );
-
-        for row in 0..visible_count {
-            let comment_idx = self.comments_scroll_offset + row;
-            if comment_idx >= self.current_comments.len() {
-                break;
-            }
-
-            self.comments_row_map[row] = Some(comment_idx);
-            let comment = &self.current_comments[comment_idx];
-            let is_selected = comment_idx == self.comments_selected_index;
-
-            // 列表仅展示歌曲评论本体：若当前项是"回复评论"，则显示其被回复的原评论
-            let (list_nickname, list_content) = if let Some(reply) = &comment.reply {
-                (reply.nickname.as_str(), reply.content.as_str())
-            } else {
-                (comment.nickname.as_str(), comment.content.as_str())
-            };
-
-            let prefix = if is_selected { "> " } else { "  " };
-            let nickname_part = self.t().fmt_comment_name.replace("{}", list_nickname);
-            let full_text = format!("{}{}{}", prefix, nickname_part, list_content);
-            let display_text = Self::truncate_with_ellipsis(&full_text, width.saturating_sub(1) as usize);
-
-            if is_selected {
-                queue!(stdout, style::SetBackgroundColor(style::Color::DarkBlue))?;
-            }
-
-            queue!(
-                stdout,
-                cursor::MoveTo(start_x, (row + 6) as u16),
-                terminal::Clear(ClearType::UntilNewLine),
-            )?;
-
-            queue!(
-                stdout,
-                style::SetForegroundColor(self.theme_colors.song_normal),
-                style::Print(display_text),
-                style::ResetColor,
-            )?;
-        }
-
-        Ok(())
-    }
-
-    /// 绘制控制栏（快捷键提示 + 播放状态信息）
-    fn draw_controls<W: Write>(&mut self, stdout: &mut W) -> io::Result<()> {
-        let (state, volume, mode) = {
-            let audio_player = self.audio_player.lock().unwrap();
-            (audio_player.get_state(), audio_player.get_volume(), audio_player.get_play_mode())
-        };
-
-        // 控制栏分隔线位置：倒数第6行
-        let control_line = self.terminal_height.saturating_sub(6);
-
-        queue!(
-            stdout,
-            cursor::MoveTo(0, control_line),
-            terminal::Clear(ClearType::UntilNewLine),
-            style::SetForegroundColor(self.theme_colors.section_title),
-            style::Print("─".repeat(self.terminal_width as usize)),
-            style::ResetColor,
-        )?;
-
-        // 播放状态
-        let state_str = self.play_state_text(state).to_string();
-        let vol_bar: String = "█".repeat(volume as usize / 5);
-        let vol_empty: String = "░".repeat(20 - volume as usize / 5);
-
-        let state_label = self.t().play_status_label;
-        let volume_label = self.t().volume_label;
-        let mode_label = self.t().play_mode_label;
-
-        // 快捷键提示行和播放状态信息行
-        let tip_line = self.terminal_height.saturating_sub(5);
-        let info_line = self.terminal_height.saturating_sub(4);
-        let term_width = self.terminal_width as usize;
-
-        if self.terminal_height > 4 {
-            // 获取快捷键提示文本
-            let help_text = self.get_help_tip_text();
-            let help_width = unicode_width::UnicodeWidthStr::width(help_text.as_str());
-
-            if help_width <= term_width {
-                // 快捷键文本不超长，正常显示
-                queue!(
-                    stdout,
-                    cursor::MoveTo(0, tip_line),
-                    terminal::Clear(ClearType::UntilNewLine),
-                    style::SetForegroundColor(style::Color::DarkGrey),
-                    style::Print(&help_text),
-                    style::ResetColor,
-                )?;
-
-                // 播放状态信息（独立行）
-                let vol_prefix = format!("{}: {} | {}: [", state_label, state_str, volume_label);
-                let vol_prefix_width = unicode_width::UnicodeWidthStr::width(vol_prefix.as_str());
-                self.volume_bar_layout = Some(VolumeBarLayout {
-                    row: info_line,
-                    bar_start_col: vol_prefix_width,
-                    bar_width: 20,
-                });
-
-                queue!(
-                    stdout,
-                    cursor::MoveTo(0, info_line),
-                    terminal::Clear(ClearType::UntilNewLine),
-                    style::SetForegroundColor(self.theme_colors.info_text),
-                    style::Print(format!("{}: {} | ", state_label, state_str)),
-                    style::Print(format!(
-                        "{}: [{}{}] {:3}% | ",
-                        volume_label, vol_bar, vol_empty, volume
-                    )),
-                    style::Print(format!("{}: {}", mode_label, self.play_mode_text(mode))),
-                    style::ResetColor,
-                )?;
-            } else {
-                // 快捷键文本超长，需要换行显示
-                let (first_part, overflow) = Self::split_at_display_width(&help_text, term_width);
-
-                // 第一行：快捷键文本
-                queue!(
-                    stdout,
-                    cursor::MoveTo(0, tip_line),
-                    terminal::Clear(ClearType::UntilNewLine),
-                    style::SetForegroundColor(style::Color::DarkGrey),
-                    style::Print(first_part),
-                    style::ResetColor,
-                )?;
-
-                // 第二行：快捷键溢出部分（DarkGrey）+ 空格分隔 + 播放状态信息（info_text）
-                let separator = "  ";
-                let play_info = format!("{}: {} | {}: [{}{}] {:3}% | {}: {}",
-                    state_label, state_str, volume_label, vol_bar, vol_empty, volume, mode_label, self.play_mode_text(mode));
-                let play_info_width = unicode_width::UnicodeWidthStr::width(play_info.as_str());
-                let separator_width = unicode_width::UnicodeWidthStr::width(separator);
-
-                // 计算溢出文本可占的最大宽度（为播放状态信息留出空间）
-                let max_overflow_width = term_width.saturating_sub(play_info_width + separator_width);
-                let (overflow_fit, _) = if unicode_width::UnicodeWidthStr::width(overflow) > max_overflow_width {
-                    Self::split_at_display_width(overflow, max_overflow_width)
-                } else {
-                    (overflow, "")
-                };
-
-                let overflow_fit_width = unicode_width::UnicodeWidthStr::width(overflow_fit);
-
-                // 计算音量条位置（需要考虑溢出文本和分隔符的偏移）
-                let vol_prefix = format!("{}: {} | {}: [", state_label, state_str, volume_label);
-                let vol_prefix_width = overflow_fit_width + separator_width + unicode_width::UnicodeWidthStr::width(vol_prefix.as_str());
-                self.volume_bar_layout = Some(VolumeBarLayout {
-                    row: info_line,
-                    bar_start_col: vol_prefix_width,
-                    bar_width: 20,
-                });
-
-                queue!(
-                    stdout,
-                    cursor::MoveTo(0, info_line),
-                    terminal::Clear(ClearType::UntilNewLine),
-                    // 溢出的快捷键文本（跟前面快捷键同色 DarkGrey）
-                    style::SetForegroundColor(style::Color::DarkGrey),
-                    style::Print(overflow_fit),
-                    // 分隔空格
-                    style::Print(separator),
-                    // 播放状态信息（info_text 颜色）
-                    style::SetForegroundColor(self.theme_colors.info_text),
-                    style::Print(&play_info),
-                    style::ResetColor,
-                )?;
-            }
-        } else {
-            // 终端高度不够，只显示播放状态信息
-            let vol_prefix = format!("{}: {} | {}: [", state_label, state_str, volume_label);
-            let vol_prefix_width = unicode_width::UnicodeWidthStr::width(vol_prefix.as_str());
-            self.volume_bar_layout = Some(VolumeBarLayout {
-                row: info_line,
-                bar_start_col: vol_prefix_width,
-                bar_width: 20,
-            });
-
-            queue!(
-                stdout,
-                cursor::MoveTo(0, info_line),
-                terminal::Clear(ClearType::UntilNewLine),
-                style::SetForegroundColor(self.theme_colors.info_text),
-                style::Print(format!("{}: {} | ", state_label, state_str)),
-                style::Print(format!(
-                    "{}: [{}{}] {:3}% | ",
-                    volume_label, vol_bar, vol_empty, volume
-                )),
-                style::Print(format!("{}: {}", mode_label, self.play_mode_text(mode))),
-                style::ResetColor,
-            )?;
-        }
-
-        Ok(())
-    }
-
-    /// 绘制状态栏
-    fn draw_status<W: Write>(&mut self, stdout: &mut W) -> io::Result<()> {
-        // 克隆消息字符串
-        let message = self.status_message.clone();
-
-        // 一次性获取所有需要的音频信息，避免多次加锁
-        let (play_state, realtime_volume, progress_info) = {
-            let audio_player = self.audio_player.lock().unwrap();
-            let state = audio_player.get_state();
-            let volume = audio_player.get_realtime_volume();
-            let progress = if state != PlayState::Stopped {
-                let (current, total) = audio_player.get_progress();
-                let time_str = audio_player.format_progress();
-                let progress_percent = if let Some(total_dur) = total {
-                    if total_dur.as_secs() > 0 {
-                        (current.as_secs_f64() / total_dur.as_secs_f64()).min(1.0)
-                    } else {
-                        0.0
-                    }
-                } else {
-                    0.0
-                };
-                Some((time_str, progress_percent))
-            } else {
-                None
-            };
-            (state, volume, progress)
-        };
-
-        // 状态栏位置：底部第1行
-        let status_line = self.terminal_height.saturating_sub(1);
-
-        queue!(
-            stdout,
-            cursor::MoveTo(0, status_line),
-            terminal::Clear(ClearType::UntilNewLine),
-            style::SetForegroundColor(style::Color::Yellow),
-            style::Print("─".repeat(self.terminal_width as usize)),
-            style::ResetColor,
-        )?;
-
-        // 播放进度（状态栏上面，如果有足够空间）
-        if self.terminal_height > 1 {
-            let progress_line = self.terminal_height.saturating_sub(2);
-            let prefix = self.t().progress_label;
-
-            if let Some((time_str, progress_percent)) = progress_info {
-                let bar_width = self.terminal_width as usize;
-                let prefix_len = unicode_width::UnicodeWidthStr::width(prefix);
-                let time_len = time_str.len();
-                let bar_total = bar_width.saturating_sub(prefix_len + time_len + 3);
-                let filled = (bar_total as f64 * progress_percent) as usize;
-                let empty = bar_total.saturating_sub(filled);
-
-                // 保存进度条布局信息（用于鼠标点击定位）
-                // 格式：前缀 + 时间 + 空格 + [ + bar + ]
-                self.progress_bar_layout = Some(ProgressBarLayout {
-                    row: progress_line,
-                    bar_start_col: prefix_len + time_len + 2, // 前缀宽度 + 时间字符数 + 空格(1) + [(1)
-                    bar_width: bar_total,
-                });
-
-                let progress_bar = format!("[{}{}]", "█".repeat(filled), "░".repeat(empty));
-
-                queue!(
-                    stdout,
-                    cursor::MoveTo(0, progress_line),
-                    terminal::Clear(ClearType::UntilNewLine),
-                    style::SetForegroundColor(self.theme_colors.progress_text),
-                    style::Print(format!("{}{} {}", prefix, time_str, progress_bar)),
-                    style::ResetColor,
-                )?;
-            } else {
-                let bar_width = self.terminal_width as usize;
-                let prefix_len = unicode_width::UnicodeWidthStr::width(prefix);
-                let time_text = "--:--/--:-- ";
-                let bar_total = bar_width.saturating_sub(prefix_len + time_text.len() + 2);
-
-                // 停止状态也保存布局（不可点击，因为无法 seek）
-                self.progress_bar_layout = None;
-
-                queue!(
-                    stdout,
-                    cursor::MoveTo(0, progress_line),
-                    terminal::Clear(ClearType::UntilNewLine),
-                    style::SetForegroundColor(style::Color::DarkGrey),
-                    style::Print(format!("{}{}[{}]", prefix, time_text, "░".repeat(bar_total))),
-                    style::ResetColor,
-                )?;
-            }
-        } else {
-            // 终端高度不够显示进度条，清除布局
-            self.progress_bar_layout = None;
-        }
-
-        // 状态消息（播放进度上面，如果有足够空间）
-        if self.terminal_height > 2 {
-            let msg_line = self.terminal_height.saturating_sub(3);
-
-            if play_state == PlayState::Stopped {
-                // 停止状态也显示进度条样式
-                let stopped_msg = self.t().stopped_status;
-                let msg_width = unicode_width::UnicodeWidthStr::width(stopped_msg);
-                let bar_total = (self.terminal_width as usize).saturating_sub(msg_width + 3).max(10);
-
-                queue!(
-                    stdout,
-                    cursor::MoveTo(0, msg_line),
-                    terminal::Clear(ClearType::UntilNewLine),
-                    style::SetForegroundColor(style::Color::DarkGrey),
-                    style::Print(format!("{} [{}]", stopped_msg, "░".repeat(bar_total))),
-                    style::ResetColor,
-                )?;
-            } else {
-                // 构建状态消息，如果是播放中或暂停中则添加波形动画（占满整行）
-                let display_msg = if (play_state == PlayState::Playing || play_state == PlayState::Paused)
-                    && self.is_now_playing_message(&message)
-                {
-                    // 只有播放中才更新波形帧（暂停时波形固定不变）
-                    if play_state == PlayState::Playing {
-                        self.wave_frame = self.wave_frame.wrapping_add(1);
-                    }
-
-                    // 生成波形数据（使用真实音量）
-                    self.generate_wave_visual_full_width(&message, realtime_volume)
-                } else {
-                    message
-                };
-
-                queue!(
-                    stdout,
-                    cursor::MoveTo(0, msg_line),
-                    terminal::Clear(ClearType::UntilNewLine),
-                    style::SetForegroundColor(self.theme_colors.status_text),
-                    style::Print(display_msg),
-                    style::ResetColor,
-                )?;
-            }
-        }
-
-        Ok(())
-    }
-    
-    /// 生成横向波形可视化字符串（进度条样式，占满整行）
-    fn generate_wave_visual_full_width(&mut self, message: &str, realtime_volume: f32) -> String {
-        use std::f64::consts::PI;
-        
-        // 计算消息文本占用的显示宽度
-        let msg_width = unicode_width::UnicodeWidthStr::width(message);
-        
-        // 计算波形条可用的总宽度（整行 - 消息宽度 - 3个字符：空格和方括号）
-        let available_width = self.terminal_width as usize;
-        let bar_total = available_width.saturating_sub(msg_width + 3);
-        
-        // 确保 bar_total 至少有 10 个字符
-        let bar_total = bar_total.max(10);
-        
-        // 使用真实音量作为基础
-        // realtime_volume 是 0.0-1.0 的值
-        let base_volume = realtime_volume as f64;
-        
-        // 添加平滑处理，避免波形跳变太快
-        let frame = self.wave_frame as f64;
-        let time = frame * 0.1;
-        
-        // 添加轻微的波动效果，使波形看起来更自然
-        let wave_variation = (time * PI * 2.5).sin() * 0.05;
-        
-        // 计算最终的音量强度
-        let intensity = (base_volume + wave_variation).clamp(0.02, 1.0);
-        
-        // 计算填充长度
-        let filled = (intensity * bar_total as f64).round() as usize;
-        let filled = filled.min(bar_total);
-        let empty = bar_total.saturating_sub(filled);
-        
-        format!("{} [{}{}]", message, "█".repeat(filled), "░".repeat(empty))
-    }
-
     /// 处理键盘事件
     fn handle_desktop_key(&mut self, key: &str) {
         match key {
@@ -3008,20 +2409,30 @@ impl UserInterface {
                 self.desktop_lyrics.adjust_alpha(-1);
                 self.save_config_now();
             }
-            "PAGEUP" | "PAGEDOWN" => {
+            "PAGEUP" | "PAGEDOWN" if !self.comments_mode => {
                 self.desktop_lyrics.toggle_position();
                 self.save_config_now();
             }
             "SPACE" => {
                 let player = self.audio_player.lock().unwrap();
                 match player.get_state() {
-                    crate::defs::PlayState::Playing => { drop(player); self.audio_player.lock().unwrap().pause(); }
-                    crate::defs::PlayState::Paused => { drop(player); self.audio_player.lock().unwrap().resume(); }
+                    crate::defs::PlayState::Playing => {
+                        drop(player);
+                        self.audio_player.lock().unwrap().pause();
+                    }
+                    crate::defs::PlayState::Paused => {
+                        drop(player);
+                        self.audio_player.lock().unwrap().resume();
+                    }
                     _ => {}
                 }
             }
-            "-" => { self.audio_player.lock().unwrap().volume_down(); }
-            "=" => { self.audio_player.lock().unwrap().volume_up(); }
+            "-" => {
+                self.audio_player.lock().unwrap().volume_down();
+            }
+            "=" => {
+                self.audio_player.lock().unwrap().volume_up();
+            }
             "[" | "【" | "［" => self.seek_relative(-5.0),
             "]" | "】" | "］" | "’" | "‘" => self.seek_relative(5.0),
             "," | "，" | "、" => self.seek_relative(-10.0),
@@ -3031,7 +2442,7 @@ impl UserInterface {
             "3" => self.set_play_mode(crate::defs::PlayMode::Sequence),
             "4" => self.set_play_mode(crate::defs::PlayMode::LoopAll),
             "5" => self.set_play_mode(crate::defs::PlayMode::Random),
-            
+
             "T" => {
                 self.theme = self.theme.next();
                 self.theme_colors = self.theme.colors();
@@ -3044,105 +2455,11 @@ impl UserInterface {
     }
 
     fn handle_key_event(&mut self, code: KeyCode) -> io::Result<()> {
-        // API 配置输入模式（三步：接口地址 → API Key → 模型名称）
-        if self.api_key_input_mode {
-            match code {
-                KeyCode::Esc => {
-                    self.api_key_input_mode = false;
-                    self.api_key_input_for_song_info = false;
-                    self.api_input_step = 0;
-                    self.api_key_input_value.clear();
-                    self.cached_lyrics_title = None;
-                }
-                KeyCode::Enter => {
-                    let value = self.api_key_input_value.trim().to_string();
-                    match self.api_input_step {
-                        0 => {
-                            // 步骤1：保存接口地址，进入 API Key 输入
-                            self.api_base_url = if value.is_empty() {
-                                "https://api.deepseek.com/".to_string()
-                            } else {
-                                // 确保以 / 结尾
-                                if value.ends_with('/') { value } else { format!("{}/", value) }
-                            };
-                            self.api_input_step = 1;
-                            self.api_key_input_value = self.resolved_api_key().unwrap_or_default();
-                            self.cached_lyrics_title = None;
-                        }
-                        1 => {
-                            // 步骤2：保存 API Key，进入模型名称输入
-                            self.api_key = value.clone();
-                            if value.is_empty() {
-                                std::env::remove_var("DEEPSEEK_API_KEY");
-                            } else {
-                                std::env::set_var("DEEPSEEK_API_KEY", &value);
-                            }
-                            self.api_input_step = 2;
-                            self.api_key_input_value = self.api_model.clone();
-                            self.cached_lyrics_title = None;
-                        }
-                        2 => {
-                            // 步骤3：保存模型名称，完成配置
-                            self.api_model = if value.is_empty() {
-                                "deepseek-v4-flash".to_string()
-                            } else {
-                                value
-                            };
-                            self.save_config_now();
-                            let continue_song_info = self.api_key_input_for_song_info;
-                            self.api_key_input_mode = false;
-                            self.api_key_input_for_song_info = false;
-                            self.api_input_step = 0;
-                            self.api_key_input_value.clear();
-                            self.cached_lyrics_title = None;
-
-                            if continue_song_info {
-                                self.start_song_info_mode_for_current_song();
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                KeyCode::Backspace => {
-                    self.api_key_input_value.pop();
-                    self.cached_lyrics_title = None;
-                }
-                KeyCode::Char(c) => {
-                    self.api_key_input_value.push(c);
-                    self.cached_lyrics_title = None;
-                }
-                _ => {}
-            }
+        if self.handle_api_key_input(code) {
             return Ok(());
         }
 
-        // GitHub Token 输入模式
-        if self.github_token_input_mode {
-            match code {
-                KeyCode::Esc => {
-                    self.github_token_input_mode = false;
-                    self.github_token_input_value.clear();
-                    self.cached_lyrics_title = None;
-                }
-                KeyCode::Enter => {
-                    let value = self.github_token_input_value.trim().to_string();
-                    // 用户输入为空时存储空字符串，使用时再回退到默认 token
-                    self.github_token = value;
-                    self.github_token_input_mode = false;
-                    self.github_token_input_value.clear();
-                    self.cached_lyrics_title = None;
-                    self.save_config_now();
-                }
-                KeyCode::Backspace => {
-                    self.github_token_input_value.pop();
-                    self.cached_lyrics_title = None;
-                }
-                KeyCode::Char(c) => {
-                    self.github_token_input_value.push(c);
-                    self.cached_lyrics_title = None;
-                }
-                _ => {}
-            }
+        if self.handle_github_token_input(code) {
             return Ok(());
         }
 
@@ -3179,7 +2496,9 @@ impl UserInterface {
                     // 删除目录记录
                     if self.dir_history_selected_index < self.dir_history.len() {
                         self.dir_history.remove(self.dir_history_selected_index);
-                        if self.dir_history_selected_index >= self.dir_history.len() && self.dir_history_selected_index > 0 {
+                        if self.dir_history_selected_index >= self.dir_history.len()
+                            && self.dir_history_selected_index > 0
+                        {
                             self.dir_history_selected_index -= 1;
                         }
                         self.save_config_now();
@@ -3241,7 +2560,9 @@ impl UserInterface {
                     if self.favorites_selected_index < self.favorites.len() {
                         self.favorites.remove(self.favorites_selected_index);
                         // 调整选中索引
-                        if self.favorites_selected_index >= self.favorites.len() && self.favorites_selected_index > 0 {
+                        if self.favorites_selected_index >= self.favorites.len()
+                            && self.favorites_selected_index > 0
+                        {
                             self.favorites_selected_index -= 1;
                         }
                         self.save_config_now();
@@ -3252,273 +2573,8 @@ impl UserInterface {
             return Ok(());
         }
 
-        // 搜索模式下的键盘处理（本地搜索和网络搜索共用此逻辑）
-        if self.search_mode {
-            let in_playlist_detail = self.online_search_mode && self.playlist_search_mode && self.current_playlist.is_some();
-            let online_input_focused = self.online_search_mode && !in_playlist_detail && self.search_input_focused;
-            let mut handled_in_search = true;
-            match code {
-                KeyCode::Esc => {
-                    // 优先关闭右侧视图层（评论/歌曲信息/帮助），避免误退到歌单搜索列表
-                    if self.comments_mode {
-                        self.comments_mode = false;
-                        self.comments_detail_mode = false;
-                    } else if self.song_info_mode {
-                        self.song_info_mode = false;
-                    } else if self.help_mode {
-                        self.help_mode = false;
-                    } else if self.playlist_search_mode && self.current_playlist.is_some() {
-                        // 歌单歌曲页返回歌单搜索结果页
-                        self.search_input_focused = false;
-                        self.current_playlist = None;
-                        self.online_search_results.clear();
-                        self.online_selected_index = self.playlist_list_selected_index;
-                        self.online_scroll_offset = self.online_selected_index.saturating_sub(2);
-                        let total = self.playlist_search_results.len();
-                        Self::clamp_selected_and_scroll(
-                            &mut self.online_selected_index,
-                            &mut self.online_scroll_offset,
-                            total,
-                            (self.terminal_height as usize).saturating_sub(12).max(5),
-                        );
-                        self.online_searching = false;
-                        self.playlist_songs_rx = None;
-                    } else {
-                        // 退出搜索模式
-                        self.search_mode = false;
-                        self.online_search_mode = false;
-                        self.juhe_search_mode = false;
-                        self.playlist_search_mode = false;
-                        self.search_query.clear();
-                        self.search_results.clear();
-                        self.search_selected_index = 0;
-                        self.search_scroll_offset = 0;
-                        self.online_search_results.clear();
-                        self.online_selected_index = 0;
-                        self.online_scroll_offset = 0;
-                        self.online_searching = false;
-                        self.online_search_page = 1;
-                        self.online_search_rx = None;
-                        self.playlist_search_rx = None;
-                        self.playlist_songs_rx = None;
-                        self.playlist_search_results.clear();
-                        self.current_playlist = None;
-                    }
-                }
-                KeyCode::Enter => {
-                    // 评论/帮助模式下，Enter 由全局处理器处理
-                    if self.comments_mode || self.help_mode {
-                        handled_in_search = false;
-                    } else if self.online_search_mode {
-                        if self.online_searching {
-                            // 正在搜索中，忽略
-                        } else if self.online_downloading {
-                            // 正在下载中，忽略
-                        } else if self.playlist_search_mode && self.current_playlist.is_none() {
-                            if !self.playlist_search_results.is_empty() {
-                                if let Some(pl) = self.playlist_search_results.get(self.online_selected_index).cloned() {
-                                    self.playlist_list_selected_index = self.online_selected_index;
-                                    self.online_searching = true;
-                                    self.online_search_results.clear();
-                                    self.online_selected_index = 0;
-                                    self.online_scroll_offset = 0;
-                                    self.current_playlist = Some(pl.clone());
-                                    self.playlist_songs_rx = Some(crate::search::fetch_playlist_songs_background(pl));
-                                    // 进入列表操作态：按键默认作用于列表/全局快捷键
-                                    self.search_input_focused = false;
-                                }
-                            } else if online_input_focused && !self.search_query.is_empty() {
-                                self.online_search_page = 1;
-                                self.start_online_search();
-                            }
-                        } else if !self.online_search_results.is_empty() {
-                            // 有搜索结果：下载选中的歌曲，并切到列表操作态
-                            if let Some(song) = self.online_search_results.get(self.online_selected_index).cloned() {
-                                // 用户主动点播在线歌曲，开始新一轮播放尝试，重置自动切歌节流窗口
-                                self.online_auto_skip_times.clear();
-                                self.start_download_song(song);
-                                self.search_input_focused = false;
-                            }
-                        } else if online_input_focused && !self.search_query.is_empty() {
-                            // 无搜索结果且输入框有焦点：触发网络搜索（从第1页开始）
-                            self.online_search_page = 1;
-                            self.start_online_search();
-                        }
-                    } else if !self.search_results.is_empty() {
-                        // 本地搜索：有搜索结果时，播放选中的歌曲
-                        if let Some(&orig_idx) = self.search_results.get(self.search_selected_index) {
-                            self.selected_index = orig_idx;
-                            self.search_mode = false;
-                            self.search_input_focused = false;
-                            self.search_query.clear();
-                            self.search_results.clear();
-                            self.search_scroll_offset = 0;
-                            self.play_song_by_index(orig_idx);
-                        }
-                    } else if !self.search_query.is_empty() {
-                        // 本地搜索：无搜索结果且有输入，触发搜索
-                        self.update_search_results();
-                    }
-                }
-                KeyCode::Up => {
-                    if self.comments_mode || self.song_info_mode || self.help_mode {
-                        handled_in_search = false;
-                    } else if self.online_search_mode {
-                        if self.online_selected_index > 0 {
-                            self.online_selected_index -= 1;
-                        }
-                    } else if self.search_selected_index > 0 {
-                        self.search_selected_index -= 1;
-                    }
-                }
-                KeyCode::Down => {
-                    if self.comments_mode || self.song_info_mode || self.help_mode {
-                        handled_in_search = false;
-                    } else if self.online_search_mode {
-                        let total = if self.playlist_search_mode && self.current_playlist.is_none() {
-                            self.playlist_search_results.len()
-                        } else {
-                            self.online_search_results.len()
-                        };
-                        if total > 0 && self.online_selected_index < total - 1 {
-                            self.online_selected_index += 1;
-                        }
-                    } else if !self.search_results.is_empty() && self.search_selected_index < self.search_results.len() - 1 {
-                        self.search_selected_index += 1;
-                    }
-                }
-                KeyCode::Backspace => {
-                    if self.online_search_mode {
-                        // 在线搜索列表焦点态：Backspace 不再编辑搜索框，交给全局按键分支
-                        if !online_input_focused {
-                            handled_in_search = false;
-                        } else if !self.search_query.is_empty() {
-                            self.search_query.pop();
-                            // 关键字变化时清空旧搜索结果
-                            self.online_search_results.clear();
-                            self.playlist_search_results.clear();
-                            self.current_playlist = None;
-                            self.online_selected_index = 0;
-                            self.online_scroll_offset = 0;
-                            self.online_search_page = 1;
-                        }
-                    } else {
-                        // 本地搜索：删除最后一个字符，清空旧结果以便按回车重新搜索
-                        self.search_query.pop();
-                        self.search_results.clear();
-                        self.search_selected_index = 0;
-                        self.search_scroll_offset = 0;
-                    }
-                }
-                KeyCode::Char(c) => {
-                    // 进入歌单详情后，不再把键盘输入写入搜索框；空格改为播放/暂停
-                    if in_playlist_detail {
-                        if c == ' ' {
-                            let mut audio_player = self.audio_player.lock().unwrap();
-                            match audio_player.get_state() {
-                                PlayState::Playing => audio_player.pause(),
-                                PlayState::Paused => audio_player.resume(),
-                                _ => {}
-                            }
-                        } else {
-                            // 其余字符按键交给下方全局快捷键分支处理
-                            handled_in_search = false;
-                        }
-                    } else if self.online_search_mode && !online_input_focused {
-                        // 在线搜索列表焦点态：字符键不写入搜索框，交给全局快捷键分支
-                        handled_in_search = false;
-                    } else {
-                        // 输入搜索关键字
-                        self.search_query.push(c);
-                        if self.online_search_mode {
-                            // 网络搜索模式：关键字变化时清空旧搜索结果，以便按 Enter 触发新搜索
-                            if !self.online_search_results.is_empty() || !self.playlist_search_results.is_empty() || self.current_playlist.is_some() {
-                                self.online_search_results.clear();
-                                self.playlist_search_results.clear();
-                                self.current_playlist = None;
-                                self.online_selected_index = 0;
-                                self.online_scroll_offset = 0;
-                                self.online_search_page = 1;
-                            }
-                        } else {
-                            // 本地搜索：关键字变化时清空旧结果，按 Enter 重新搜索
-                            self.search_results.clear();
-                            self.search_selected_index = 0;
-                            self.search_scroll_offset = 0;
-                        }
-                    }
-                }
-                KeyCode::PageUp => {
-                    // 评论/歌曲信息/帮助模式下，PageUp 由全局处理器处理
-                    if self.comments_mode || self.song_info_mode || self.help_mode {
-                        handled_in_search = false;
-                    } else if self.playlist_search_mode && self.current_playlist.is_some() {
-                        // 歌单详情页：翻到上一“页”（每页20首）
-                        let page_size = 20usize;
-                        let total = self.online_search_results.len();
-                        if total > 0 {
-                            let cur_page = self.online_selected_index / page_size;
-                            let prev_page = cur_page.saturating_sub(1);
-                            self.online_selected_index = prev_page * page_size;
-                            self.online_scroll_offset = self.online_selected_index;
-                            Self::clamp_selected_and_scroll(
-                                &mut self.online_selected_index,
-                                &mut self.online_scroll_offset,
-                                total,
-                                (self.terminal_height as usize).saturating_sub(12).max(5),
-                            );
-                        }
-                    } else if self.online_search_mode && !self.online_searching && self.online_search_page > 1 {
-                        // 网络搜索翻上一页
-                        self.online_search_page -= 1;
-                        self.start_online_search();
-                    }
-                }
-                KeyCode::PageDown => {
-                    // 评论/歌曲信息/帮助模式下，PageDown 由全局处理器处理
-                    if self.comments_mode || self.song_info_mode || self.help_mode {
-                        handled_in_search = false;
-                    } else if self.playlist_search_mode && self.current_playlist.is_some() {
-                        // 歌单详情页：翻到下一“页”（每页20首）
-                        let page_size = 20usize;
-                        let total = self.online_search_results.len();
-                        if total > 0 {
-                            let cur_page = self.online_selected_index / page_size;
-                            let next_index = (cur_page + 1) * page_size;
-                            if next_index < total {
-                                self.online_selected_index = next_index;
-                                self.online_scroll_offset = self.online_selected_index;
-                                Self::clamp_selected_and_scroll(
-                                    &mut self.online_selected_index,
-                                    &mut self.online_scroll_offset,
-                                    total,
-                                    (self.terminal_height as usize).saturating_sub(12).max(5),
-                                );
-                            }
-                        }
-                    } else if self.online_search_mode && !self.online_searching {
-                        // 网络搜索翻下一页
-                        let has_results = if self.playlist_search_mode && self.current_playlist.is_none() {
-                            !self.playlist_search_results.is_empty()
-                        } else {
-                            !self.online_search_results.is_empty()
-                        };
-                        if has_results {
-                            self.online_search_page += 1;
-                            self.start_online_search();
-                        }
-                    }
-                }
-                _ => {
-                    if in_playlist_detail {
-                        // 歌单详情中未在搜索分支处理的按键，继续走全局快捷键
-                        handled_in_search = false;
-                    }
-                }
-            }
-            if handled_in_search {
-                return Ok(());
-            }
+        if self.search_mode && self.handle_search_input(code) {
+            return Ok(());
         }
 
         // 正常模式下的键盘处理
@@ -3562,7 +2618,10 @@ impl UserInterface {
                     let visible_count = self.terminal_height.saturating_sub(12) as usize;
                     let left_width = (self.terminal_width as f32 * 0.50) as u16;
                     let right_width = self.terminal_width.saturating_sub(left_width + 1);
-                    let wrapped_lines = wrap_text_to_width(&self.song_info_content, right_width.saturating_sub(1) as usize);
+                    let wrapped_lines = wrap_text_to_width(
+                        &self.song_info_content,
+                        right_width.saturating_sub(1) as usize,
+                    );
                     let max_offset = wrapped_lines.len().saturating_sub(visible_count);
                     if self.song_info_scroll_offset < max_offset {
                         self.song_info_scroll_offset += 1;
@@ -3570,7 +2629,8 @@ impl UserInterface {
                 } else if self.comments_mode {
                     if !self.current_comments.is_empty() {
                         let max_idx = self.current_comments.len().saturating_sub(1);
-                        self.comments_selected_index = (self.comments_selected_index + 1).min(max_idx);
+                        self.comments_selected_index =
+                            (self.comments_selected_index + 1).min(max_idx);
                         let visible_count = self.terminal_height.saturating_sub(12) as usize;
                         Self::adjust_scroll_offset(
                             self.comments_selected_index,
@@ -3620,9 +2680,14 @@ impl UserInterface {
             }
             KeyCode::Esc => {
                 if self.comments_mode {
-                    // 评论视图下返回歌词视图
-                    self.comments_mode = false;
-                    self.comments_detail_mode = false;
+                    if self.comments_detail_mode {
+                        // 先从详情返回评论列表
+                        self.comments_detail_mode = false;
+                    } else {
+                        // 再从评论列表返回歌词视图
+                        self.comments_mode = false;
+                        self.comments_detail_mode = false;
+                    }
                 } else if self.song_info_mode {
                     // AI 信息视图下返回歌词视图
                     self.song_info_mode = false;
@@ -3647,7 +2712,11 @@ impl UserInterface {
                 // 快退 5 秒
                 self.seek_relative(-5.0);
             }
-            KeyCode::Char(']') | KeyCode::Char('】') | KeyCode::Char('］') | KeyCode::Char('’') | KeyCode::Char('‘') => {
+            KeyCode::Char(']')
+            | KeyCode::Char('】')
+            | KeyCode::Char('］')
+            | KeyCode::Char('’')
+            | KeyCode::Char('‘') => {
                 // 快进 5 秒
                 self.seek_relative(5.0);
             }
@@ -3698,10 +2767,15 @@ impl UserInterface {
             }
             KeyCode::Char('s') | KeyCode::Char('S') => {
                 // 歌单详情页中禁用 s，避免误切换到搜索模式
-                if self.search_mode && self.online_search_mode && self.playlist_search_mode && self.current_playlist.is_some() {
+                if self.search_mode
+                    && self.online_search_mode
+                    && self.playlist_search_mode
+                    && self.current_playlist.is_some()
+                {
                     // ignore
                 } else {
                     // 进入本地搜索模式（搜索音乐目录）
+                    self.clear_online_download_state();
                     self.search_mode = true;
                     self.search_input_focused = true;
                     self.help_mode = false;
@@ -3714,10 +2788,15 @@ impl UserInterface {
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
                 // 歌单详情页中禁用 n，避免误切换到搜索模式
-                if self.search_mode && self.online_search_mode && self.playlist_search_mode && self.current_playlist.is_some() {
+                if self.search_mode
+                    && self.online_search_mode
+                    && self.playlist_search_mode
+                    && self.current_playlist.is_some()
+                {
                     // ignore
                 } else {
                     // 进入网络搜索模式（搜索网络歌曲并下载）
+                    self.clear_online_download_state();
                     self.search_mode = true;
                     self.search_input_focused = true;
                     self.help_mode = false;
@@ -3735,10 +2814,15 @@ impl UserInterface {
             }
             KeyCode::Char('j') | KeyCode::Char('J') => {
                 // 歌单详情页中禁用 j，避免误切换到搜索模式
-                if self.search_mode && self.online_search_mode && self.playlist_search_mode && self.current_playlist.is_some() {
+                if self.search_mode
+                    && self.online_search_mode
+                    && self.playlist_search_mode
+                    && self.current_playlist.is_some()
+                {
                     // ignore
                 } else {
                     // 进入聚合搜索搜索模式（通过独家API获取播放链接和歌词）
+                    self.clear_online_download_state();
                     self.search_mode = true;
                     self.search_input_focused = true;
                     self.help_mode = false;
@@ -3756,6 +2840,7 @@ impl UserInterface {
             }
             KeyCode::Char('p') | KeyCode::Char('P') => {
                 // 进入歌单搜索模式（先显示歌单，Enter进入歌单歌曲）
+                self.clear_online_download_state();
                 self.search_mode = true;
                 self.search_input_focused = true;
                 self.help_mode = false;
@@ -3794,11 +2879,18 @@ impl UserInterface {
                     audio_player.get_current_file()
                 };
                 self.comments_file_path = current_file.as_ref().map(|f| f.path.clone());
-                self.comments_song_name = current_file.map(|f| f.name.trim().to_string()).unwrap_or_default();
+                self.comments_song_name = current_file
+                    .map(|f| f.name.trim().to_string())
+                    .unwrap_or_default();
             }
             KeyCode::Char('i') | KeyCode::Char('I') => {
                 // i：直接查询歌曲信息（有 DeepSeek Key 用 DeepSeek，否则用 OpenRouter 免费模型）
                 self.start_song_info_mode_for_current_song();
+            }
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                self.recommand = true;
+                self.start_recommendations_if_enabled();
+                self.save_config_now();
             }
             KeyCode::Char('k') | KeyCode::Char('K') => {
                 // k：进入 API 配置输入模式（接口地址 → API Key → 模型名称）
@@ -3841,7 +2933,10 @@ impl UserInterface {
                 self.save_config_now();
             }
             KeyCode::PageUp => {
-                if self.comments_mode && self.comments_page > 1 {
+                if self.comments_mode {
+                    if self.comments_page > 1 {
+                        self.comments_page -= 1;
+                    }
                     self.current_comments.clear();
                     self.comments_selected_index = 0;
                     self.comments_scroll_offset = 0;
@@ -3852,10 +2947,6 @@ impl UserInterface {
                 }
             }
             KeyCode::PageDown => {
-                // 桌面歌词激活时 PgUp/PgDn 切换位置
-                if self.desktop_lyrics.is_active() {
-                    self.desktop_lyrics.toggle_position();
-                }
                 if self.comments_mode {
                     self.comments_page += 1;
                     self.current_comments.clear();
@@ -3865,11 +2956,14 @@ impl UserInterface {
                     self.comments_detail_mode = false;
                     self.comments_loading = false;
                     self.comments_rx = None;
+                } else if self.desktop_lyrics.is_active() {
+                    // 桌面歌词激活时 PgUp/PgDn 切换位置。评论翻页时不触发。
+                    self.desktop_lyrics.toggle_position();
                 }
             }
             KeyCode::Char('f') | KeyCode::Char('F') => {
                 // 在在线搜索模式（网络/聚合/歌单）下屏蔽 f 收藏，避免误操作到本地播放列表
-                if self.search_mode && self.online_search_mode && self.playlist_search_mode{
+                if self.search_mode && self.online_search_mode && self.playlist_search_mode {
                     // ignore
                 } else {
                     // 切换当前选中歌曲的收藏状态（已收藏则移除，未收藏则添加）
@@ -3966,6 +3060,7 @@ impl UserInterface {
         }
         self.online_search_mode = true;
         self.online_searching = true;
+        self.clear_online_download_state();
         // 翻页也先清空旧结果，避免旧页内容短暂可见
         self.online_search_results.clear();
         self.playlist_search_results.clear();
@@ -4033,6 +3128,7 @@ impl UserInterface {
                 Ok(result) => {
                     self.online_searching = false;
                     self.playlist_songs_rx = None;
+                    self.clear_online_download_state();
                     self.current_playlist = Some(result.playlist);
                     self.online_search_results = result.songs;
                     self.online_selected_index = 0;
@@ -4052,8 +3148,10 @@ impl UserInterface {
     fn start_download_song(&mut self, song: OnlineSong) {
         // 写入日志文件
         {
-            let log_msg = format!("开始下载: {} - {}, source={:?}, juhe_platform={}, juhe_song_id={}",
-                song.artist, song.name, song.source, song.juhe_platform, song.juhe_song_id);
+            let log_msg = format!(
+                "开始下载: {} - {}, source={:?}, juhe_platform={}, juhe_song_id={}",
+                song.artist, song.name, song.source, song.juhe_platform, song.juhe_song_id
+            );
             let timestamp = Local::now().format("%H:%M:%S%.3f");
             let line = format!("[{}] {}\n", timestamp, log_msg);
             let _ = std::fs::OpenOptions::new()
@@ -4077,6 +3175,7 @@ impl UserInterface {
             };
             if play_result.is_ok() {
                 self.update_now_playing_status(&play_file.name);
+                self.record_play_history(&play_file.name, &play_file.path);
                 let log_msg = format!(
                     "之前已下载命中缓存，跳过下载直接播放: {} - {}, path={}",
                     song.artist,
@@ -4090,17 +3189,21 @@ impl UserInterface {
                     .append(true)
                     .open(crate::config::get_daily_log_path())
                     .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+                // 重置推荐下载状态
+                self.recommendation_downloading = false;
+                self.recommendation_download_percent = 0;
+                self.recommendation_downloading_name = None;
             } else if let Err(e) = play_result {
                 if self.online_auto_skip_times.is_empty() {
-                    self.update_status(&format!(
-                        "{}{}",
-                        self.t().play_failed,
-                        e
-                    ));
+                    self.update_status(&format!("{}{}", self.t().play_failed, e));
                 } else {
                     // 自动切歌链路下，缓存命中但播放失败时继续尝试下一首，不弹提示
                     self.play_next_with_flag(false);
                 }
+                // 重置推荐下载状态
+                self.recommendation_downloading = false;
+                self.recommendation_download_percent = 0;
+                self.recommendation_downloading_name = None;
             }
             return;
         }
@@ -4110,9 +3213,7 @@ impl UserInterface {
             self.skip_auto_lyrics_download_for_current_song = true;
             let log_msg = format!(
                 "本地已存在该歌曲，跳过下载直接播放: {} - {}, local_idx={}",
-                song.artist,
-                song.name,
-                local_idx
+                song.artist, song.name, local_idx
             );
             let timestamp = Local::now().format("%H:%M:%S%.3f");
             let line = format!("[{}] {}\n", timestamp, log_msg);
@@ -4121,13 +3222,18 @@ impl UserInterface {
                 .append(true)
                 .open(crate::config::get_daily_log_path())
                 .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+            // 重置推荐下载状态
+            self.recommendation_downloading = false;
+            self.recommendation_download_percent = 0;
+            self.recommendation_downloading_name = None;
             return;
         }
 
         let save_dir = {
             let playlist = self.playlist.lock().unwrap();
             // 保存到当前音乐目录，无目录时使用默认音乐目录（配置目录/music）
-            playlist.directory
+            playlist
+                .directory
                 .as_ref()
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|| crate::config::get_default_music_dir())
@@ -4141,7 +3247,6 @@ impl UserInterface {
         } else {
             format!("{} - {}", song.artist, song.name)
         };
-
 
         let rx = crate::search::download_song_background(song, save_dir);
         self.online_download_rx = Some(rx);
@@ -4164,7 +3269,9 @@ impl UserInterface {
 
                 if is_current {
                     if let Some(lyrics) = result.lyrics {
-                        self.append_runtime_log("[LyricsFallback] 兜底歌词下载成功，已更新当前歌词");
+                        self.append_runtime_log(
+                            "[LyricsFallback] 兜底歌词下载成功，已更新当前歌词",
+                        );
                         self.current_lyrics = Some(lyrics);
                     } else {
                         self.append_runtime_log("[LyricsFallback] 兜底歌词下载失败（未返回歌词）");
@@ -4188,23 +3295,34 @@ impl UserInterface {
                 match progress {
                     DownloadProgress::Progress(percent) => {
                         self.online_download_percent = percent;
+                        if self.recommendation_downloading {
+                            self.recommendation_download_percent = percent;
+                        }
                     }
                     DownloadProgress::Done(result) => {
                         self.online_downloading = false;
                         self.online_download_rx = None;
                         self.online_download_percent = 0;
+                        self.online_downloading_index = None;
+                        self.recommendation_downloading = false;
+                        self.recommendation_download_percent = 0;
+                        self.recommendation_downloading_name = None;
 
                         // 写入日志
                         {
-                            let log_msg = format!("下载完成: path={:?}, error={:?}",
-                                result.local_path, result.error);
+                            let log_msg = format!(
+                                "下载完成: path={:?}, error={:?}",
+                                result.local_path, result.error
+                            );
                             let timestamp = Local::now().format("%H:%M:%S%.3f");
                             let line = format!("[{}] {}\n", timestamp, log_msg);
                             let _ = std::fs::OpenOptions::new()
                                 .create(true)
                                 .append(true)
                                 .open(crate::config::get_daily_log_path())
-                                .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+                                .and_then(|mut f| {
+                                    std::io::Write::write_all(&mut f, line.as_bytes())
+                                });
                         }
 
                         let downloaded_song = result.song.clone();
@@ -4225,6 +3343,7 @@ impl UserInterface {
                                     };
                                     if play_result.is_ok() {
                                         self.update_now_playing_status(&play_file.name);
+                                        self.record_play_history(&play_file.name, &play_file.path);
                                     } else if let Err(e) = play_result {
                                         if self.online_auto_skip_times.is_empty() {
                                             self.update_status(&format!(
@@ -4242,15 +3361,20 @@ impl UserInterface {
                                     let path_str = path.to_string_lossy().to_string();
                                     let dir = {
                                         let playlist = self.playlist.lock().unwrap();
-                                        playlist.directory.clone()
-                                            .unwrap_or_else(|| crate::config::get_default_music_dir().to_string_lossy().to_string())
+                                        playlist.directory.clone().unwrap_or_else(|| {
+                                            crate::config::get_default_music_dir()
+                                                .to_string_lossy()
+                                                .to_string()
+                                        })
                                     };
                                     self.load_directory_and_play(&dir, &path_str);
                                 }
                             }
                             None => {
                                 // 下载失败，不做提示以避免覆盖波形
-                                let _err = result.error.unwrap_or_else(|| self.t().unknown_error.to_string());
+                                let _err = result
+                                    .error
+                                    .unwrap_or_else(|| self.t().unknown_error.to_string());
                             }
                         }
                         break;
@@ -4309,7 +3433,8 @@ impl UserInterface {
                     // 仅当聚合失败且当前还没有歌词时，才回退到常规歌词下载
                     self.append_runtime_log("[JuheLyrics] 聚合歌词失败，开始兜底歌词下载");
                     self.current_lyrics = None;
-                    self.lyrics_download_rx = Some(Lyrics::download_lyrics_background(&target_music_path));
+                    self.lyrics_download_rx =
+                        Some(Lyrics::download_lyrics_background(&target_music_path));
                     self.lyrics_downloading = true;
                 } else {
                     self.append_runtime_log("[JuheLyrics] 聚合歌词失败，但当前已有歌词，跳过兜底");
@@ -4322,7 +3447,10 @@ impl UserInterface {
     fn get_fav_orig_index(&self, fav_index: usize) -> Option<usize> {
         let path = self.favorites.get(fav_index)?;
         let playlist = self.playlist.lock().unwrap();
-        playlist.files.iter().enumerate()
+        playlist
+            .files
+            .iter()
+            .enumerate()
             .find(|(_, f)| f.path.to_string_lossy() == *path)
             .map(|(i, _)| i)
     }
@@ -4332,7 +3460,27 @@ impl UserInterface {
         input
             .to_lowercase()
             .chars()
-            .filter(|c| !c.is_whitespace() && !matches!(c, '-' | '_' | '·' | '•' | ',' | '，' | '.' | '。' | '(' | ')' | '（' | '）' | '[' | ']' | '【' | '】'))
+            .filter(|c| {
+                !c.is_whitespace()
+                    && !matches!(
+                        c,
+                        '-' | '_'
+                            | '·'
+                            | '•'
+                            | ','
+                            | '，'
+                            | '.'
+                            | '。'
+                            | '('
+                            | ')'
+                            | '（'
+                            | '）'
+                            | '['
+                            | ']'
+                            | '【'
+                            | '】'
+                    )
+            })
             .collect()
     }
 
@@ -4360,11 +3508,15 @@ impl UserInterface {
 
     fn remember_downloaded_online_song(&mut self, song: &OnlineSong, path: &std::path::Path) {
         for key in Self::online_song_match_keys(song) {
-            self.downloaded_online_song_cache.insert(key, path.to_path_buf());
+            self.downloaded_online_song_cache
+                .insert(key, path.to_path_buf());
         }
     }
 
-    fn find_cached_local_path_for_online(&mut self, song: &OnlineSong) -> Option<std::path::PathBuf> {
+    fn find_cached_local_path_for_online(
+        &mut self,
+        song: &OnlineSong,
+    ) -> Option<std::path::PathBuf> {
         for key in Self::online_song_match_keys(song) {
             if let Some(path) = self.downloaded_online_song_cache.get(&key).cloned() {
                 if path.exists() {
@@ -4393,7 +3545,11 @@ impl UserInterface {
             if local_key == full_key || local_key == name_key {
                 return Some(idx);
             }
-            if !artist_key.is_empty() && !name_key.is_empty() && local_key.contains(&artist_key) && local_key.contains(&name_key) {
+            if !artist_key.is_empty()
+                && !name_key.is_empty()
+                && local_key.contains(&artist_key)
+                && local_key.contains(&name_key)
+            {
                 return Some(idx);
             }
             None
@@ -4456,22 +3612,19 @@ impl UserInterface {
                     }
                     self.selected_index = index;
                     self.update_now_playing_status(&file.name);
+                    self.record_play_history(&file.name, &file.path);
                     // 歌曲切换成功后保存配置
                     self.save_config_now();
                 }
                 Err(e) => {
-                    self.update_status(&format!(
-                        "{}{}",
-                        self.t().play_failed,
-                        e
-                    ));
+                    self.update_status(&format!("{}{}", self.t().play_failed, e));
                 }
             }
         }
     }
 
     /// 处理鼠标事件
-    fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> io::Result<()> {
+    fn handle_mouse_event_impl(&mut self, mouse_event: MouseEvent) -> io::Result<()> {
         let col = mouse_event.column as usize;
         let row = mouse_event.row;
         let in_playlist_detail = self.search_mode
@@ -4490,11 +3643,31 @@ impl UserInterface {
                 self.lyrics_dragging = false;
                 self.lyrics_drag_target_time = None;
 
+                if self.recommand && row == 1 {
+                    if let Some(name) = self
+                        .recommendation_items
+                        .iter()
+                        .find(|item| col >= item.start_col && col < item.end_col)
+                        .map(|item| item.name.clone())
+                    {
+                        if !self.recommendation_downloading
+                            || self.recommendation_downloading_name.as_ref() != Some(&name)
+                        {
+                            self.start_recommendation_download(&name);
+                        }
+                        return Ok(());
+                    }
+                }
+
                 // 所有模式：检查是否点击了音量条区域
                 if let Some(layout) = self.volume_bar_layout {
-                    if row == layout.row && col >= layout.bar_start_col && col < layout.bar_start_col + layout.bar_width {
+                    if row == layout.row
+                        && col >= layout.bar_start_col
+                        && col < layout.bar_start_col + layout.bar_width
+                    {
                         // 音量条共20格，点击位置按比例映射到0-100，四舍五入到5的倍数
-                        let ratio = (col - layout.bar_start_col) as f64 / (layout.bar_width - 1) as f64;
+                        let denominator = layout.bar_width.saturating_sub(1).max(1);
+                        let ratio = (col - layout.bar_start_col) as f64 / denominator as f64;
                         let new_volume = (ratio * 100.0 / 5.0).round() as u8 * 5;
                         let new_volume = new_volume.clamp(0, 100);
 
@@ -4505,7 +3678,10 @@ impl UserInterface {
 
                 // 所有模式：检查是否点击了进度条区域
                 if let Some(layout) = self.progress_bar_layout {
-                    if row == layout.row && col >= layout.bar_start_col && col < layout.bar_start_col + layout.bar_width {
+                    if row == layout.row
+                        && col >= layout.bar_start_col
+                        && col < layout.bar_start_col + layout.bar_width
+                    {
                         // 计算点击位置在进度条中的比例
                         let ratio = (col - layout.bar_start_col) as f64 / layout.bar_width as f64;
                         let ratio = ratio.clamp(0.0, 1.0);
@@ -4532,12 +3708,12 @@ impl UserInterface {
 
                 // 搜索模式：鼠标点击选择/播放搜索结果
                 if self.search_mode {
-                    // 点击搜索栏（第4行左侧）时，切回输入框焦点
+                    // 点击搜索栏时，切回输入框焦点。搜索结果紧跟在输入行之后，不能拦截第一条结果。
                     let left_width = (self.terminal_width as f32 * 0.50) as usize;
                     let in_playlist_detail = self.online_search_mode
                         && self.playlist_search_mode
                         && self.current_playlist.is_some();
-                    if self.online_search_mode && !in_playlist_detail && row == 4 && col < left_width {
+                    if !in_playlist_detail && row == 4 && col < left_width {
                         self.search_input_focused = true;
                         return Ok(());
                     }
@@ -4545,33 +3721,54 @@ impl UserInterface {
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize && row >= layout.start_row {
                             let click_row = (row - layout.start_row) as usize;
-                            if click_row < layout.visible_count {
+                            if click_row >= 1 && click_row < layout.visible_count {
+                                let result_row = click_row - 1;
                                 if self.online_search_mode {
-                                    // 点击在线搜索列表后，键盘默认作用于列表/全局快捷键
                                     self.search_input_focused = false;
-                                    if self.playlist_search_mode && self.current_playlist.is_none() {
-                                        // 歌单搜索结果：点击进入歌单
-                                        let clicked_index = self.online_scroll_offset + click_row;
+                                    if self.playlist_search_mode && self.current_playlist.is_none()
+                                    {
+                                        let clicked_index = self.online_scroll_offset + result_row;
                                         if clicked_index < self.playlist_search_results.len() {
+                                            let already_selected =
+                                                self.online_selected_index == clicked_index;
                                             self.online_selected_index = clicked_index;
                                             self.playlist_list_selected_index = clicked_index;
-                                            if let Some(pl) = self.playlist_search_results.get(clicked_index).cloned() {
+                                            if !already_selected {
+                                                return Ok(());
+                                            }
+                                            if let Some(pl) = self
+                                                .playlist_search_results
+                                                .get(clicked_index)
+                                                .cloned()
+                                            {
+                                                self.clear_online_download_state();
                                                 self.online_searching = true;
                                                 self.online_search_results.clear();
                                                 self.online_selected_index = 0;
                                                 self.online_scroll_offset = 0;
                                                 self.current_playlist = Some(pl.clone());
-                                                self.playlist_songs_rx = Some(crate::search::fetch_playlist_songs_background(pl));
+                                                self.playlist_songs_rx = Some(
+                                                    crate::search::fetch_playlist_songs_background(
+                                                        pl,
+                                                    ),
+                                                );
                                             }
                                         }
                                     } else {
-                                        // 网络歌曲结果：点击选择并下载
-                                        let clicked_index = self.online_scroll_offset + click_row;
+                                        let clicked_index = self.online_scroll_offset + result_row;
                                         if clicked_index < self.online_search_results.len() {
+                                            let already_selected =
+                                                self.online_selected_index == clicked_index;
                                             self.online_selected_index = clicked_index;
-                                            if let Some(song) = self.online_search_results.get(clicked_index).cloned() {
+                                            if !already_selected {
+                                                return Ok(());
+                                            }
+                                            if let Some(song) = self
+                                                .online_search_results
+                                                .get(clicked_index)
+                                                .cloned()
+                                            {
                                                 if !self.online_downloading {
-                                                    // 用户鼠标主动点播在线歌曲，重置自动切歌节流窗口
                                                     self.online_auto_skip_times.clear();
                                                     self.start_download_song(song);
                                                 }
@@ -4579,10 +3776,17 @@ impl UserInterface {
                                         }
                                     }
                                 } else {
-                                    // 本地搜索结果：点击选择并播放
-                                    let clicked_index = self.search_scroll_offset + click_row;
+                                    let clicked_index = self.search_scroll_offset + result_row;
                                     if clicked_index < self.search_results.len() {
-                                        if let Some(&orig_idx) = self.search_results.get(clicked_index) {
+                                        let already_selected =
+                                            self.search_selected_index == clicked_index;
+                                        self.search_selected_index = clicked_index;
+                                        if !already_selected {
+                                            return Ok(());
+                                        }
+                                        if let Some(&orig_idx) =
+                                            self.search_results.get(clicked_index)
+                                        {
                                             self.selected_index = orig_idx;
                                             self.search_mode = false;
                                             self.search_input_focused = false;
@@ -4654,20 +3858,30 @@ impl UserInterface {
                     return Ok(());
                 }
 
-                // 评论模式：右侧区域左键点击，行为与 Enter 一致（选中并进入详情）
-                if self.help_mode {
-                    // 帮助视图：忽略右键点击
+                // 帮助/歌曲信息：右侧 URL 可点击打开
+                if self.help_mode || self.song_info_mode {
+                    let _ = self.open_clicked_right_panel_url(col, row);
                     return Ok(());
                 } else if self.comments_mode {
                     if !self.comments_detail_mode {
                         let left_width = (self.terminal_width as f32 * 0.50) as usize;
-                        if col > left_width && row >= 6 {
-                            let click_row = (row - 6) as usize;
-                            if click_row < self.comments_row_map.len() {
-                                if let Some(comment_idx) = self.comments_row_map[click_row] {
-                                    if comment_idx < self.current_comments.len() {
-                                        self.comments_selected_index = comment_idx;
-                                        self.comments_detail_mode = true;
+                        if col > left_width {
+                            if let Some(inner_y) = self.comment_panel_inner_y {
+                                if row as usize >= inner_y as usize {
+                                    let click_row = (row as usize) - (inner_y as usize);
+                                    if click_row < self.comments_row_map.len() {
+                                        if let Some(comment_idx) = self.comments_row_map[click_row]
+                                        {
+                                            if comment_idx < self.current_comments.len() {
+                                                let already_selected =
+                                                    self.comments_selected_index == comment_idx;
+                                                self.comments_selected_index = comment_idx;
+                                                if !already_selected {
+                                                    return Ok(());
+                                                }
+                                                self.comments_detail_mode = true;
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -4719,6 +3933,13 @@ impl UserInterface {
                     return Ok(());
                 }
 
+                // 推荐歌曲区域滚轮向上 -> 水平向左滚动
+                if self.recommand && row <= 2 {
+                    self.recommendation_scroll_offset =
+                        self.recommendation_scroll_offset.saturating_sub(3);
+                    return Ok(());
+                }
+
                 if self.song_info_mode {
                     // AI 歌曲信息模式：右侧区域滚轮向上滚动
                     let left_width = (self.terminal_width as f32 * 0.50) as usize;
@@ -4734,7 +3955,8 @@ impl UserInterface {
                 } else if self.comments_mode {
                     let left_width = (self.terminal_width as f32 * 0.50) as usize;
                     if col > left_width && !self.current_comments.is_empty() {
-                        self.comments_selected_index = self.comments_selected_index.saturating_sub(1);
+                        self.comments_selected_index =
+                            self.comments_selected_index.saturating_sub(1);
                         Self::adjust_scroll_offset(
                             self.comments_selected_index,
                             &mut self.comments_scroll_offset,
@@ -4746,22 +3968,34 @@ impl UserInterface {
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize {
                             if self.online_search_mode {
-                                let total = if self.playlist_search_mode && self.current_playlist.is_none() {
+                                let total = if self.playlist_search_mode
+                                    && self.current_playlist.is_none()
+                                {
                                     self.playlist_search_results.len()
                                 } else {
                                     self.online_search_results.len()
                                 };
                                 if total > 0 {
-                                    self.online_selected_index = self.online_selected_index.saturating_sub(1);
+                                    self.online_selected_index =
+                                        self.online_selected_index.saturating_sub(1);
                                     Self::adjust_scroll_offset(
                                         self.online_selected_index,
                                         &mut self.online_scroll_offset,
                                         layout.visible_count.max(1),
                                     );
+                                    self.search_input_focused = false;
                                 }
                             } else {
-                                if self.search_scroll_offset > 0 {
-                                    self.search_scroll_offset -= 1;
+                                let total = self.search_results.len();
+                                if total > 0 {
+                                    self.search_selected_index =
+                                        self.search_selected_index.saturating_sub(1);
+                                    Self::adjust_scroll_offset(
+                                        self.search_selected_index,
+                                        &mut self.search_scroll_offset,
+                                        layout.visible_count.max(1),
+                                    );
+                                    self.search_input_focused = false;
                                 }
                             }
                         }
@@ -4769,18 +4003,44 @@ impl UserInterface {
                 } else if self.dir_history_mode {
                     // 音乐目录模式：滚轮向上
                     if let Some(layout) = self.playlist_layout {
-                        if col < layout.left_width as usize
-                            && self.dir_history_scroll_offset > 0 {
-                                self.dir_history_scroll_offset -= 1;
+                        if col < layout.left_width as usize && self.dir_history_scroll_offset > 0 {
+                            self.dir_history_scroll_offset -= 1;
+                            let total_len = self.dir_history.len();
+                            if total_len > 0 {
+                                let view_start = self.dir_history_scroll_offset;
+                                let view_end = self
+                                    .dir_history_scroll_offset
+                                    .saturating_add(layout.visible_count)
+                                    .saturating_sub(1)
+                                    .min(total_len - 1);
+                                if self.dir_history_selected_index < view_start {
+                                    self.dir_history_selected_index = view_start;
+                                } else if self.dir_history_selected_index > view_end {
+                                    self.dir_history_selected_index = view_end;
+                                }
                             }
+                        }
                     }
                 } else if self.favorites_mode {
                     // 收藏列表模式：滚轮向上
                     if let Some(layout) = self.playlist_layout {
-                        if col < layout.left_width as usize
-                            && self.favorites_scroll_offset > 0 {
-                                self.favorites_scroll_offset -= 1;
+                        if col < layout.left_width as usize && self.favorites_scroll_offset > 0 {
+                            self.favorites_scroll_offset -= 1;
+                            let total_len = self.favorites.len();
+                            if total_len > 0 {
+                                let view_start = self.favorites_scroll_offset;
+                                let view_end = self
+                                    .favorites_scroll_offset
+                                    .saturating_add(layout.visible_count)
+                                    .saturating_sub(1)
+                                    .min(total_len - 1);
+                                if self.favorites_selected_index < view_start {
+                                    self.favorites_selected_index = view_start;
+                                } else if self.favorites_selected_index > view_end {
+                                    self.favorites_selected_index = view_end;
+                                }
                             }
+                        }
                     }
                 } else {
                     // 正常模式：在播放列表区域滚轮向上 → 列表上移
@@ -4818,6 +4078,12 @@ impl UserInterface {
                     return Ok(());
                 }
 
+                // 推荐歌曲区域滚轮向下 -> 水平向右滚动
+                if self.recommand && row <= 2 {
+                    self.recommendation_scroll_offset += 3;
+                    return Ok(());
+                }
+
                 if self.song_info_mode {
                     // AI 歌曲信息模式：右侧区域滚轮向下滚动
                     let left_width = (self.terminal_width as f32 * 0.50) as usize;
@@ -4825,7 +4091,8 @@ impl UserInterface {
                         let visible_count = self.terminal_height.saturating_sub(12) as usize;
                         let content = self.song_info_content.clone();
                         let right_width = self.terminal_width.saturating_sub(left_width as u16 + 1);
-                        let wrapped_lines = wrap_text_to_width(&content, right_width.saturating_sub(1) as usize);
+                        let wrapped_lines =
+                            wrap_text_to_width(&content, right_width.saturating_sub(1) as usize);
                         let max_offset = wrapped_lines.len().saturating_sub(visible_count);
                         if self.song_info_scroll_offset < max_offset {
                             self.song_info_scroll_offset += 1;
@@ -4846,7 +4113,8 @@ impl UserInterface {
                     let left_width = (self.terminal_width as f32 * 0.50) as usize;
                     if col > left_width && !self.current_comments.is_empty() {
                         let max_idx = self.current_comments.len().saturating_sub(1);
-                        self.comments_selected_index = (self.comments_selected_index + 1).min(max_idx);
+                        self.comments_selected_index =
+                            (self.comments_selected_index + 1).min(max_idx);
                         Self::adjust_scroll_offset(
                             self.comments_selected_index,
                             &mut self.comments_scroll_offset,
@@ -4859,24 +4127,36 @@ impl UserInterface {
                         let allow_scroll = in_playlist_detail || col < layout.left_width as usize;
                         if allow_scroll {
                             if self.online_search_mode {
-                                let total = if self.playlist_search_mode && self.current_playlist.is_none() {
+                                let total = if self.playlist_search_mode
+                                    && self.current_playlist.is_none()
+                                {
                                     self.playlist_search_results.len()
                                 } else {
                                     self.online_search_results.len()
                                 };
                                 if total > 0 {
                                     let max_idx = total.saturating_sub(1);
-                                    self.online_selected_index = (self.online_selected_index + 1).min(max_idx);
+                                    self.online_selected_index =
+                                        (self.online_selected_index + 1).min(max_idx);
                                     Self::adjust_scroll_offset(
                                         self.online_selected_index,
                                         &mut self.online_scroll_offset,
                                         layout.visible_count.max(1),
                                     );
+                                    self.search_input_focused = false;
                                 }
                             } else {
-                                let max_offset = self.search_results.len().saturating_sub(layout.visible_count);
-                                if self.search_scroll_offset < max_offset {
-                                    self.search_scroll_offset += 1;
+                                let total = self.search_results.len();
+                                if total > 0 {
+                                    let max_idx = total.saturating_sub(1);
+                                    self.search_selected_index =
+                                        (self.search_selected_index + 1).min(max_idx);
+                                    Self::adjust_scroll_offset(
+                                        self.search_selected_index,
+                                        &mut self.search_scroll_offset,
+                                        layout.visible_count.max(1),
+                                    );
+                                    self.search_input_focused = false;
                                 }
                             }
                         }
@@ -4885,9 +4165,24 @@ impl UserInterface {
                     // 音乐目录模式：滚轮向下
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize {
-                            let max_offset = self.dir_history.len().saturating_sub(layout.visible_count);
+                            let max_offset =
+                                self.dir_history.len().saturating_sub(layout.visible_count);
                             if self.dir_history_scroll_offset < max_offset {
                                 self.dir_history_scroll_offset += 1;
+                                let total_len = self.dir_history.len();
+                                if total_len > 0 {
+                                    let view_start = self.dir_history_scroll_offset;
+                                    let view_end = self
+                                        .dir_history_scroll_offset
+                                        .saturating_add(layout.visible_count)
+                                        .saturating_sub(1)
+                                        .min(total_len - 1);
+                                    if self.dir_history_selected_index < view_start {
+                                        self.dir_history_selected_index = view_start;
+                                    } else if self.dir_history_selected_index > view_end {
+                                        self.dir_history_selected_index = view_end;
+                                    }
+                                }
                             }
                         }
                     }
@@ -4895,9 +4190,24 @@ impl UserInterface {
                     // 收藏列表模式：滚轮向下
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize {
-                            let max_offset = self.favorites.len().saturating_sub(layout.visible_count);
+                            let max_offset =
+                                self.favorites.len().saturating_sub(layout.visible_count);
                             if self.favorites_scroll_offset < max_offset {
                                 self.favorites_scroll_offset += 1;
+                                let total_len = self.favorites.len();
+                                if total_len > 0 {
+                                    let view_start = self.favorites_scroll_offset;
+                                    let view_end = self
+                                        .favorites_scroll_offset
+                                        .saturating_add(layout.visible_count)
+                                        .saturating_sub(1)
+                                        .min(total_len - 1);
+                                    if self.favorites_selected_index < view_start {
+                                        self.favorites_selected_index = view_start;
+                                    } else if self.favorites_selected_index > view_end {
+                                        self.favorites_selected_index = view_end;
+                                    }
+                                }
                             }
                         }
                     }
@@ -4994,17 +4304,18 @@ impl UserInterface {
                             .map(|p| *p == current_file.path)
                             .unwrap_or(false)
                 });
-                if matched { Some(idx) } else { None }
+                if matched {
+                    Some(idx)
+                } else {
+                    None
+                }
             })
     }
 
     /// 播放下一曲（manual: 是否为用户手动切换）
     fn play_next_with_flag(&mut self, manual: bool) {
         // 在线搜索结果视图（网络/聚合/歌单歌曲）统一按在线结果模拟 1~5 播放模式
-        if self.search_mode
-            && self.online_search_mode
-            && !self.online_search_results.is_empty()
-        {
+        if self.search_mode && self.online_search_mode && !self.online_search_results.is_empty() {
             // 手动切歌不计入节流窗口，并清空历史
             if manual {
                 self.online_auto_skip_times.clear();
@@ -5035,11 +4346,19 @@ impl UserInterface {
 
             let next_idx = match mode {
                 PlayMode::Single => {
-                    if manual { Some((cur + 1).min(len - 1)) } else { None }
+                    if manual {
+                        Some((cur + 1).min(len - 1))
+                    } else {
+                        None
+                    }
                 }
                 PlayMode::RepeatOne => Some(cur),
                 PlayMode::Sequence => {
-                    if cur + 1 < len { Some(cur + 1) } else { None }
+                    if cur + 1 < len {
+                        Some(cur + 1)
+                    } else {
+                        None
+                    }
                 }
                 PlayMode::LoopAll => Some((cur + 1) % len),
                 PlayMode::Random => {
@@ -5212,10 +4531,20 @@ impl UserInterface {
     /// 在终端内交互式输入路径（临时退出 raw mode）
     #[cfg(target_os = "linux")]
     fn terminal_input_path(&mut self) -> Option<String> {
+        use crossterm::{
+            cursor,
+            event::{DisableMouseCapture, EnableMouseCapture},
+            execute, terminal,
+        };
         use std::io::{self, Write};
 
         // 临时恢复终端
-        let _ = execute!(io::stdout(), DisableMouseCapture, terminal::LeaveAlternateScreen, cursor::Show);
+        let _ = execute!(
+            io::stdout(),
+            DisableMouseCapture,
+            terminal::LeaveAlternateScreen,
+            cursor::Show
+        );
         let _ = terminal::disable_raw_mode();
 
         // 提示用户输入
@@ -5228,7 +4557,12 @@ impl UserInterface {
 
         // 重新进入 raw mode
         let _ = terminal::enable_raw_mode();
-        let _ = execute!(io::stdout(), terminal::EnterAlternateScreen, cursor::Hide, EnableMouseCapture);
+        let _ = execute!(
+            io::stdout(),
+            terminal::EnterAlternateScreen,
+            cursor::Hide,
+            EnableMouseCapture
+        );
 
         if result.is_ok() {
             let path = input.trim().to_string();
@@ -5270,11 +4604,7 @@ impl UserInterface {
                 }
             }
             Err(e) => {
-                self.update_status(&format!(
-                    "{}{}",
-                    self.t().load_failed,
-                    e
-                ));
+                self.update_status(&format!("{}{}", self.t().load_failed, e));
             }
         }
     }
@@ -5294,7 +4624,10 @@ impl UserInterface {
                 self.dir_history.push(path_str);
 
                 // 在新播放列表中查找目标歌曲的索引
-                let target_idx = new_playlist.files.iter().position(|s| s.path.to_string_lossy() == song_path);
+                let target_idx = new_playlist
+                    .files
+                    .iter()
+                    .position(|s| s.path.to_string_lossy() == song_path);
 
                 *self.playlist.lock().unwrap() = new_playlist;
                 self.scroll_offset = 0;
@@ -5310,11 +4643,7 @@ impl UserInterface {
                 }
             }
             Err(e) => {
-                self.update_status(&format!(
-                    "{}{}",
-                    self.t().load_failed,
-                    e
-                ));
+                self.update_status(&format!("{}{}", self.t().load_failed, e));
             }
         }
     }
@@ -5335,6 +4664,10 @@ impl UserInterface {
         self.status_message = message.to_string();
     }
 
+    pub fn record_played_file(&self, file: &crate::defs::MusicFile) {
+        self.record_play_history(&file.name, &file.path);
+    }
+
     /// 推送当前歌词到桌面悬浮窗
     fn push_current_lyrics_to_desktop(&mut self) {
         if !self.desktop_lyrics.is_active() {
@@ -5350,13 +4683,15 @@ impl UserInterface {
                 let lines = lyrics.get_lines();
 
                 // Convert to the format expected by desktop lyrics: Vec<(String, f64)>
-                let all_lyrics: Vec<(String, f64)> = lines.iter()
+                let all_lyrics: Vec<(String, f64)> = lines
+                    .iter()
                     .map(|line| (line.text.clone(), line.time.as_secs_f64()))
                     .collect();
 
                 let current_time_sec = current_time.as_secs_f64();
 
-                self.desktop_lyrics.update_all_lyrics(&all_lyrics, current_time_sec, theme_name);
+                self.desktop_lyrics
+                    .update_all_lyrics(&all_lyrics, current_time_sec, theme_name);
 
                 // Also update the traditional three-line format for backward compatibility
                 let idx = lines.partition_point(|line| line.time <= current_time);
@@ -5379,7 +4714,8 @@ impl UserInterface {
         }
         // No lyrics available
         let empty_lyrics: Vec<(String, f64)> = vec![];
-        self.desktop_lyrics.update_all_lyrics(&empty_lyrics, 0.0, theme_name);
+        self.desktop_lyrics
+            .update_all_lyrics(&empty_lyrics, 0.0, theme_name);
         self.desktop_lyrics.update_lyrics("\n\n", theme_name);
     }
 
@@ -5465,9 +4801,19 @@ impl UserInterface {
         };
     }
 
+    pub fn set_recommand(&mut self, recommand: bool) {
+        self.recommand = recommand;
+        self.start_recommendations_if_enabled();
+    }
+
+    pub fn get_recommand(&self) -> bool {
+        self.recommand
+    }
+
     /// 设置 GitHub Token（空字符串或默认 Token 均视为使用内置默认值，不写入配置文件）
     pub fn set_lyrics_position(&mut self, position: String) {
-        self.desktop_lyrics.set_position(DesktopLyricsPosition::from_config_key(&position));
+        self.desktop_lyrics
+            .set_position(DesktopLyricsPosition::from_config_key(&position));
     }
 
     pub fn set_lyrics_alpha(&mut self, alpha: u8) {
@@ -5583,6 +4929,7 @@ impl UserInterface {
             api_base_url: self.api_base_url.clone(),
             api_model: self.api_model.clone(),
             github_token: self.get_github_token(),
+            recommand: self.recommand,
             lyrics_visible: self.desktop_lyrics.is_active(),
             lyrics_position: self.get_lyrics_position_key(),
             lyrics_alpha: self.get_lyrics_alpha(),
@@ -5598,6 +4945,8 @@ impl UserInterface {
     pub fn run(&mut self) -> io::Result<()> {
         // 初始化终端（使用 RAII 保护）
         let _guard = Self::init_terminal()?;
+        let backend = CrosstermBackend::new(io::stdout());
+        let mut terminal = Terminal::new(backend)?;
 
         // Linux 下首次进入 alternate screen 时，终端可能尚未正确报告窗口大小，
         // 导致界面缩在左上角。短暂等待后重新获取尺寸并清屏可解决此问题。
@@ -5611,7 +4960,8 @@ impl UserInterface {
         }
 
         // 初始绘制
-        self.draw()?;
+        Self::restore_mouse_capture();
+        self.draw(&mut terminal)?;
 
         // 上次进度更新的时间
         let mut last_progress_update = std::time::Instant::now();
@@ -5634,13 +4984,15 @@ impl UserInterface {
             // 如果播放完成，自动播放下一首（非手动）
             if should_play_next {
                 self.play_next_with_flag(false);
-                self.draw()?;
+                self.draw(&mut terminal)?;
             }
 
             // 检查网络搜索结果
             if self.online_searching {
                 self.check_online_search_result();
             }
+
+            self.check_recommendation_result();
 
             // 检查下载结果
             if self.online_downloading {
@@ -5657,11 +5009,13 @@ impl UserInterface {
             if (current_state == PlayState::Playing
                 || self.song_info_loading
                 || self.github_discussion_loading
-                || self.comments_loading)
+                || self.comments_loading
+                || self.recommendations_loading
+                || self.recommendation_search_rx.is_some())
                 && now.duration_since(last_progress_update) >= progress_update_interval
             {
                 self.push_current_lyrics_to_desktop();
-                self.draw()?;
+                self.draw(&mut terminal)?;
                 last_progress_update = now;
             }
 
@@ -5675,7 +5029,9 @@ impl UserInterface {
                     crate::desktop_lyrics::DesktopLyricsEvent::KeyPress { key } => {
                         self.handle_desktop_key(&key);
                     }
-                    crate::desktop_lyrics::DesktopLyricsEvent::ScrollModeChanged { scroll_mode } => {
+                    crate::desktop_lyrics::DesktopLyricsEvent::ScrollModeChanged {
+                        scroll_mode,
+                    } => {
                         self.desktop_lyrics.set_scroll_mode(scroll_mode);
                         self.save_config_now();
                     }
@@ -5696,17 +5052,17 @@ impl UserInterface {
                                 }
                             } else {
                                 self.handle_key_event(key_event.code)?;
-                                self.draw()?;
+                                self.draw(&mut terminal)?;
                             }
                         }
                     }
                     Event::Mouse(mouse_event) => {
                         self.handle_mouse_event(mouse_event)?;
-                        self.draw()?;
+                        self.draw(&mut terminal)?;
                     }
                     Event::Resize(_, _) => {
                         // 窗口大小改变时立即重绘，无论播放状态如何
-                        self.draw()?;
+                        self.draw(&mut terminal)?;
                     }
                     _ => {}
                 }
@@ -5722,127 +5078,7 @@ impl UserInterface {
         // 退出前保存配置
         self.save_config_now();
 
-        // TerminalGuard 会在函数退出时自动恢复终端
-
+        // TerminalGuard 会在函数结束时自动恢复终端设置
         Ok(())
     }
-}
-
-/// 获取字符在终端中的实际显示宽度
-fn term_char_width(ch: char) -> usize {
-    unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0)
-}
-
-/// 计算字符串在终端中的实际显示宽度
-fn term_display_width(s: &str) -> usize {
-    s.chars().map(term_char_width).sum()
-}
-
-/// 截断字符串到指定显示宽度（不加省略号，用于歌词区域）
-fn truncate_to_width(text: &str, max_width: usize) -> String {
-    // 全局兜底：避免任意来源文本中的控制字符（如 CR/ESC）破坏终端光标定位
-    let sanitized: String = text
-        .chars()
-        .map(|ch| match ch {
-            '\n' | '\r' | '\t' => ' ',
-            c if c.is_control() => ' ',
-            c => c,
-        })
-        .collect();
-
-    if term_display_width(sanitized.as_str()) <= max_width {
-        return sanitized;
-    }
-
-    let mut result = String::new();
-    let mut current_width = 0;
-
-    for ch in sanitized.chars() {
-        let ch_width = term_char_width(ch);
-        if current_width + ch_width > max_width {
-            break;
-        }
-        result.push(ch);
-        current_width += ch_width;
-    }
-
-    result
-}
-
-/// 取字符串在给定显示宽度下的“尾部可见部分”（用于超长输入框编辑）
-fn tail_to_width(text: &str, max_width: usize) -> String {
-    if max_width == 0 {
-        return String::new();
-    }
-
-    // 与 truncate_to_width 保持一致的控制字符清理策略
-    let sanitized: String = text
-        .chars()
-        .map(|ch| match ch {
-            '\n' | '\r' | '\t' => ' ',
-            c if c.is_control() => ' ',
-            c => c,
-        })
-        .collect();
-
-    if unicode_width::UnicodeWidthStr::width(sanitized.as_str()) <= max_width {
-        return sanitized;
-    }
-
-    let mut reversed: Vec<char> = Vec::new();
-    let mut current_width = 0;
-
-    for ch in sanitized.chars().rev() {
-        let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-        if current_width + ch_width > max_width {
-            break;
-        }
-        reversed.push(ch);
-        current_width += ch_width;
-    }
-
-    reversed.into_iter().rev().collect()
-}
-
-/// 按显示宽度自动换行，保留原始换行
-fn wrap_text_to_width(text: &str, max_width: usize) -> Vec<String> {
-    if max_width == 0 {
-        return vec![String::new()];
-    }
-
-    let mut out = Vec::new();
-
-    // 保留换行语义，同时过滤会影响终端布局的控制字符
-    let normalized = text.replace('\r', "\n");
-
-    for raw_line in normalized.lines() {
-        if raw_line.is_empty() {
-            out.push(String::new());
-            continue;
-        }
-
-        let mut buf = String::new();
-        let mut width = 0;
-        for ch in raw_line.chars() {
-            let ch = if ch.is_control() { ' ' } else { ch };
-            let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-            if width + ch_width > max_width && !buf.is_empty() {
-                out.push(buf);
-                buf = String::new();
-                width = 0;
-            }
-            buf.push(ch);
-            width += ch_width;
-        }
-
-        if !buf.is_empty() {
-            out.push(buf);
-        }
-    }
-
-    if out.is_empty() {
-        out.push(String::new());
-    }
-
-    out
 }

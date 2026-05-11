@@ -1,7 +1,7 @@
 // Ter-Music-Rust: 终端音乐播放器
 
-mod audio;
 mod analyzer;
+mod audio;
 mod config;
 mod defs;
 mod desktop_lyrics;
@@ -58,7 +58,8 @@ fn run_lyrics_child() {
     let position = desktop_lyrics::DesktopLyricsPosition::from_config_key(
         &std::env::var("TER_DESKTOP_LYRICS_POSITION").unwrap_or_else(|_| "bottom".to_string()),
     );
-    let theme_name = std::env::var("TER_DESKTOP_LYRICS_THEME").unwrap_or_else(|_| "Neon".to_string());
+    let theme_name =
+        std::env::var("TER_DESKTOP_LYRICS_THEME").unwrap_or_else(|_| "Neon".to_string());
     let alpha: u8 = std::env::var("TER_DESKTOP_LYRICS_ALPHA")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -75,10 +76,10 @@ fn run_lyrics_child() {
     // 命令行参数已解析，子进程启动桌面歌词窗口
     // 创建命令 channel：父进程通过 stdin 发送命令，子进程通过 cmd_rx 接收
     let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<desktop_lyrics::DesktopLyricsCommand>();
-    
+
     // 创建事件 channel：窗口线程通过 ev_tx 发送事件，父进程通过 ev_rx 接收并转发到 stdout
     let (ev_tx, ev_rx) = std::sync::mpsc::channel::<desktop_lyrics::DesktopLyricsEvent>();
-    
+
     // 从 stdin 读取命令的线程
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
@@ -90,7 +91,9 @@ fn run_lyrics_child() {
                     if trimmed.is_empty() {
                         continue;
                     }
-                    if let Ok(cmd) = serde_json::from_str::<desktop_lyrics::DesktopLyricsCommand>(trimmed) {
+                    if let Ok(cmd) =
+                        serde_json::from_str::<desktop_lyrics::DesktopLyricsCommand>(trimmed)
+                    {
                         if cmd_tx.send(cmd).is_err() {
                             break;
                         }
@@ -207,7 +210,11 @@ fn main() {
             // 设置 music_directory 为默认目录
             config.music_directory = Some(default_music_dir_str.clone());
             // 添加到 dir_history（如果不存在）
-            if !config.dir_history.iter().any(|p| *p == default_music_dir_str) {
+            if !config
+                .dir_history
+                .iter()
+                .any(|p| *p == default_music_dir_str)
+            {
                 config.dir_history.push(default_music_dir_str);
             }
             // 尝试扫描默认目录（可能有之前下载的歌曲）
@@ -240,10 +247,13 @@ fn main() {
     ui.set_api_base_url(config.api_base_url.clone());
     ui.set_api_model(config.api_model.clone());
     ui.set_github_token(config.github_token.clone());
+    ui.set_recommand(config.recommand);
     ui.set_lyrics_position(config.lyrics_position.clone());
     ui.set_lyrics_alpha(config.lyrics_alpha);
     ui.set_lyrics_coords(config.lyrics_x, config.lyrics_y);
-    ui.set_lyrics_scroll(crate::desktop_lyrics::DesktopLyricsScrollMode::from_config_key(&config.lyrics_scroll));
+    ui.set_lyrics_scroll(
+        crate::desktop_lyrics::DesktopLyricsScrollMode::from_config_key(&config.lyrics_scroll),
+    );
     if config.lyrics_visible {
         ui.open_desktop_lyrics(&config.theme);
     }
@@ -253,7 +263,8 @@ fn main() {
         let should_quit = ui.get_should_quit();
         ctrlc::set_handler(move || {
             *should_quit.lock().unwrap() = true;
-        }).expect(texts.cli_ctrlc_error);
+        })
+        .expect(texts.cli_ctrlc_error);
     }
 
     // 从配置加载收藏列表
@@ -290,6 +301,7 @@ fn main() {
             if play_result.is_ok() {
                 playlist.lock().unwrap().current_index = Some(index);
                 ui.update_now_playing_status(&file.name);
+                ui.record_played_file(&file);
             }
         }
     }
@@ -318,6 +330,7 @@ fn main() {
             api_base_url: ui.get_api_base_url(),
             api_model: ui.get_api_model(),
             github_token: ui.get_github_token(),
+            recommand: ui.get_recommand(),
             lyrics_visible: ui.is_lyrics_active(),
             lyrics_position: ui.get_lyrics_position_key(),
             lyrics_alpha: ui.get_lyrics_alpha(),

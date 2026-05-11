@@ -1,13 +1,19 @@
 [package]
 name = "ter-music-rust"
-version = "1.8.0"
+version = "1.9.0"
 edition = "2021"
 description = "A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems."
 license = "MIT"
+repository = "https://github.com/xxgg121/ter-music-rust"  # 替换为实际仓库URL
+homepage = "https://github.com/xxgg121/ter-music-rust"  # 可选
+documentation = "https://github.com/xxgg121/ter-music-rust/blob/main/README_EN.md"  # 可选
 
 [dependencies]
 # 音频播放库
 rodio = "0.19"
+
+# 终端 UI 框架
+ratatui = { version = "0.29", features = ["crossterm"] }
 
 # 终端 UI 库
 crossterm = "0.28"

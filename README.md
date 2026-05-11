@@ -146,6 +146,7 @@
 | `lyrics_alpha` | 桌面歌词背景透明度 10-100（默认 70） |
 | `lyrics_x` | 桌面歌词窗口 X 坐标（-1 为自动计算） |
 | `lyrics_y` | 桌面歌词窗口 Y 坐标（-1 为自动计算） |
+| `recommand` | 今日推荐歌曲开关（默认 `false`） |
 
 **自动保存时机**：切歌、切换主题、切换语言、收藏变更、每 30 秒、退出时（含 Ctrl+C）
 
@@ -243,6 +244,7 @@ cargo run --release -- -o d:\Music
 | `k` | 配置API 接口 |
 | `g` | 配置Github Token |
 | `z` | 桌面歌词开关 |
+| `r` | 推荐歌曲开关 |
 | `q` | 退出音乐程序 |
 
 ### 歌曲搜索按键
@@ -570,7 +572,16 @@ src/
 ├── search.rs         # 网络搜索下载（酷我+酷狗+网易搜索、在线下载、评论拉取、歌曲信息流式查询）
 ├── config.rs         # 配置文件管理（JSON 序列化、配置项持久化）
 ├── desktop_lyrics.rs # 桌面歌词悬浮窗（Windows API/Linux子进程、透明度/位置/拖动/快捷键）
-└── ui.rs             # 用户界面（终端渲染、事件处理、多视图模式、主题/语言系统）
+├── ui.rs             # 用户界面（Ratatui 框架、终端渲染、事件处理、多视图模式、主题/语言系统）
+└── ui/
+    ├── input.rs      # 输入处理
+    ├── render.rs     # 渲染逻辑
+    ├── layout.rs     # 布局管理
+    ├── theme.rs      # 主题系统
+    ├── mouse.rs      # 鼠标交互
+    ├── terminal.rs   # 终端管理
+    ├── format.rs     # 格式化工具
+    └── view_model.rs # 视图模型
 ```
 
 ### 技术栈
@@ -692,14 +703,45 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605090949394710_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605090950148659_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605090950302081_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605090950383775_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新日志
+
+## 版本 1.9.0 (2026-05-11)
+
+### 🎉 新功能
+
+#### Ratatui UI重构
+- ✨ **UI 框架升级**：将直接使用 crossterm 的 UI 代码重构为使用 Ratatui 框架，提供更高级的 TUI 抽象和更好的代码组织
+- ✨ **模块化重构**：将 `ui.rs` 拆分为多个子模块：`input.rs`（输入处理）、`render.rs`（渲染逻辑）、`layout.rs`（布局管理）、`theme.rs`（主题系统）、`mouse.rs`（鼠标交互）、`terminal.rs`（终端管理）、`format.rs`（格式化工具）、`view_model.rs`（视图模型）
+- ✨ **代码结构优化**：UI 代码更加模块化、可维护性更好，各个功能职责分离清晰
+
+#### 今日推荐歌曲
+- ✨ **推荐歌曲开关**：按 `r` 键开启/关闭今日推荐歌曲功能
+- ✨ **自动获取推荐**：开启后自动从网络获取推荐歌曲列表，显示在界面上方
+- ✨ **点击下载播放**：点击推荐歌曲名称可直接下载并播放
+- ✨ **鼠标滚轮滑动**：推荐歌曲名称较长时，鼠标滚轮可水平滑动查看全部歌曲名称
+- ✨ **配置持久化**：推荐歌曲开关状态自动保存和恢复
+
+### 🔧 功能改进
+
+- 🎨 **UI 一致性提升**：Ratatui 提供统一的组件和样式系统，确保界面元素的一致性和可扩展性
+
+### 💻 技术细节
+
+#### 依赖更新
+- ➕ 添加 `ratatui` 依赖（版本 0.29，启用 crossterm 特性）
+- ♻️ 保留 `crossterm` 作为底层终端控制库
+
+#### 项目结构更新
+- ♻️ `ui/` 目录：新增多个 UI 子模块，实现功能解耦和代码复用
+
+---
 
 ## 版本 1.8.0 (2026-05-08)
 

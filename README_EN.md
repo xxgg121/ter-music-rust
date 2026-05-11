@@ -146,6 +146,7 @@ Configuration is stored in `USERPROFILE/ter-music-rust/config.json` in the progr
 | `lyrics_alpha` | Desktop lyrics background transparency (10-100) |
 | `lyrics_x` | Desktop lyrics window x coordinate |
 | `lyrics_y` | Desktop lyrics window y coordinate |
+| `recommand` | Today's recommended songs toggle (default `false`) |
 
 **Auto-save triggers**: track change, theme change, language change, favorite change, every 30 seconds, and on exit (including Ctrl+C)
 
@@ -244,6 +245,7 @@ cargo run --release -- -o d:\Music
 | `k` | Configure API endpoint |
 | `g` | Configure GitHub Token |
 | `z` | Toggle desktop lyrics |
+| `r` | Toggle recommended songs |
 | `q` | Quit |
 
 ### Search View
@@ -565,14 +567,24 @@ registry = "https://mirrors.ustc.edu.cn/crates.io-index"
 src/
 ├── main.rs       # Program entry (arg parsing, init, config restore/save)
 ├── defs.rs       # Shared definitions (PlayMode/PlayState enums, MusicFile/Playlist structs)
+├── langs.rs      # Language packs (11 languages translation texts centralized, global language accessor)
 ├── audio.rs      # Audio control (rodio wrapper, play/pause/seek/volume/progress)
 ├── analyzer.rs   # Audio analyzer (real-time RMS volume, EMA smoothing, waveform rendering)
 ├── playlist.rs   # Playlist management (directory scan, parallel duration loading, folder picker)
-├── lyrics.rs     # Lyric parsing (LRC, local search, encoding detection, background download)
-├── desktop_lyrics.rs  # Desktop lyrics module (Windows API + Linux child process, transparency/position/drag/shortcuts)
+├── lyrics.rs     # Lyric parsing (LRC format, local search, encoding detection, background download)
 ├── search.rs     # Online search/download (Kuwo + Kugou + NetEase search, download, comments fetch, song info streaming query)
-├── config.rs     # Config management (JSON serialization, 8 persistent items)
-└── ui.rs         # UI (terminal rendering, event handling, multi-view mode, theme/language system)
+├── config.rs     # Config management (JSON serialization, config persistence)
+├── desktop_lyrics.rs # Desktop lyrics floating window (Windows API/Linux child process, transparency/position/drag/shortcuts)
+├── ui.rs         # User interface (Ratatui framework, terminal rendering, event handling, multi-view mode, theme/language system)
+└── ui/
+    ├── input.rs      # Input handling
+    ├── render.rs     # Rendering logic
+    ├── layout.rs     # Layout management
+    ├── theme.rs      # Theme system
+    ├── mouse.rs      # Mouse interaction
+    ├── terminal.rs   # Terminal management
+    ├── format.rs     # Formatting tools
+    └── view_model.rs # View model
 ```
 
 ### Tech Stack
@@ -693,16 +705,47 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605090949394710_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605090950148659_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605090950302081_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605090950383775_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ---
 
 ## 📝 Changelog
+
+## Version 1.9.0 (2026-05-11)
+
+### 🎉 New Features
+
+#### Ratatui UI Refactoring
+- ✨ **UI Framework Upgrade**: Refactored direct crossterm UI code to use the Ratatui framework, providing higher-level TUI abstractions and better code organization
+- ✨ **Modular Refactoring**: Split `ui.rs` into multiple sub-modules: `input.rs` (input handling), `render.rs` (rendering logic), `layout.rs` (layout management), `theme.rs` (theme system), `mouse.rs` (mouse interaction), `terminal.rs` (terminal management), `format.rs` (formatting tools), `view_model.rs` (view model)
+- ✨ **Code Structure Optimization**: UI code is more modular, maintainable, with clear functional separation
+
+#### Today's Recommended Songs
+- ✨ **Recommended Songs Toggle**: Press `r` to enable/disable today's recommended songs feature
+- ✨ **Auto Fetch Recommendations**: When enabled, automatically fetch recommended song list from network, display at the top of interface
+- ✨ **Click to Download Play**: Click recommended song name to directly download and play
+- ✨ **Mouse Wheel Scroll**: When recommended song name is long, mouse wheel can scroll horizontally to view full name
+- ✨ **Config Persistence**: Recommended songs toggle state is auto-saved and restored
+
+### 🔧 Improvements
+
+- 🎨 **UI Consistency Improvement**: Ratatui provides unified components and styles, ensuring consistency and scalability of interface elements
+
+### 💻 Technical Details
+
+#### Dependency Updates
+- ➕ Added `ratatui` dependency (version 0.29, with crossterm feature)
+- ♻️ Retained `crossterm` as underlying terminal control library
+
+#### Project Structure Updates
+- ♻️ `ui/` directory: Added multiple UI sub-modules for functional decoupling and code reuse
+
+---
 
 ## Version 1.8.0 (2026-05-08)
 

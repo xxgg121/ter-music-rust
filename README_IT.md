@@ -146,6 +146,7 @@ La configurazione è memorizzata in `USERPROFILE/ter-music-rust/config.json` nel
 | `lyrics_alpha` | Trasparenza dello sfondo della finestra lyrics desktop (10-100) |
 | `lyrics_x` | Coordinata X della finestra lyrics desktop |
 | `lyrics_y` | Coordinata Y della finestra lyrics desktop |
+| `recommand` | Attivatore canzoni raccomandate del giorno (predefinito `false`) |
 
 **Attivatori di salvataggio automatico**: cambio traccia, cambio tema, cambio lingua, cambio preferiti, ogni 30 secondi e all'uscita (incluso Ctrl+C)
 
@@ -244,6 +245,7 @@ cargo run --release -- -o d:\Music
 | `k` | Configura endpoint API |
 | `g` | Configura Token GitHub |
 | `z` | Attiva/disattiva lyrics desktop |
+| `r` | Attiva/disattiva canzoni raccomandate |
 | `q` | Esci |
 
 
@@ -564,16 +566,26 @@ registry = "https://mirrors.ustc.edu.cn/crates.io-index"
 
 ```text
 src/
-├── main.rs       # Punto di ingresso del programma (analisi args, inizializzazione, ripristino/salvataggio configurazione)
-├── defs.rs       # Definizioni condivise (enum PlayMode/PlayState, struct MusicFile/Playlist)
-├── audio.rs      # Controllo audio (wrapper rodio, riproduci/pausa/seek/volume/progresso)
-├── analyzer.rs   # Analizzatore audio (volume RMS in tempo reale, smorzamento EMA, rendering forma d'onda)
-├── playlist.rs   # Gestione playlist (scansione directory, caricamento parallelo durata, selettore cartella)
-├── lyrics.rs     # Analisi testi (LRC, ricerca locale, rilevamento codifica, download in background)
-├── desktop_lyrics.rs   # Modulo lyrics desktop (Windows API + processo figlio Linux, trasparenza/posizione/trascinamento/scorciatoie)
-├── search.rs     # Ricerca/download online (ricerca Kuwo + Kugou + NetEase, download, recupero commenti, interrogazione streaming informazioni)
-├── config.rs     # Gestione configurazione (serializzazione JSON, 8 elementi persistenti)
-└── ui.rs         # Interfaccia (rendering terminale, gestione eventi, modalità multi-vista, sistema tema/lingua)
+├── main.rs       # Punto di ingresso (parsing argomenti, inizializzazione, ripristino/salvataggio configurazione)
+├── defs.rs       # Definizioni comuni (enumerazioni PlayMode/PlayState, strutture MusicFile/Playlist)
+├── langs.rs      # Pacchetti lingua (gestione centralizzata testi traduzione in 11 lingue, accessore lingua globale)
+├── audio.rs      # Controllo audio (wrapper rodio, riproduzione/pausa/ricerca/volume/progresso)
+├── analyzer.rs   # Analizzatore audio (RMS in tempo reale, smoothing EMA, rendering forma d'onda)
+├── playlist.rs   # Gestione playlist (scansione directory, caricamento parallelo durata, selezione cartella)
+├── lyrics.rs     # Parsing testi (formato LRC, ricerca locale, rilevamento codifica, download in background)
+├── search.rs     # Ricerca/download online (ricerca Kuwo + Kugou + NetEase, download, recupero commenti, query informazioni canzoni in streaming)
+├── config.rs     # Gestione configurazione (serializzazione JSON, elementi configurazione persistenti)
+├── desktop_lyrics.rs # Finestra flottante testi desktop (Windows API/processo figlio Linux, trasparenza/posizione/trascinamento/scorciatoie)
+├── ui.rs         # Interfaccia utente (framework Ratatui, rendering terminale, gestione eventi, modalità multivista, sistema temi/lingue)
+└── ui/
+    ├── input.rs      # Gestione input
+    ├── render.rs     # Logica rendering
+    ├── layout.rs     # Gestione layout
+    ├── theme.rs      # Sistema temi
+    ├── mouse.rs      # Interazione mouse
+    ├── terminal.rs   # Gestione terminale
+    ├── format.rs     # Strumenti formattazione
+    └── view_model.rs # Modello vista
 ```
 
 ### Stack tecnologico
@@ -694,10 +706,43 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La prima compilazione scarica e compila tutte le dipendenze; questo è normale. Le compilazioni successive sono molto più veloci.
 
 ### Scarica Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605090949394710_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605090950148659_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605090950302081_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605090950383775_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
+
+---
+
+## 📝 Registro delle modifiche
+
+## Versione 1.9.0 (2026-05-11)
+
+### 🎉 Nuove funzionalità
+
+#### Refattorizzazione UI con Ratatui
+- ✨ **Aggiornamento framework UI**: Refattorizzazione del codice UI che usa direttamente crossterm per utilizzare il framework Ratatui, fornendo astrazioni TUI di livello superiore e una migliore organizzazione del codice
+- ✨ **Refattorizzazione modulare**: Divisione di `ui.rs` in diversi sottomoduli: `input.rs`(gestione input), `render.rs`(logica rendering), `layout.rs`(gestione layout), `theme.rs`(sistema temi), `mouse.rs`(interazione mouse), `terminal.rs`(gestione terminale), `format.rs`(strumenti formattazione), `view_model.rs`(modello vista)
+- ✨ **Ottimizzazione struttura codice**: Il codice UI è più modulare, manutenibile, con responsabilità funzionali chiaramente separate
+
+#### Canzoni raccomandate del giorno
+- ✨ **Attivatore canzoni raccomandate**: Premi `r` per attivare/disattivare la funzione di canzoni raccomandate del giorno
+- ✨ **Recupero automatico raccomandazioni**: Quando attivato, recupera automaticamente la lista di canzoni raccomandate dalla rete e la mostra nella parte superiore dell'interfaccia
+- ✨ **Clic per scaricare e riprodurre**: Clicca sul nome della canzone raccomandata per scaricare direttamente e riprodurre
+- ✨ **Scorrimento rotella mouse**: Se il nome della canzone raccomandata è lungo, la rotella del mouse permette scorrimento orizzontale per vedere il nome completo
+- ✨ **Persistenza impostazioni**: Lo stato dell'attivatore di canzoni raccomandate viene salvato e ripristinato automaticamente
+
+### 🔧 Miglioramenti funzionali
+
+- 🎨 **Miglioramento consistenza UI**: Ratatui fornisce componenti e un sistema di stili unificati, garantendo consistenza ed estensibilità degli elementi dell'interfaccia
+
+### 💻 Dettagli tecnici
+
+#### Aggiornamenti dipendenze
+- ➕ Aggiunta dipendenza `ratatui`(versione 0.29, con funzione crossterm)
+- ♻️ Conservazione di `crossterm` come libreria di controllo terminale di base
+
+#### Aggiornamenti struttura progetto
+- ♻️ Directory `ui/`: Aggiunta di diversi sottomoduli UI per disaccoppiamento funzionale e riutilizzo codice
 
 ---
 

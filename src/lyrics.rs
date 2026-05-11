@@ -127,7 +127,7 @@ impl Lyrics {
 
         // 尝试多种可能的文件名（同时尝试带/不带首尾空白）
         let possible_names = vec![
-            format!("{}.lrc", file_stem),       // 原始名称
+            format!("{}.lrc", file_stem),        // 原始名称
             format!("{}.lrc", trimmed_stem),     // 去除首尾空白后的名称
             format!("{} [网易].lrc", file_stem), // 带网易标记
             format!("{} [网易].lrc", trimmed_stem),
@@ -147,17 +147,15 @@ impl Lyrics {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.extension().map(|ext| ext == "lrc").unwrap_or(false) {
-                if let Some(lrc_stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    // 去掉标记和首尾空白（包括全角空格）后比较
-                    let clean_lrc = lrc_stem
-                        .replace("[网易]", "")
-                        .replace("【QQ音乐v2】", "");
-                    let clean_lrc = clean_lrc.trim().trim_matches('\u{3000}');
+                    if let Some(lrc_stem) = path.file_stem().and_then(|s| s.to_str()) {
+                        // 去掉标记和首尾空白（包括全角空格）后比较
+                        let clean_lrc = lrc_stem.replace("[网易]", "").replace("【QQ音乐v2】", "");
+                        let clean_lrc = clean_lrc.trim().trim_matches('\u{3000}');
 
-                    if clean_lrc == trimmed_stem {
-                        return Some(path);
+                        if clean_lrc == trimmed_stem {
+                            return Some(path);
+                        }
                     }
-                }
                 }
             }
         }
@@ -168,7 +166,7 @@ impl Lyrics {
     /// 解析歌词内容
     fn parse_lyrics_content(content: &str) -> Option<Self> {
         let mut lines = Vec::new();
-        
+
         for line in content.lines() {
             let parsed = parse_lrc_line(line);
             lines.extend(parsed);
@@ -195,7 +193,7 @@ impl Lyrics {
         // 从文件名提取歌手和歌名
         let file_stem = music_path.file_stem()?.to_str()?;
         let (artist, title) = Self::parse_artist_title(file_stem)?;
-        
+
         // 尝试多个歌词 API
         let apis = vec![
             // API 1: 歌词下载网站
@@ -203,38 +201,37 @@ impl Lyrics {
                 "https://api.lrc.cx/v1/search?name={}",
                 urlencoding::encode(&format!("{} {}", artist, title))
             ),
-            
             // API 2: 备用 API
             format!(
                 "https://music.163.com/api/search/get?s={}&type=1",
                 urlencoding::encode(&format!("{} {}", artist, title))
             ),
         ];
-        
+
         for api_url in apis {
             if let Some(content) = Self::try_download_from_api(&client, &api_url) {
                 return Some(content);
             }
         }
-        
+
         None
     }
-    
+
     /// 尝试从指定 API 下载歌词
     fn try_download_from_api(client: &reqwest::blocking::Client, api_url: &str) -> Option<String> {
         // 发送请求
         let response = client.get(api_url).send().ok()?;
         let text = response.text().ok()?;
-        
+
         // 尝试解析 JSON 响应
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
             // 尝试不同的 JSON 格式
-            
+
             // 格式1: 直接返回歌词
             if let Some(lyric) = json.get("lyric").and_then(|l| l.as_str()) {
                 return Some(lyric.to_string());
             }
-            
+
             // 格式2: results 数组
             if let Some(results) = json.get("results").and_then(|r| r.as_array()) {
                 if let Some(first) = results.first() {
@@ -250,14 +247,15 @@ impl Lyrics {
                     }
                 }
             }
-            
+
             // 格式3: result 对象
             if let Some(result) = json.get("result") {
                 if let Some(songs) = result.get("songs").and_then(|s| s.as_array()) {
                     if let Some(song) = songs.first() {
                         if let Some(id) = song.get("id").and_then(|i| i.as_i64()) {
                             // 使用歌曲 ID 获取歌词
-                            let lrc_url = format!("https://music.163.com/api/song/lyric?id={}&lv=1", id);
+                            let lrc_url =
+                                format!("https://music.163.com/api/song/lyric?id={}&lv=1", id);
                             if let Some(content) = Self::fetch_lyric_by_id(client, &lrc_url) {
                                 return Some(content);
                             }
@@ -265,7 +263,7 @@ impl Lyrics {
                     }
                 }
             }
-            
+
             // 格式4: data 数组
             if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
                 if let Some(first) = data.first() {
@@ -277,15 +275,15 @@ impl Lyrics {
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// 下载歌词文件
     fn download_lyric_file(client: &reqwest::blocking::Client, url: &str) -> Option<String> {
         let response = client.get(url).send().ok()?;
         let bytes = response.bytes().ok()?;
-        
+
         // 尝试解码
         if let Ok(utf8_content) = String::from_utf8(bytes.to_vec()) {
             Some(utf8_content)
@@ -295,13 +293,13 @@ impl Lyrics {
             Some(cow.into_owned())
         }
     }
-    
+
     /// 通过歌曲 ID 获取歌词
     fn fetch_lyric_by_id(client: &reqwest::blocking::Client, url: &str) -> Option<String> {
         let response = client.get(url).send().ok()?;
         let text = response.text().ok()?;
         let json: serde_json::Value = serde_json::from_str(&text).ok()?;
-        
+
         json.get("lrc")
             .and_then(|l| l.get("lyric"))
             .and_then(|l| l.as_str())
@@ -361,7 +359,7 @@ impl Lyrics {
         }
 
         let current_idx = self.get_current_index(current_time).unwrap_or(0);
-        
+
         // 计算可见范围，让当前歌词尽量在中间
         let half = visible_count / 2;
         let start = current_idx.saturating_sub(half);
@@ -397,7 +395,7 @@ fn parse_lrc_line(line: &str) -> Vec<LyricLine> {
     // 查找所有时间标签
     let chars: Vec<char> = line.chars().collect();
     let mut i = 0;
-    
+
     while i < chars.len() {
         if chars[i] == '[' {
             // 查找对应的 ]
@@ -405,15 +403,15 @@ fn parse_lrc_line(line: &str) -> Vec<LyricLine> {
             while j < chars.len() && chars[j] != ']' {
                 j += 1;
             }
-            
+
             if j < chars.len() {
-                let tag: String = chars[i+1..j].iter().collect();
-                
+                let tag: String = chars[i + 1..j].iter().collect();
+
                 // 尝试解析时间标签
                 if let Some(duration) = parse_time_tag(&tag) {
                     times.push(duration);
                 }
-                
+
                 text_start = j + 1;
                 i = j + 1;
             } else {
@@ -455,11 +453,11 @@ fn parse_time_tag(tag: &str) -> Option<Duration> {
     }
 
     let minutes: u64 = parts[0].parse().ok()?;
-    
+
     // 秒数部分可能包含小数点
     let seconds_parts: Vec<&str> = parts[1].split('.').collect();
     let seconds: u64 = seconds_parts.first()?.parse().ok()?;
-    
+
     let milliseconds: u64 = if seconds_parts.len() > 1 {
         // 补齐到3位
         let ms_str = seconds_parts[1];

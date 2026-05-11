@@ -43,21 +43,21 @@ impl AudioAnalyzer {
             smooth_alpha: 0.3, // EMA 系数：0.3 提供较好的平滑效果，同时保持响应速度
         }
     }
-    
+
     /// 计算 RMS（均方根）音量，并使用 EMA 平滑
     fn calculate_rms(&mut self) {
         if self.sample_count == 0 {
             return;
         }
-        
+
         // 计算 RMS
         let mean_square = self.sum_of_squares / self.sample_count as f64;
         let rms = mean_square.sqrt();
-        
+
         // 将 RMS 转换为 0.0-1.0 的归一化值
         // 使用非线性映射使小音量更明显
         let normalized = (rms * 3.5).min(1.0); // 放大小音量
-        
+
         // EMA 平滑：smoothed = alpha * new + (1 - alpha) * old
         // 平滑衰减：音量下降时使用更小的 alpha，避免波形突然消失
         let alpha = if normalized < self.smoothed_level {
@@ -66,12 +66,12 @@ impl AudioAnalyzer {
             self.smooth_alpha // 上升时保持正常响应速度
         };
         self.smoothed_level = alpha * normalized + (1.0 - alpha) * self.smoothed_level;
-        
+
         // 转换为 0-1000 的整数
         let level = (self.smoothed_level * 1000.0) as u32;
-        
+
         self.volume_level.store(level, Ordering::Relaxed);
-        
+
         // 重置计数器
         self.sum_of_squares = 0.0;
         self.sample_count = 0;

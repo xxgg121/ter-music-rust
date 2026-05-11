@@ -70,7 +70,6 @@ impl PlayMode {
     }
 }
 
-
 impl fmt::Display for PlayMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -108,7 +107,6 @@ pub enum PlayState {
     /// 暂停
     Paused,
 }
-
 
 /// 音乐文件信息
 #[derive(Debug, Clone)]

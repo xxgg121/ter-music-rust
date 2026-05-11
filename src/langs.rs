@@ -50,27 +50,61 @@ impl UiLanguage {
     }
 
     pub fn from_config_key(s: &str) -> Self {
-        if s.eq_ignore_ascii_case("sc") || s.eq_ignore_ascii_case("zh-cn") || s.eq_ignore_ascii_case("zh_hans") || s.eq_ignore_ascii_case("cn") || s == "简体" || s == "中文简体" {
+        if s.eq_ignore_ascii_case("sc")
+            || s.eq_ignore_ascii_case("zh-cn")
+            || s.eq_ignore_ascii_case("zh_hans")
+            || s.eq_ignore_ascii_case("cn")
+            || s == "简体"
+            || s == "中文简体"
+        {
             UiLanguage::Sc
-        } else if s.eq_ignore_ascii_case("tc") || s.eq_ignore_ascii_case("zh-tw") || s.eq_ignore_ascii_case("zh_hant") || s.eq_ignore_ascii_case("tw") || s == "繁体" || s == "中文繁体" {
+        } else if s.eq_ignore_ascii_case("tc")
+            || s.eq_ignore_ascii_case("zh-tw")
+            || s.eq_ignore_ascii_case("zh_hant")
+            || s.eq_ignore_ascii_case("tw")
+            || s == "繁体"
+            || s == "中文繁体"
+        {
             UiLanguage::Tc
         } else if s.eq_ignore_ascii_case("en") || s.eq_ignore_ascii_case("english") {
             UiLanguage::En
-        } else if s.eq_ignore_ascii_case("ja") || s.eq_ignore_ascii_case("jp") || s.eq_ignore_ascii_case("japanese") {
+        } else if s.eq_ignore_ascii_case("ja")
+            || s.eq_ignore_ascii_case("jp")
+            || s.eq_ignore_ascii_case("japanese")
+        {
             UiLanguage::Ja
-        } else if s.eq_ignore_ascii_case("ko") || s.eq_ignore_ascii_case("kr") || s.eq_ignore_ascii_case("korean") {
+        } else if s.eq_ignore_ascii_case("ko")
+            || s.eq_ignore_ascii_case("kr")
+            || s.eq_ignore_ascii_case("korean")
+        {
             UiLanguage::Ko
-        } else if s.eq_ignore_ascii_case("ru") || s.eq_ignore_ascii_case("russian") || s == "русский" {
+        } else if s.eq_ignore_ascii_case("ru")
+            || s.eq_ignore_ascii_case("russian")
+            || s == "русский"
+        {
             UiLanguage::Ru
-        } else if s.eq_ignore_ascii_case("fr") || s.eq_ignore_ascii_case("french") || s == "français" {
+        } else if s.eq_ignore_ascii_case("fr")
+            || s.eq_ignore_ascii_case("french")
+            || s == "français"
+        {
             UiLanguage::Fr
-        } else if s.eq_ignore_ascii_case("de") || s.eq_ignore_ascii_case("german") || s == "deutsch" {
+        } else if s.eq_ignore_ascii_case("de") || s.eq_ignore_ascii_case("german") || s == "deutsch"
+        {
             UiLanguage::De
-        } else if s.eq_ignore_ascii_case("es") || s.eq_ignore_ascii_case("spanish") || s == "español" {
+        } else if s.eq_ignore_ascii_case("es")
+            || s.eq_ignore_ascii_case("spanish")
+            || s == "español"
+        {
             UiLanguage::Es
-        } else if s.eq_ignore_ascii_case("it") || s.eq_ignore_ascii_case("italian") || s == "italiano" {
+        } else if s.eq_ignore_ascii_case("it")
+            || s.eq_ignore_ascii_case("italian")
+            || s == "italiano"
+        {
             UiLanguage::It
-        } else if s.eq_ignore_ascii_case("pt") || s.eq_ignore_ascii_case("portuguese") || s == "português" {
+        } else if s.eq_ignore_ascii_case("pt")
+            || s.eq_ignore_ascii_case("portuguese")
+            || s == "português"
+        {
             UiLanguage::Pt
         } else {
             UiLanguage::Sc
@@ -117,6 +151,7 @@ impl UiLanguage {
 // ============================================================================
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct LangTexts {
     // ── 播放状态 ──
     pub now_playing_prefix: &'static str,
@@ -204,6 +239,11 @@ pub struct LangTexts {
     pub select_song_for_lyrics: &'static str,
     pub no_comments: &'static str,
 
+    // ── 推荐歌曲 ──
+    pub recommendation_title: &'static str,
+    pub recommendation_loading: &'static str,
+    pub recommendation_no_data: &'static str,
+
     // ── 控制栏标签 ──
     pub play_status_label: &'static str,
     pub volume_label: &'static str,
@@ -250,6 +290,7 @@ pub struct LangTexts {
 
     // ── AI 提示词模板（含 {} 占位符） ──
     pub ai_prompt_template: &'static str,
+    pub recommendation_prompt_template: &'static str,
 
     // ── 帮助信息 ──
     pub help_lines: &'static [&'static str],
@@ -381,11 +422,11 @@ static SC: LangTexts = LangTexts {
     search_prompt_juhe: "聚合搜索: ",
     search_prompt_online: "网络搜索: ",
     search_prompt_local: "本地搜索: ",
-    playlist_empty_hint: "输入歌单名称后按 Enter 搜索歌单",
-    playlist_no_result: "歌单搜索无结果，修改关键字后按 Enter 重新搜索",
-    juhe_enter_hint: "输入歌曲名称后按 Enter 搜索聚合搜索",
-    online_enter_hint: "输入歌曲名称后按 Enter 搜索网络歌曲",
-    online_no_result: "网络搜索无结果，修改关键字后按 Enter 重新搜索",
+    playlist_empty_hint: "输入关键字后按Enter搜索在线歌单",
+    playlist_no_result: "歌单搜索无结果，修改关键字后按Enter重新搜索",
+    juhe_enter_hint: "输入关键字后按Enter搜索聚合歌曲",
+    online_enter_hint: "输入关键字后按Enter搜索网络歌曲",
+    online_no_result: "网络搜索无结果，修改关键字后按Enter重新搜索",
 
     app_title: "🎵 Ter-Music-Rust - 终端音乐播放器 🎵",
     song_info_label: "歌曲信息",
@@ -406,6 +447,10 @@ static SC: LangTexts = LangTexts {
     select_song_for_lyrics: "请选择歌曲播放",
     no_comments: "暂无评论",
 
+    recommendation_title: "今日推荐歌曲：",
+    recommendation_loading: "正在获取推荐歌曲...",
+    recommendation_no_data: "播放几首歌曲后才能推荐",
+
     play_status_label: "播放状态",
     volume_label: "播放音量",
     play_mode_label: "播放模式",
@@ -424,8 +469,8 @@ static SC: LangTexts = LangTexts {
     dir_empty_hint: "音乐目录为空，按o打开目录添加",
     favorites_empty_hint: "收藏列表为空，按f添加当前歌曲到收藏",
     playlist_no_dir_hint: "请按o打开音乐目录",
-    local_search_empty_hint: "输入关键字后按 Enter 搜索本地歌曲",
-    local_search_no_result_hint: "按 Enter 搜索本地歌曲，按n搜索网络",
+    local_search_empty_hint: "输入关键字后按Enter搜索本地歌曲",
+    local_search_no_result_hint: "按Enter搜索本地歌曲，按n搜索网络",
     instrumental_no_lyrics: "（纯音乐无歌词）",
     seek_error_zero_duration: "无法跳转：歌曲时长为零",
     seek_error_unknown_duration: "无法跳转：未知歌曲时长",
@@ -437,8 +482,10 @@ static SC: LangTexts = LangTexts {
 
     ai_prompt_template: "请根据歌曲名称整理该歌曲的详细信息。禁止输出任何开场白、问候语或自我介绍，直接输出歌曲信息。\n\n歌曲名称：{}\n\n按以下结构详细输出，每项尽量展开，无法确认的标注「暂无公开资料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手详情：（包括国籍、出生地、出生日期、星座、血型、身高、体重、职业、毕业院校、代表作品、主要成就等）\n词曲创作：（作词、作曲、编曲、制作人等完整创作团队）\n发行时间：（具体日期，若有不同版本请分别列出）\n所属专辑：（专辑名称、第几首曲目、专辑曲目列表）\n创作背景：（详细描述创作灵感来源、幕后故事、创作过程中的趣闻等）\n歌词大意：（深入解读歌词含义、表达的情感与主题思想）\n音乐风格：（流派、BPM、调性、节奏特点、特殊编曲或乐器使用等）\n商业成绩：（榜单排名、销量、播放量、认证等）\n获奖记录：（音乐奖项、提名等）\n影响评价：（乐评人评价、文化影响、历史地位等）\n翻唱引用：（知名翻唱版本、影视/广告/游戏等中的使用）\n趣闻轶事：（与歌曲相关的冷知识、轶事、趣闻等）\n\n要求：\n- 信息尽量准确详实，避免杜撰，不确定的标注「据传」或「待考证」。\n- 如有多个歌手或版本，以原唱或最知名版本为主，必要时补充其他版本。\n- 每项内容尽量详细展开，不要过于简略。\n- 绝对禁止输出开场白、问候语、自我介绍，禁止使用序号编号。\n- 必须使用简体中文回答。",
 
+    recommendation_prompt_template: "请根据以下用户的歌曲播放历史，推荐10首用户可能喜欢的歌曲。只返回歌曲名列表，每行一首，不要编号，不要解释。\n{}",
+
     help_lines: &[
-        "§快捷按键",
+        "快捷按键",
         "→ ↑/↓         上下选择歌曲",
         "→ Enter       播放选中歌曲",
         "→ Space       播放/暂停歌曲",
@@ -448,7 +495,7 @@ static SC: LangTexts = LangTexts {
         "→ ,/.         快退/快进10秒",
         "→ +/-         音量大小加减",
         "",
-        "§功能按键",
+        "功能按键",
         "→ 1-5         切换播放模式",
         "→ o           打开音乐目录",
         "→ s           搜索本地歌曲",
@@ -465,30 +512,31 @@ static SC: LangTexts = LangTexts {
         "→ k           配置API 接口",
         "→ g           配置GitHub Token",
         "→ z           桌面歌词开关",
+        "→ r           推荐歌曲开关",
         "→ q           退出音乐程序",
         "",
-        "§播放模式",
+        "播放模式",
         "→ 1  单曲播放（歌曲播放完停止）",
         "→ 2  单曲循环（循环播放当前歌曲）",
         "→ 3  顺序播放（顺序播放完后回到第一首）",
         "→ 4  列表循环（循环播放整个列表）",
         "→ 5  随机播放（随机选择播放歌曲）",
         "",
-        "§支持格式",
+        "支持格式",
         "  MP3、WAV、FLAC、OGG、OGA、",
         "  Opus、M4A、AAC、AIFF、APE",
         "",
-        "§命令行参数",
+        "命令行参数",
         "→ -o <目录>   打开音乐目录",
         "→ -h, --help  显示帮助信息",
         "",
-        "§鼠标操作",
+        "鼠标操作",
         "  点击歌曲列表选择歌曲",
         "  点击进度条跳转播放位置",
         "  点击音量条调节音量",
         "  拖动歌词区域跳转歌词",
         "",
-        "§GitHub仓库",
+        "GitHub仓库",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -527,6 +575,7 @@ static SC: LangTexts = LangTexts {
         " k 配置API 接口",
         " g 配置Github Token",
         " z 桌面歌词开关",
+        " r 推荐歌曲开关",
         " q 退出音乐程序",
         "",
         "播放模式:",
@@ -663,11 +712,11 @@ static TC: LangTexts = LangTexts {
     search_prompt_juhe: "聚合搜索: ",
     search_prompt_online: "網路搜尋: ",
     search_prompt_local: "本地搜尋: ",
-    playlist_empty_hint: "輸入歌單名稱後按 Enter 搜尋歌單",
+    playlist_empty_hint: " 輸入關鍵字後按Enter搜尋歌單",
     playlist_no_result: "歌單蒐索無結果，修改關鍵字後按Enter重新搜索",
-    juhe_enter_hint: "輸入歌曲名稱後按 Enter 搜尋獨家音源",
-    online_enter_hint: "輸入歌曲名稱後按 Enter 搜尋網路歌曲",
-    online_no_result: "網路搜尋無結果，修改關鍵字後按 Enter 重新搜尋",
+    juhe_enter_hint: "輸入關鍵字後按Enter搜尋獨家音源",
+    online_enter_hint: "輸入關鍵字後按Enter搜尋網路歌曲",
+    online_no_result: "網路搜尋無結果，修改關鍵字後按Enter重新搜尋",
 
     app_title: "🎵 Ter-Music-Rust - 終端音樂播放器 🎵",
     song_info_label: "歌曲資訊",
@@ -688,6 +737,10 @@ static TC: LangTexts = LangTexts {
     select_song_for_lyrics: "請選擇歌曲播放",
     no_comments: "暫無評論",
 
+    recommendation_title: "今日推薦歌曲：",
+    recommendation_loading: "正在獲取推薦歌曲...",
+    recommendation_no_data: "播放幾首歌曲後才能推薦",
+
     play_status_label: "播放狀態",
     volume_label: "播放音量",
     play_mode_label: "播放模式",
@@ -706,8 +759,8 @@ static TC: LangTexts = LangTexts {
     dir_empty_hint: "音樂目錄為空，按o開啟目錄新增",
     favorites_empty_hint: "收藏列表為空，按f新增當前歌曲到收藏",
     playlist_no_dir_hint: "請按o打開音樂目錄",
-    local_search_empty_hint: "輸入關鍵字後按 Enter 搜尋本地歌曲",
-    local_search_no_result_hint: "按 Enter 搜尋本地歌曲，按n搜尋網路",
+    local_search_empty_hint: "輸入關鍵字後按Enter搜尋本地歌曲",
+    local_search_no_result_hint: "按Enter搜尋本地歌曲，按n搜尋網路",
     instrumental_no_lyrics: "（純音樂無歌詞）",
     seek_error_zero_duration: "無法跳轉：歌曲時長為零",
     seek_error_unknown_duration: "無法跳轉：未知歌曲時長",
@@ -719,8 +772,10 @@ static TC: LangTexts = LangTexts {
 
     ai_prompt_template: "請根據歌曲名稱整理該歌曲的詳細資訊。禁止輸出任何開場白、問候語或自我介紹，直接輸出歌曲資訊。\n\n歌曲名稱：{}\n\n依照以下結構詳細輸出，每項盡量展開，無法確認的標註「暫無公開資料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手詳情：（包括國籍、出生地、出生日期、星座、血型、身高、體重、職業、畢業院校、代表作、主要成就等）\n詞曲創作：（作詞、作曲、編曲、製作人等完整創作團隊）\n發行時間：（具體日期，若有不同版本請分別列出）\n所屬專輯：（專輯名稱、第幾首曲目、專輯曲目列表）\n創作背景：（詳細描述創作靈感來源、幕後故事、創作過程中的趣聞等）\n歌詞大意：（深入解讀歌詞含義、表達的情感與主題思想）\n音樂風格：（流派、BPM、調性、節奏特點、特殊編曲或樂器使用等）\n商業成績：（榜單排名、銷量、播放量、認證等）\n得獎紀錄：（音樂獎項、提名等）\n影響評價：（樂評人評價、文化影響、歷史地位等）\n翻唱引用：（知名翻唱版本、影視/廣告/遊戲等中的使用）\n趣聞軼事：（與歌曲相關的冷知識、軼事、趣聞等）\n\n要求：\n- 資訊盡量準確詳實，避免杜撰，不確定的標註「據傳」或「待考證」。\n- 若有多位歌手或多個版本，以原唱或最知名版本為主，必要時補充其他版本。\n- 每項內容盡量詳細展開，不要過於簡略。\n- 絕對禁止輸出開場白、問候語、自我介紹，禁止使用序號編號。\n- 必須使用繁體中文回答。",
 
+    recommendation_prompt_template: "請根據以下用戶的歌曲播放歷史，推薦10首用戶可能喜歡的歌曲。只返回歌曲名列表，每行一首，不要編號，不要解釋。\n{}",
+
     help_lines: &[
-        "§快捷按鍵",
+        "快捷按鍵",
         "→ ↑/↓         上下選擇歌曲",
         "→ Enter       播放選中歌曲",
         "→ Space       播放/暫停歌曲",
@@ -730,7 +785,7 @@ static TC: LangTexts = LangTexts {
         "→ ,/.         快退/快進10秒",
         "→ +/-         音量大小加減",
         "",
-        "§功能按鍵",
+        "功能按鍵",
         "→ 1-5         切換播放模式",
         "→ o           打開音樂目錄",
         "→ s           搜尋本地歌曲",
@@ -747,30 +802,31 @@ static TC: LangTexts = LangTexts {
         "→ k           設定API接口",
         "→ g           設定GitHub Token",
         "→ z           桌面歌詞開關",
+        "→ r           推薦歌曲開關",
         "→ q           退出音樂程式",
         "",
-        "§播放模式",
+        "播放模式",
         "→ 1  單曲播放（歌曲播放完停止）",
         "→ 2  單曲循環（循環播放當前歌曲）",
         "→ 3  順序播放（順序播放完後回到第一首）",
         "→ 4  列表循環（循環播放整個列表）",
         "→ 5  隨機播放（隨機選擇播放歌曲）",
         "",
-        "§支持格式",
+        "支持格式",
         "  MP3、WAV、FLAC、OGG、OGA、",
         "  Opus、M4A、AAC、AIFF、APE",
         "",
-        "§命令列參數",
+        "命令列參數",
         "→ -o <目錄>   打開音樂目錄",
         "→ -h, --help  顯示幫助資訊",
         "",
-        "§滑鼠操作",
+        "滑鼠操作",
         "  點擊歌曲列表選擇歌曲",
         "  點擊進度條跳轉播放位置",
         "  點擊音量條調節音量",
         "  拖動歌詞區域跳轉歌詞",
         "",
-        "§GitHub倉庫",
+        "GitHub倉庫",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -809,6 +865,7 @@ static TC: LangTexts = LangTexts {
         " k 設定API接口",
         " g 設定Github Token",
         " z 桌面歌詞開關",
+        " r 推薦歌曲開關",
         " q 退出音樂程式",
         "",
         "播放模式:",
@@ -945,10 +1002,10 @@ static EN: LangTexts = LangTexts {
     search_prompt_juhe: "Juhe Search: ",
     search_prompt_online: "Online Search: ",
     search_prompt_local: "Local Search: ",
-    playlist_empty_hint: "Enter the playlist name and press Enter to search for the playlist",
+    playlist_empty_hint: "Enter keyword and press Enter to search for the playlist",
     playlist_no_result: "No playlist results. Update keyword and press Enter again",
-    juhe_enter_hint: "Enter song name, then press Enter to search Juhe",
-    online_enter_hint: "Enter song name, then press Enter to search online",
+    juhe_enter_hint: "Enter keyword, then press Enter to search Juhe",
+    online_enter_hint: "Enter keyword, then press Enter to search online",
     online_no_result: "No online result. Update keyword and press Enter again",
 
     app_title: "🎵 Ter-Music-Rust - Terminal Music Player 🎵",
@@ -969,6 +1026,10 @@ static EN: LangTexts = LangTexts {
     no_lyrics_found: "Lyrics file not found",
     select_song_for_lyrics: "Select a song to play",
     no_comments: "No comments",
+
+    recommendation_title: "Today's Recommendations: ",
+    recommendation_loading: "Fetching recommendations...",
+    recommendation_no_data: "Play some songs first to get recommendations",
 
     play_status_label: "State",
     volume_label: "Volume",
@@ -1001,8 +1062,10 @@ static EN: LangTexts = LangTexts {
 
     ai_prompt_template: "Compile detailed information about the song based on its title. Do NOT output any preamble, greeting, or self-introduction. Output the song information directly.\n\nSong Title: {}\n\nOutput in the following structure with detailed descriptions. If any item cannot be verified, write \"No public information available\":\n\nPerformers: (including lead vocals, backing vocals, featured artists, etc.)\nArtist Details: (including nationality, birthplace, date of birth, zodiac sign, blood type, height, weight, occupation, alma mater, notable works, major achievements, etc.)\nSongwriting & Production: (lyricist, composer, arranger, producer, full creative team)\nRelease Date: (specific date; list different versions separately if applicable)\nAlbum: (album name, track number, album track listing)\nCreative Background: (detailed description of inspiration, behind-the-scenes stories, interesting anecdotes during creation)\nLyrics Meaning: (in-depth interpretation of lyrics, emotions and themes expressed)\nMusical Style: (genre, BPM, key, rhythm characteristics, special arrangements or instruments)\nCommercial Performance: (chart positions, sales, streaming numbers, certifications)\nAwards & Nominations: (music awards, nominations)\nImpact & Reviews: (critic reviews, cultural impact, historical significance)\nCovers & Usage: (notable cover versions, usage in films/ads/games/etc.)\nAnecdotes: (trivia, anecdotes related to the song)\n\nRequirements:\n- Keep information as accurate and detailed as possible; avoid fabrication. Mark uncertain info as \"Reportedly\" or \"Unverified\".\n- If multiple singers or versions exist, prioritize the original or most well-known version, and supplement with others.\n- Elaborate on each item in detail rather than being too brief.\n- Absolutely NO preamble, greeting, or self-introduction. Do NOT use numbered lists.\n- You MUST respond in English.",
 
+    recommendation_prompt_template: "Based on the following user's song play history, recommend 10 songs that the user might like. Return only a list of song names, one per line, without numbering, without explanation.\n{}",
+
     help_lines: &[
-        "§Keyboard Shortcuts",
+        "Keyboard Shortcuts",
         "→ ↑/↓         Previous Next Select song",
         "→ Enter       Play selected song",
         "→ Space       Play/Pause",
@@ -1012,7 +1075,7 @@ static EN: LangTexts = LangTexts {
         "→ ,/.         Rewind/Forward 10s",
         "→ +/-         Volume up/down",
         "",
-        "§Feature Keys",
+        "Feature Keys",
         "→ 1-5         Switch play mode",
         "→ o           Open music folder",
         "→ s           Search local songs",
@@ -1029,30 +1092,31 @@ static EN: LangTexts = LangTexts {
         "→ k           Configure API",
         "→ g           Configure GitHub Token",
         "→ z           Toggle desktop lyrics",
+        "→ r           Toggle recommendations",
         "→ q           Quit",
         "",
-        "§Play Modes",
+        "Play Modes",
         "→ 1  Single play (stop after one)",
         "→ 2  Single repeat (loop current)",
         "→ 3  Sequential (restart from 1st)",
         "→ 4  List repeat (loop entire list)",
         "→ 5  Shuffle (select random play)",
         "",
-        "§Supported Formats",
+        "Supported Formats",
         "  MP3, WAV, FLAC, OGG, OGA,",
         "  Opus, M4A, AAC, AIFF, APE",
         "",
-        "§Command Line",
+        "Command Line",
         "→ -o <dir>    Open music folder",
         "→ -h, --help  Show help",
         "",
-        "§Mouse Operations",
+        "Mouse Operations",
         "  Click song list to select",
         "  Click progress bar to seek",
         "  Click volume bar to adjust",
         "  Drag lyrics area to jump",
         "",
-        "§GitHub Repository",
+        "GitHub Repository",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -1091,6 +1155,7 @@ static EN: LangTexts = LangTexts {
         " k           Configure API",
         " g           Configure GitHub Token",
         " z           Toggle desktop lyrics",
+        " r           Toggle recommendations",
         " q           Quit",
         "",
         "Play Modes:",
@@ -1227,10 +1292,10 @@ static JA: LangTexts = LangTexts {
     search_prompt_juhe: "聚合検索: ",
     search_prompt_online: "オンライン検索: ",
     search_prompt_local: "ローカル検索: ",
-    playlist_empty_hint: "プレイリスト名を入力してEnterキーを押すと、そのプレイリストが検索されます",
+    playlist_empty_hint: "キーワードを入力してEnterキーを押すと、そのプレイリストが検索されます",
     playlist_no_result: "プレイリストの検索に結果が表示されません。キーワードを変更してEnterキーを押すと、再度検索できます",
-    juhe_enter_hint: "曲名を入力して Enter で独占音源検索",
-    online_enter_hint: "曲名を入力して Enter でオンライン検索",
+    juhe_enter_hint: "キーワードを入力して Enter で独占音源検索",
+    online_enter_hint: "キーワードを入力して Enter でオンライン検索",
     online_no_result: "結果なし。キーワードを変更して Enter で再検索",
 
     app_title: "🎵 Ter-Music-Rust - ターミナル音楽プレーヤー 🎵",
@@ -1251,6 +1316,10 @@ static JA: LangTexts = LangTexts {
     no_lyrics_found: "歌詞ファイルが見つかりません",
     select_song_for_lyrics: "再生する曲を選択してください",
     no_comments: "コメントはありません",
+
+    recommendation_title: "今日のおすすめ: ",
+    recommendation_loading: "おすすめを取得中...",
+    recommendation_no_data: "曲を再生してからおすすめを表示します",
 
     play_status_label: "再生状態",
     volume_label: "音量",
@@ -1278,13 +1347,15 @@ static JA: LangTexts = LangTexts {
     fmt_seek_failed: "シーク失敗: {}",
     input_dir_path: "音楽フォルダパスを入力: ",
     fmt_comment_name: "{}：",
-
-    ai_prompt_template: "楽曲名に基づいて楽曲の詳細情報を整理してください。冒頭の挨拶や自己紹介は一切出力せず、直接楽曲情報を出力してください。\n\n楽曲名：{}\n\n以下の構成で各項目を詳しく記述してください。取得できない項目は「公開情報なし」と記載してください。\n\n歌手：（メインボーカル、コーラス、フィーチャリングアーティストなど）\n歌手詳細：（国籍、出身地、生年月日、星座、血液型、身長、体重、職業、卒業校、代表作、主な受賞歴など）\n作詞・作曲・制作：（作詞、作曲、編曲、プロデューサーなど完全な制作チーム）\nリリース日：（具体的な日付、異なるバージョンがあればそれぞれ記載）\n収録アルバム：（アルバム名、トラック番号、アルバム収録曲一覧）\n制作背景：（インスピレーションの源泉、舞台裏のエピソード、制作中の逸話などを詳しく）\n歌詞の大意：（歌詞の解釈、表現されている感情とテーマを深く考察）\n音楽スタイル：（ジャンル、BPM、キー、リズムの特徴、特殊なアレンジや楽器使用など）\n商業成績：（チャート順位、売上、再生回数、認定など）\n受賞・ノミネート：（音楽賞、ノミネーションなど）\n影響と評価：（評論家の評価、文化的影響、歴史的意義など）\nカバーと使用例：（有名なカバーバージョン、映画/CM/ゲームなどでの使用）\n興味深い逸話：（楽曲にまつわるトリビア、逸話など）\n\n要求：\n- 情報はできるだけ正確かつ詳細にし、捏造を避けてください。不確かな情報は「伝聞」や「未確認」と記載してください。\n- 複数の歌手やバージョンがある場合は、原曲または最も有名な版を優先し、必要に応じて補足してください。\n- 各項目を簡略にせず、できるだけ詳しく記述してください。\n- 冒頭の挨拶や自己紹介は絶対に出力せず、番号付きリストの使用も禁止します。\n- 必ず日本語で回答してください。",
     now_playing_prefixes: &["再生中: ", "再生中："],
     tip_online_narrow: "オンライン: Enter|↑↓|DL|PgUp/Dn|Esc",
 
+    ai_prompt_template: "楽曲名に基づいて楽曲の詳細情報を整理してください。冒頭の挨拶や自己紹介は一切出力せず、直接楽曲情報を出力してください。\n\n楽曲名：{}\n\n以下の構成で各項目を詳しく記述してください。取得できない項目は「公開情報なし」と記載してください。\n\n歌手：（メインボーカル、コーラス、フィーチャリングアーティストなど）\n歌手詳細：（国籍、出身地、生年月日、星座、血液型、身長、体重、職業、卒業校、代表作、主な受賞歴など）\n作詞・作曲・制作：（作詞、作曲、編曲、プロデューサーなど完全な制作チーム）\nリリース日：（具体的な日付、異なるバージョンがあればそれぞれ記載）\n収録アルバム：（アルバム名、トラック番号、アルバム収録曲一覧）\n制作背景：（インスピレーションの源泉、舞台裏のエピソード、制作中の逸話などを詳しく）\n歌詞の大意：（歌詞の解釈、表現されている感情とテーマを深く考察）\n音楽スタイル：（ジャンル、BPM、キー、リズムの特徴、特殊なアレンジや楽器使用など）\n商業成績：（チャート順位、売上、再生回数、認定など）\n受賞・ノミネート：（音楽賞、ノミネーションなど）\n影響と評価：（評論家の評価、文化的影響、歴史的意義など）\nカバーと使用例：（有名なカバーバージョン、映画/CM/ゲームなどでの使用）\n興味深い逸話：（楽曲にまつわるトリビア、逸話など）\n\n要求：\n- 情報はできるだけ正確かつ詳細にし、捏造を避けてください。不確かな情報は「伝聞」や「未確認」と記載してください。\n- 複数の歌手やバージョンがある場合は、原曲または最も有名な版を優先し、必要に応じて補足してください。\n- 各項目を簡略にせず、できるだけ詳しく記述してください。\n- 冒頭の挨拶や自己紹介は絶対に出力せず、番号付きリストの使用も禁止します。\n- 必ず日本語で回答してください。",
+
+    recommendation_prompt_template: "以下のユーザーの楽曲再生履歴に基づいて、ユーザーが気に入りそうな10曲を推薦してください。曲名リストのみを返し、1行に1曲、番号付けせず、説明なし。\n{}",
+
     help_lines: &[
-        "§ショートカットキー",
+        "ショートカットキー",
         "→ ↑/↓         前の次の曲を選択",
         "→ Enter       選択した曲を再生",
         "→ Space       再生/一時停止",
@@ -1294,7 +1365,7 @@ static JA: LangTexts = LangTexts {
         "→ ,/.         10秒巻き戻し/早送り",
         "→ +/-         音量アップ/ダウン",
         "",
-        "§機能キー",
+        "機能キー",
         "→ 1-5         再生モード切替",
         "→ o           音楽フォルダを開く",
         "→ s           ローカル曲を検索",
@@ -1311,30 +1382,31 @@ static JA: LangTexts = LangTexts {
         "→ k           API 設定",
         "→ g           GitHub Token 設定",
         "→ z           デスクトップ歌詞の表示切替",
+        "→ r           おすすめの表示切替",
         "→ q           終了",
         "",
-        "§再生モード",
+        "再生モード",
         "→ 1  単曲再生（1曲で停止）",
         "→ 2  単曲リピート（現在の曲をループ）",
         "→ 3  順次再生（最後まで再生後1曲目に戻る）",
         "→ 4  リストリピート（全リストをループ）",
         "→ 5  シャッフル（ランダム再生）",
         "",
-        "§対応形式",
+        "対応形式",
         "  MP3、WAV、FLAC、OGG、OGA、",
         "  Opus、M4A、AAC、AIFF、APE",
         "",
-        "§コマンドライン",
+        "コマンドライン",
         "→ -o <dir>    音楽フォルダを開く",
         "→ -h, --help  ヘルプを表示",
         "",
-        "§マウス操作",
+        "マウス操作",
         "  曲リストをクリックして選択",
         "  プログレスバーをクリックしてシーク",
         "  音量バーをクリックして調整",
         "  歌詞エリアをドラッグしてジャンプ",
         "",
-        "§GitHubリポジトリ",
+        "GitHubリポジトリ",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -1373,6 +1445,7 @@ static JA: LangTexts = LangTexts {
         " k API 設定",
         " g GitHub Token 設定",
         " z デスクトップ歌詞の表示切替",
+        " r おすすめの表示切替",
         " q 終了",
         "",
         "再生モード:",
@@ -1509,10 +1582,10 @@ static KO: LangTexts = LangTexts {
     search_prompt_juhe: "폴리머 검색: ",
     search_prompt_online: "온라인 검색: ",
     search_prompt_local: "로컬 검색: ",
-    playlist_empty_hint: "노래 목록 이름을 입력한 후 Enter를 누르면 노래 목록을 검색합니다",
+    playlist_empty_hint: "키워드를 입력한 후 Enter를 누르면 노래 목록을 검색합니다",
     playlist_no_result: "노래 목록 검색 결과가 없어, 키워드를 수정한 후 Enter를 누르고 다시 검색하세요",
-    juhe_enter_hint: "곡명을 입력하고 Enter로 독점음원 검색",
-    online_enter_hint: "곡명을 입력하고 Enter로 온라인 검색",
+    juhe_enter_hint: "키워드를 입력하고 Enter로 독점음원 검색",
+    online_enter_hint: "키워드를 입력하고 Enter로 온라인 검색",
     online_no_result: "결과 없음. 키워드 수정 후 Enter로 재검색",
 
     app_title: "🎵 Ter-Music-Rust - 터미널 음악 플레이어 🎵",
@@ -1533,6 +1606,10 @@ static KO: LangTexts = LangTexts {
     no_lyrics_found: "가사 파일을 찾을 수 없음",
     select_song_for_lyrics: "재생할 곡을 선택하세요",
     no_comments: "댓글이 없습니다",
+
+    recommendation_title: "오늘의 추천: ",
+    recommendation_loading: "추천곡을 가져오는 중...",
+    recommendation_no_data: "몇 곡 재생 후 추천 표시",
 
     play_status_label: "재생 상태",
     volume_label: "볼륨",
@@ -1560,13 +1637,15 @@ static KO: LangTexts = LangTexts {
     fmt_seek_failed: "이동 실패: {}",
     input_dir_path: "음악 폴더 경로 입력: ",
     fmt_comment_name: "{}：",
-
-    ai_prompt_template: "곡명을 바탕으로 해당 곡의 상세 정보를 정리해 주세요. 서론, 인사말, 자기소개를 절대 출력하지 말고 곡 정보를 직접 출력해 주세요.\n\n곡명: {}\n\n아래 구조로 각 항목을 자세히 서술해 주세요. 확인할 수 없는 항목은 \"공개 자료 없음\"으로 표시해 주세요.\n\n가수：（메인 보컬, 백보컬, 피처링 아티스트 등）\n가수 상세：（국적, 출생지, 생년월일, 별자리, 혈액형, 키, 몸무게, 직업, 졸업 학교, 대표작, 주요 수상 경력 등）\n작사·작곡·제작：（작사, 작곡, 편곡, 프로듀서 등 전체 크리에이티브 팀）\n발매일：（구체적인 날짜, 다른 버전이 있으면 각각 표기）\n수록 앨범：（앨범명, 트랙 번호, 앨범 트랙 목록）\n창작 배경：（영감의 원천, 비하인드 스토리, 제작 중 에피소드 등 상세히）\n가사 개요：（가사 해석, 표현된 감정과 주제를 깊이 있게 분석）\n음악 스타일：（장르, BPM, 조성, 리듬 특징, 특수 편곡이나 악기 사용 등）\n상업 성적：（차트 순위, 판매량, 스트리밍 수, 인증 등）\n수상 및 후보：（음악상, 후보 지명 등）\n영향과 평가：（평론가 평가, 문화적 영향, 역사적 의의 등）\n커버 및 사용：（유명한 커버 버전, 영화/광고/게임 등에서의 사용）\n흥미로운 이야기：（곡과 관련된 트리비아, 일화 등）\n\n요구사항：\n- 정보는 최대한 정확하고 상세하게 작성하며, 지어내지 마세요. 불확실한 정보는 \"전해짐\" 또는 \"미확인\"으로 표시하세요.\n- 여러 가수나 버전이 있으면 원곡 또는 가장 널리 알려진 버전을 우선하고, 필요하면 보충하세요.\n- 각 항목을 너무 간단히 하지 말고 최대한 자세히 서술해 주세요.\n- 서론, 인사말, 자기소개는 절대 출력하지 말고, 번호 매기기 목록 사용도 금지합니다.\n- 반드시 한국어로 답변해 주세요.",
     now_playing_prefixes: &["재생 중: ", "재생 중："],
     tip_online_narrow: "온라인: Enter|↑↓|DL|PgUp/Dn|Esc",
 
+    ai_prompt_template: "곡명을 바탕으로 해당 곡의 상세 정보를 정리해 주세요. 서론, 인사말, 자기소개를 절대 출력하지 말고 곡 정보를 직접 출력해 주세요.\n\n곡명: {}\n\n아래 구조로 각 항목을 자세히 서술해 주세요. 확인할 수 없는 항목은 \"공개 자료 없음\"으로 표시해 주세요.\n\n가수：（메인 보컬, 백보컬, 피처링 아티스트 등）\n가수 상세：（국적, 출생지, 생년월일, 별자리, 혈액형, 키, 몸무게, 직업, 졸업 학교, 대표작, 주요 수상 경력 등）\n작사·작곡·제작：（작사, 작곡, 편곡, 프로듀서 등 전체 크리에이티브 팀）\n발매일：（구체적인 날짜, 다른 버전이 있으면 각각 표기）\n수록 앨범：（앨범명, 트랙 번호, 앨범 트랙 목록）\n창작 배경：（영감의 원천, 비하인드 스토리, 제작 중 에피소드 등 상세히）\n가사 개요：（가사 해석, 표현된 감정과 주제를 깊이 있게 분석）\n음악 스타일：（장르, BPM, 조성, 리듬 특징, 특수 편곡이나 악기 사용 등）\n상업 성적：（차트 순위, 판매량, 스트리밍 수, 인증 등）\n수상 및 후보：（음악상, 후보 지명 등）\n영향과 평가：（평론가 평가, 문화적 영향, 역사적 의의 등）\n커버 및 사용：（유명한 커버 버전, 영화/광고/게임 등에서의 사용）\n흥미로운 이야기：（곡과 관련된 트리비아, 일화 등）\n\n요구사항：\n- 정보는 최대한 정확하고 상세하게 작성하며, 지어내지 마세요. 불확실한 정보는 \"전해짐\" 또는 \"미확인\"으로 표시하세요.\n- 여러 가수나 버전이 있으면 원곡 또는 가장 널리 알려진 버전을 우선하고, 필요하면 보충하세요.\n- 각 항목을 너무 간단히 하지 말고 최대한 자세히 서술해 주세요.\n- 서론, 인사말, 자기소개는 절대 출력하지 말고, 번호 매기기 목록 사용도 금지합니다。\n- 반드시 한국어로 답변해 주세요。",
+
+    recommendation_prompt_template: "아래 사용자의 노래 재생 기록을 바탕으로 사용자가 좋아할 만한 10곡을 추천해 주세요. 노래 이름 목록만 반환하고, 한 줄에 한 곡씩, 번호 매기기 없이, 설명 없이。\n{}",
+
     help_lines: &[
-        "§단축키",
+        "단축키",
         "→ ↑/↓         노래 선택하기",
         "→ Enter       선택한 곡 재생",
         "→ Space       재생/일시정지",
@@ -1576,7 +1655,7 @@ static KO: LangTexts = LangTexts {
         "→ ,/.         10초 뒤로/앞으로",
         "→ +/-         볼륨 올리기/내리기",
         "",
-        "§기능 키",
+        "기능 키",
         "→ 1-5         재생 모드 전환",
         "→ o           음악 폴더 열기",
         "→ s           로컬 곡 검색",
@@ -1593,30 +1672,31 @@ static KO: LangTexts = LangTexts {
         "→ k           API 설정",
         "→ g           GitHub Token 설정",
         "→ z           데스크톱 가사 표시 전환",
+        "→ r           추천곡 표시 전환",
         "→ q           종료",
         "",
-        "§재생 모드",
+        "재생 모드",
         "→ 1  단곡 재생 (1곡 후 정지)",
         "→ 2  단곡 반복 (현재 곡 반복)",
         "→ 3  순차 재생 (끝나면 첫 곡으로)",
         "→ 4  목록 반복 (전체 목록 반복)",
         "→ 5  셔플 (무작위로 곡 재생하기)",
         "",
-        "§지원 형식",
+        "지원 형식",
         "  MP3, WAV, FLAC, OGG, OGA,",
         "  Opus, M4A, AAC, AIFF, APE",
         "",
-        "§명령줄 옵션",
+        "명령줄 옵션",
         "→ -o <dir>    음악 폴더 열기",
         "→ -h, --help  도움말 표시",
         "",
-        "§마우스 조작",
+        "마우스 조작",
         "  곡 목록 클릭하여 선택",
         "  진행 막대 클릭하여 이동",
         "  볼륨 막대 클릭하여 조절",
         "  가사 영역 드래그하여 이동",
         "",
-        "§GitHub저장소",
+        "GitHub저장소",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -1655,6 +1735,7 @@ static KO: LangTexts = LangTexts {
         " k API 설정",
         " g GitHub Token 설정",
         " z 데스크톱 가사 표시 전환",
+        " r 추천곡 표시 전환",
         " q 종료",
         "",
         "재생 모드:",
@@ -1791,10 +1872,10 @@ static RU: LangTexts = LangTexts {
     search_prompt_juhe: "Juhe: ",
     search_prompt_online: "Онлайн: ",
     search_prompt_local: "Локальный: ",
-    playlist_empty_hint: "Введите название плейлиста и нажмите Enter",
+    playlist_empty_hint: "Введите ключевое слово и нажмите Enter",
     playlist_no_result: "Плейлисты не найдены. Измените запрос и нажмите Enter",
-    juhe_enter_hint: "Введите название, затем Enter для поиска Juhe",
-    online_enter_hint: "Введите название, затем Enter для онлайн-поиска",
+    juhe_enter_hint: "Введите ключевое слово, затем Enter для поиска Juhe",
+    online_enter_hint: "Введите ключевое слово, затем Enter для онлайн-поиска",
     online_no_result: "Нет результатов. Измените запрос и нажмите Enter",
 
     app_title: "🎵 Ter-Music-Rust - Терминальный плеер 🎵",
@@ -1815,6 +1896,10 @@ static RU: LangTexts = LangTexts {
     no_lyrics_found: "Текст не найден",
     select_song_for_lyrics: "Выберите песню",
     no_comments: "Нет комментариев",
+
+    recommendation_title: "Рекомендации: ",
+    recommendation_loading: "Получение рекомендаций...",
+    recommendation_no_data: "Воспроизведите песни для рекомендаций",
 
     play_status_label: "Статус",
     volume_label: "Громкость",
@@ -1844,11 +1929,13 @@ static RU: LangTexts = LangTexts {
     fmt_comment_name: "{}: ",
 
     ai_prompt_template: "Составьте подробную информацию о песне по её названию. НЕ выводите вступление, приветствие или представление. Выводите информацию напрямую.\n\nНазвание песни: {}\n\nВыведите в следующей структуре с подробным описанием. Если пункт невозможно проверить, укажите «Нет публичных данных»:\n\nИсполнители: (основной вокал, бэк-вокал, приглашённые артисты и т.д.)\nПодробности об исполнителе: (национальность, место рождения, дата рождения, знак зодиака, группа крови, рост, вес, профессия, образование, известные работы, главные достижения и т.д.)\nАвторство и продакшен: (автор слов, композитор, аранжировщик, продюсер, полная творческая команда)\nДата выпуска: (конкретная дата; разные версии укажите отдельно)\nАльбом: (название альбома, номер трека, список треков альбома)\nИстория создания: (подробное описание вдохновения, закулисных историй, интересных случаев)\nСмысл текста: (глубокая интерпретация текста, выраженные эмоции и темы)\nМузыкальный стиль: (жанр, BPM, тональность, ритм, особые аранжировки или инструменты)\nКоммерческий успех: (позиции в чартах, продажи, стриминг, сертификации)\nНаграды: (музыкальные награды, номинации)\nВлияние и отзывы: (рецензии критиков, культурное влияние, историческое значение)\nКаверы и использование: (известные кавер-версии, использование в кино/рекламе/играх)\nИнтересные факты: (любопытные детали, анекдоты, связанные с песней)\n\nТребования:\n- Информация должна быть максимально точной и подробной; избегайте выдумок. Ненадёжные данные помечайте как «По слухам» или «Не подтверждено».\n- При наличии нескольких исполнителей или версий приоритет отдаётся оригиналу или самой известной версии.\n- Раскрывайте каждый пункт подробно, не слишком кратко.\n- Абсолютно БЕЗ вступления, приветствия или представления. НЕ используйте нумерованные списки.\n- Обязательно отвечайте на русском языке.",
+
+    recommendation_prompt_template: "На основе истории прослушивания песен пользователя, порекомендуйте 10 песен, которые могут ему понравиться. Верните только список названий песен, по одной на строке, без нумерации, без объяснений.\n{}",
     now_playing_prefixes: &["Сейчас играет: ", "Сейчас играет："],
     tip_online_narrow: "Онлайн: Enter|↑↓|DL|PgUp/Dn|Esc",
 
     help_lines: &[
-        "§Горячие клавиши",
+        "Горячие клавиши",
         "→ ↑/↓         Выбор песни",
         "→ Enter       Воспроизвести",
         "→ Space       Воспр./Пауза",
@@ -1858,7 +1945,7 @@ static RU: LangTexts = LangTexts {
         "→ ,/.         Перемотка 10с",
         "→ +/-         Громкость",
         "",
-        "§Функциональные клавиши",
+        "Функциональные клавиши",
         "→ 1-5         Режим воспроизведения",
         "→ o           Открыть папку музыки",
         "→ s           Поиск локальных песен",
@@ -1875,30 +1962,31 @@ static RU: LangTexts = LangTexts {
         "→ k           Настроить API",
         "→ g           Настроить GitHub Token",
         "→ z           Переключить отображение текста на рабочем столе",
+        "→ r           Переключить отображение рекомендаций",
         "→ q           Выход",
         "",
-        "§Режимы воспроизведения",
+        "Режимы воспроизведения",
         "→ 1  Одиночный (стоп после трека)",
         "→ 2  Повтор одного (зациклить текущий)",
         "→ 3  Последовательный (с начала после конца)",
         "→ 4  Повтор списка (зациклить весь список)",
         "→ 5  Случайный (случайный выбор)",
         "",
-        "§Поддерживаемые форматы",
+        "Поддерживаемые форматы",
         "  MP3, WAV, FLAC, OGG, OGA,",
         "  Opus, M4A, AAC, AIFF, APE",
         "",
-        "§Параметры командной строки",
+        "Параметры командной строки",
         "→ -o <dir>    Открыть папку музыки",
         "→ -h, --help  Показать справку",
         "",
-        "§Управление мышью",
+        "Управление мышью",
         "  Клик по списку для выбора",
         "  Клик по прогресс-бару для перемотки",
         "  Клик по бару громкости для настройки",
         "  Перетаскивание области текста песни",
         "",
-        "§Репозиторий GitHub",
+        "Репозиторий GitHub",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -1937,6 +2025,7 @@ static RU: LangTexts = LangTexts {
         " k           Настроить API",
         " g           Настроить GitHub Token",
         " z           Переключить отображение текста на рабочем столе",
+        " r           Переключить отображение рекомендаций",
         " q           Выход",
         "",
         "Режимы воспроизведения:",
@@ -2073,10 +2162,10 @@ static FR: LangTexts = LangTexts {
     search_prompt_juhe: "Juhe : ",
     search_prompt_online: "En ligne : ",
     search_prompt_local: "Recherche locale : ",
-    playlist_empty_hint: "Entrez le nom de playlist et appuyez sur Entrée",
+    playlist_empty_hint: "Entrez un mot-clé et appuyez sur Entrée",
     playlist_no_result: "Aucune playlist. Modifiez et appuyez sur Entrée",
-    juhe_enter_hint: "Entrez le nom, puis Entrée pour Juhe",
-    online_enter_hint: "Entrez le nom, puis Entrée pour recherche en ligne",
+    juhe_enter_hint: "Entrez un mot-clé, puis Entrée pour Juhe",
+    online_enter_hint: "Entrez un mot-clé, puis Entrée pour recherche en ligne",
     online_no_result: "Aucun résultat. Modifiez et appuyez sur Entrée",
 
     app_title: "🎵 Ter-Music-Rust - Lecteur terminal 🎵",
@@ -2097,6 +2186,10 @@ static FR: LangTexts = LangTexts {
     no_lyrics_found: "Paroles introuvables",
     select_song_for_lyrics: "Sélectionnez une chanson",
     no_comments: "Pas de commentaires",
+
+    recommendation_title: "Recommandations : ",
+    recommendation_loading: "Obtention recommandations...",
+    recommendation_no_data: "Écoutez d'abord pour recommandations",
 
     play_status_label: "État",
     volume_label: "Volume",
@@ -2126,11 +2219,13 @@ static FR: LangTexts = LangTexts {
     fmt_comment_name: "{} : ",
 
     ai_prompt_template: "Compilez des informations détaillées sur la chanson à partir de son titre. Ne PAS afficher de préambule, salutation ou auto-présentation. Affichez directement les informations.\n\nTitre : {}\n\nStructure de sortie avec descriptions détaillées. Si un élément ne peut être vérifié, indiquez « Aucune donnée publique » :\n\nInterprètes : (voix principale, chœurs, artistes invités, etc.)\nDétails sur l'artiste : (nationalité, lieu de naissance, date de naissance, signe astrologique, groupe sanguin, taille, poids, profession, formation, œuvres notables, réalisations principales, etc.)\nParoles et production : (parolier, compositeur, arrangeur, producteur, équipe créative complète)\nDate de sortie : (date précise ; listez les différentes versions séparément)\nAlbum : (nom de l'album, numéro de piste, liste complète des pistes)\nContexte créatif : (description détaillée de l'inspiration, anecdotes de coulisses, histoires de création)\nSignification des paroles : (interprétation approfondie, émotions et thèmes exprimés)\nStyle musical : (genre, BPM, tonalité, caractéristiques rythmiques, arrangements spéciaux ou instruments)\nPerformance commerciale : (classements, ventes, streaming, certifications)\nPrix et nominations : (récompenses musicales, nominations)\nImpact et critiques : (critiques, influence culturelle, importance historique)\nReprises et utilisations : (reprises notables, utilisations au cinéma/publicité/jeux)\nAnecdotes : (anecdotes, faits divers liés à la chanson)\n\nExigences :\n- Informations aussi précises et détaillées que possible ; évitez les inventions. Indiquez « Selon des rumeurs » ou « Non vérifié » pour les données incertaines.\n- En cas de multiples interprètes ou versions, privilégiez l'original ou la version la plus connue.\n- Développez chaque point en détail plutôt que trop brièvement.\n- Absolument SANS préambule, salutation ou auto-présentation. N'utilisez PAS de listes numérotées.\n- Vous DEVEZ répondre en français.",
+
+    recommendation_prompt_template: "Basé sur l'historique d'écoute de musique de l'utilisateur, recommandez 10 chansons qui pourraient lui plaire. Retournez seulement une liste de noms de chansons, une par ligne, sans numérotation, sans explication.\n{}",
     now_playing_prefixes: &["En cours : ", "En cours ："],
     tip_online_narrow: "En ligne: Enter|↑↓|DL|PgUp/Dn|Esc",
 
     help_lines: &[
-        "§Raccourcis clavier",
+        "Raccourcis clavier",
         "→ ↑/↓         Sélectionner chanson",
         "→ Enter       Lire la chanson",
         "→ Space       Lecture/Pause",
@@ -2140,7 +2235,7 @@ static FR: LangTexts = LangTexts {
         "→ ,/.         Rembobinage 10s",
         "→ +/-         Volume",
         "",
-        "§Touches de fonction",
+        "Touches de fonction",
         "→ 1-5         Mode de lecture",
         "→ o           Ouvrir dossier musique",
         "→ s           Recherche locale",
@@ -2157,30 +2252,31 @@ static FR: LangTexts = LangTexts {
         "→ k           Configurer l'API",
         "→ g           Configurer GitHub Token",
         "→ z           Basculer affichage paroles sur bureau",
+        "→ r           Basculer affichage recommandations",
         "→ q           Quitter",
         "",
-        "§Modes de lecture",
+        "Modes de lecture",
         "→ 1  Lecture unique (arrêt après la chanson)",
         "→ 2  Répétition unique (boucle sur la chanson)",
         "→ 3  Séquentiel (reprise au début après la fin)",
         "→ 4  Répétition liste (boucle sur toute la liste)",
         "→ 5  Aléatoire (choix aléatoire)",
         "",
-        "§Formats supportés",
+        "Formats supportés",
         "  MP3, WAV, FLAC, OGG, OGA,",
         "  Opus, M4A, AAC, AIFF, APE",
         "",
-        "§Ligne de commande",
+        "Ligne de commande",
         "→ -o <dir>    Ouvrir dossier musique",
         "→ -h, --help  Afficher l'aide",
         "",
-        "§Souris",
+        "Souris",
         "  Cliquer sur la liste pour sélectionner",
         "  Cliquer sur la barre de progression",
         "  Cliquer sur la barre de volume",
         "  Glisser la zone de paroles",
         "",
-        "§Dépôt GitHub",
+        "Dépôt GitHub",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -2219,6 +2315,7 @@ static FR: LangTexts = LangTexts {
         " k           Configurer l'API",
         " g           Configurer GitHub Token",
         " z           Basculer affichage paroles sur le bureau",
+        " r           Basculer affichage recommandations",
         " q           Quitter",
         "",
         "Modes de lecture :",
@@ -2355,10 +2452,10 @@ static DE: LangTexts = LangTexts {
     search_prompt_juhe: "Juhe-Suche: ",
     search_prompt_online: "Online-Suche: ",
     search_prompt_local: "Lokale Suche: ",
-    playlist_empty_hint: "Playlist-Name eingeben und Enter drücken",
+    playlist_empty_hint: "Schlüsselwort eingeben und Enter drücken",
     playlist_no_result: "Keine Playlists. Schlüsselwort ändern und Enter drücken",
-    juhe_enter_hint: "Liedname eingeben, dann Enter für Juhe",
-    online_enter_hint: "Liedname eingeben, dann Enter für Online-Suche",
+    juhe_enter_hint: "Schlüsselwort eingeben, dann Enter für Juhe",
+    online_enter_hint: "Schlüsselwort eingeben, dann Enter für Online-Suche",
     online_no_result: "Kein Ergebnis. Schlüsselwort ändern und Enter drücken",
 
     app_title: "🎵 Ter-Music-Rust - Terminal-Player 🎵",
@@ -2379,6 +2476,10 @@ static DE: LangTexts = LangTexts {
     no_lyrics_found: "Liedtext nicht gefunden",
     select_song_for_lyrics: "Wählen Sie ein Lied",
     no_comments: "Keine Kommentare",
+
+    recommendation_title: "Tägliche Empfehlungen: ",
+    recommendation_loading: "Empfehlungen laden...",
+    recommendation_no_data: "Spielen Sie Lieder für Empfehlungen",
 
     play_status_label: "Status",
     volume_label: "Lautstärke",
@@ -2408,11 +2509,13 @@ static DE: LangTexts = LangTexts {
     fmt_comment_name: "{}: ",
 
     ai_prompt_template: "Erstellen Sie detaillierte Informationen zum Song basierend auf dem Titel. Geben Sie KEIN Vorwort, keine Begrüßung oder Selbstvorstellung aus. Geben Sie die Song-Infos direkt aus.\n\nSongtitel: {}\n\nAusgabe in folgender Struktur mit detaillierten Beschreibungen. Wenn ein Punkt nicht überprüft werden kann, schreiben Sie \"Keine öffentlichen Daten verfügbar\":\n\nInterpreten: (Hauptgesang, Hintergrundgesang, Gastkünstler usw.)\nKünstlerdetails: (Nationalität, Geburtsort, Geburtsdatum, Sternzeichen, Blutgruppe, Größe, Gewicht, Beruf, Ausbildung, bekannte Werke, Haupterfolge usw.)\nSongwriting & Produktion: (Texter, Komponist, Arrangeur, Produzent, vollständiges Kreativteam)\nVeröffentlichungsdatum: (konkretes Datum; verschiedene Versionen separat auflisten)\nAlbum: (Albumname, Tracknummer, Album-Trackliste)\nKreativer Hintergrund: (detaillierte Beschreibung der Inspiration, Hintergründengeschichten, Anekdoten bei der Entstehung)\nLiedtextbedeutung: (tiefgehende Interpretation, ausgedrückte Emotionen und Themen)\nMusikalischer Stil: (Genre, BPM, Tonart, Rhythmusmerkmale, besondere Arrangements oder Instrumente)\nKommerzieller Erfolg: (Chartplatzierungen, Verkäufe, Streaming, Zertifizierungen)\nAuszeichnungen & Nominierungen: (Musikpreise, Nominierungen)\nEinfluss & Kritiken: (Kritikerbewertungen, kultureller Einfluss, historische Bedeutung)\nCover & Nutzung: (bekannte Coverversionen, Nutzung in Film/Werbung/Spielen)\nAnekdoten: (Kuriositäten, Anekdoten zum Song)\n\nAnforderungen:\n- Informationen so genau und detailliert wie möglich; keine Erfindungen. Unsicheres als \"Laut Gerüchten\" oder \"Unbestätigt\" markieren.\n- Bei mehreren Interpreten oder Versionen priorisieren Sie das Original oder die bekannteste Version.\n- Jeden Punkt ausführlich darlegen, nicht zu knapp.\n- Absolut KEIN Vorwort, keine Begrüßung oder Selbstvorstellung. KEINE nummerierten Listen.\n- Sie MÜSSEN auf Deutsch antworten.",
+
+    recommendation_prompt_template: "Basierend auf dem Musikwiedergabe-Verlauf des Benutzers, empfehlen Sie 10 Lieder, die dem Benutzer gefallen könnten. Geben Sie nur eine Liste von Liednamen zurück, einen pro Zeile, ohne Nummerierung, ohne Erklärung.\n{}",
     now_playing_prefixes: &["Aktuell: ", "Aktuell："],
     tip_online_narrow: "Online: Enter|↑↓|DL|PgUp/Dn|Esc",
 
     help_lines: &[
-        "§Tastenkombinationen",
+        "Tastenkombinationen",
         "→ ↑/↓         Lied auswählen",
         "→ Enter       Lied abspielen",
         "→ Space       Abspielen/Pause",
@@ -2422,7 +2525,7 @@ static DE: LangTexts = LangTexts {
         "→ ,/.         10s zurück/vor",
         "→ +/-         Lautstärke",
         "",
-        "§Funktionstasten",
+        "Funktionstasten",
         "→ 1-5         Wiedergabemodus",
         "→ o           Musikordner öffnen",
         "→ s           Lokale Suche",
@@ -2439,30 +2542,31 @@ static DE: LangTexts = LangTexts {
         "→ k           API konfigurieren",
         "→ g           GitHub Token konfigurieren",
         "→ z           Desktop-Lyrics ein/aus",
+        "→ r           Empfehlungen ein/aus",
         "→ q           Beenden",
         "",
-        "§Wiedergabemodi",
+        "Wiedergabemodi",
         "→ 1  Einzelwiedergabe (Stopp nach einem Lied)",
         "→ 2  Einzeln wiederholen (aktuelles Lied loopen)",
         "→ 3  Sequentiell (nach Ende von vorn beginnen)",
         "→ 4  Liste wiederholen (ganze Liste loopen)",
         "→ 5  Zufällig (zufällige Auswahl)",
         "",
-        "§Unterstützte Formate",
+        "Unterstützte Formate",
         "  MP3, WAV, FLAC, OGG, OGA,",
         "  Opus, M4A, AAC, AIFF, APE",
         "",
-        "§Kommandozeile",
+        "Kommandozeile",
         "→ -o <dir>    Musikordner öffnen",
         "→ -h, --help  Hilfe anzeigen",
         "",
-        "§Mausbedienung",
+        "Mausbedienung",
         "  Klick auf Liste zum Auswählen",
         "  Klick auf Fortschrittsbalken zum Springen",
         "  Klick auf Lautstärkebalken zum Einstellen",
         "  Liedtextbereich ziehen zum Springen",
         "",
-        "§GitHub-Repository",
+        "GitHub-Repository",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -2501,6 +2605,7 @@ static DE: LangTexts = LangTexts {
         " k           API konfigurieren",
         " g           GitHub Token konfigurieren",
         " z           Desktop-Lyrics ein/aus",
+        " r           Empfehlungen ein/aus",
         " q           Beenden",
         "",
         "Wiedergabemodi:",
@@ -2637,11 +2742,11 @@ static ES: LangTexts = LangTexts {
     search_prompt_juhe: "Juhe: ",
     search_prompt_online: "En línea: ",
     search_prompt_local: "Búsqueda local: ",
-    playlist_empty_hint: "Ingrese nombre de lista y presione Enter",
-    playlist_no_result: "Sin listas. Cambie palabra y pulse Enter",
-    juhe_enter_hint: "Ingrese nombre, luego Enter para buscar Juhe",
-    online_enter_hint: "Ingrese nombre, luego Enter para buscar en línea",
-    online_no_result: "Sin resultados. Cambie palabra y pulse Enter",
+    playlist_empty_hint: "Ingrese keyword de lista y presione Enter",
+    playlist_no_result: "Sin listas. Cambie keyword y pulse Enter",
+    juhe_enter_hint: "Ingrese keyword, luego Enter para buscar Juhe",
+    online_enter_hint: "Ingrese keyword, luego Enter para buscar en línea",
+    online_no_result: "Sin resultados. Cambie keyword y pulse Enter",
 
     app_title: "🎵 Ter-Music-Rust - Reproductor terminal 🎵",
     song_info_label: "Info canción",
@@ -2661,6 +2766,10 @@ static ES: LangTexts = LangTexts {
     no_lyrics_found: "Letras no encontradas",
     select_song_for_lyrics: "Seleccione una canción",
     no_comments: "Sin comentarios",
+
+    recommendation_title: "Recomendaciones: ",
+    recommendation_loading: "Obteniendo recomendaciones...",
+    recommendation_no_data: "Reproduce canciones para recomendaciones",
 
     play_status_label: "Estado",
     volume_label: "Volumen",
@@ -2690,11 +2799,13 @@ static ES: LangTexts = LangTexts {
     fmt_comment_name: "{}: ",
 
     ai_prompt_template: "Compile información detallada sobre la canción basándose en su título. NO muestre ningún preámbulo, saludo ni autopresentación. Muestre la información directamente.\n\nTítulo: {}\n\nEstructura de salida con descripciones detalladas. Si algún punto no se puede verificar, escriba «Sin datos públicos»:\n\nIntérpretes: (voz principal, coros, artistas invitados, etc.)\nDetalles del artista: (nacionalidad, lugar de nacimiento, fecha de nacimiento, signo zodiacal, grupo sanguíneo, altura, peso, profesión, formación, obras notables, logros principales, etc.)\nComposición y producción: (letrista, compositor, arreglista, productor, equipo creativo completo)\nFecha de lanzamiento: (fecha concreta; liste versiones diferentes por separado)\nÁlbum: (nombre del álbum, número de pista, lista de pistas del álbum)\nContexto creativo: (descripción detallada de la inspiración, anécdotas, historias de la creación)\nSignificado de la letra: (interpretación profunda, emociones y temas expresados)\nEstilo musical: (género, BPM, tonalidad, características rítmicas, arreglos especiales o instrumentos)\nRendimiento comercial: (posiciones en listas, ventas, streaming, certificaciones)\nPremios y nominaciones: (premios musicales, nominaciones)\nImpacto y críticas: (reseñas de críticos, influencia cultural, importancia histórica)\nVersiones y usos: (versiones cover notables, usos en cine/publicidad/juegos)\nAnécdotas: (curiosidades, anécdotas relacionadas con la canción)\n\nRequisitos:\n- Información lo más precisa y detallada posible; evite invenciones. Marque lo incierto como «Supuestamente» o «Sin confirmar».\n- Si hay varios intérpretes o versiones, priorice el original o la versión más conocida.\n- Desarrolle cada punto en detalle, no sea demasiado breve.\n- Absolutamente SIN preámbulo, saludo ni autopresentación. NO use listas numeradas.\n- DEBE responder en español.",
+
+    recommendation_prompt_template: "Basado en el historial de reproducción de música del usuario, recomienda 10 canciones que podrían gustarle al usuario. Devuelve solo una lista de nombres de canciones, una por línea, sin numeración, sin explicación.\n{}",
     now_playing_prefixes: &["Reproduciendo: ", "Reproduciendo："],
     tip_online_narrow: "En línea: Enter|↑↓|DL|PgUp/Dn|Esc",
 
     help_lines: &[
-        "§Atajos de teclado",
+        "Atajos de teclado",
         "→ ↑/↓         Seleccionar canción",
         "→ Enter       Reproducir canción",
         "→ Space       Reproducir/Pausa",
@@ -2704,7 +2815,7 @@ static ES: LangTexts = LangTexts {
         "→ ,/.         Retroceder/Avanzar 10s",
         "→ +/-         Volumen",
         "",
-        "§Teclas de función",
+        "Teclas de función",
         "→ 1-5         Modo de reproducción",
         "→ o           Abrir carpeta de música",
         "→ s           Búsqueda local",
@@ -2721,30 +2832,31 @@ static ES: LangTexts = LangTexts {
         "→ k           Configurar API",
         "→ g           Configurar GitHub Token",
         "→ z           Letras de escritorio on/off",
+        "→ r           Recomendaciones on/off",
         "→ q           Salir",
         "",
-        "§Modos de reproducción",
+        "Modos de reproducción",
         "→ 1  Reproducción única (detener tras canción)",
         "→ 2  Repetición única (bucle en canción actual)",
         "→ 3  Secuencial (reiniciar desde el inicio)",
         "→ 4  Repetición de lista (bucle en toda la lista)",
         "→ 5  Aleatorio (selección aleatoria)",
         "",
-        "§Formatos soportados",
+        "Formatos soportados",
         "  MP3, WAV, FLAC, OGG, OGA,",
         "  Opus, M4A, AAC, AIFF, APE",
         "",
-        "§Línea de comandos",
+        "Línea de comandos",
         "→ -o <dir>    Abrir carpeta de música",
         "→ -h, --help  Mostrar ayuda",
         "",
-        "§Ratón",
+        "Ratón",
         "  Clic en lista para seleccionar",
         "  Clic en barra de progreso para saltar",
         "  Clic en barra de volumen para ajustar",
         "  Arrastrar área de letras para saltar",
         "",
-        "§Repositorio GitHub",
+        "Repositorio GitHub",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -2783,6 +2895,7 @@ static ES: LangTexts = LangTexts {
         " k           Configurar API",
         " g           Configurar GitHub Token",
         " z           Letras de escritorio on/off",
+        " r           Recomendaciones on/off",
         " q           Salir",
         "",
         "Modos de reproducción:",
@@ -2919,10 +3032,10 @@ static IT: LangTexts = LangTexts {
     search_prompt_juhe: "Juhe: ",
     search_prompt_online: "Ricerca online: ",
     search_prompt_local: "Ricerca locale: ",
-    playlist_empty_hint: "Inserisci nome playlist e premi Invio",
+    playlist_empty_hint: "Inserisci keyword playlist e premi Invio",
     playlist_no_result: "Nessuna playlist. Modifica e premi Invio",
-    juhe_enter_hint: "Inserisci nome, poi Invio per cercare Juhe",
-    online_enter_hint: "Inserisci nome, poi Invio per cercare online",
+    juhe_enter_hint: "Inserisci keyword, poi Invio per cercare Juhe",
+    online_enter_hint: "Inserisci keyword, poi Invio per cercare online",
     online_no_result: "Nessun risultato. Modifica e premi Invio",
 
     app_title: "🎵 Ter-Music-Rust - Riproduttore terminale 🎵",
@@ -2943,6 +3056,10 @@ static IT: LangTexts = LangTexts {
     no_lyrics_found: "Testi non trovati",
     select_song_for_lyrics: "Seleziona un brano",
     no_comments: "Nessun commento",
+
+    recommendation_title: "Raccomandazioni: ",
+    recommendation_loading: "Ottenendo raccomandazioni...",
+    recommendation_no_data: "Riproduci brani per raccomandazioni",
 
     play_status_label: "Stato",
     volume_label: "Volume",
@@ -2972,11 +3089,13 @@ static IT: LangTexts = LangTexts {
     fmt_comment_name: "{}: ",
 
     ai_prompt_template: "Compila informazioni dettagliate sulla canzone basandoti sul titolo. NON mostrare alcun preambolo, saluto o autopresentazione. Mostra le informazioni direttamente.\n\nTitolo: {}\n\nStruttura di output con descrizioni dettagliate. Se un elemento non può essere verificato, scrivi «Nessun dato pubblico»:\n\nInterpreti: (voce principale, cori, artisti ospiti, ecc.)\nDettagli sull'artista: (nazionalità, luogo di nascita, data di nascita, segno zodiacale, gruppo sanguigno, altezza, peso, professione, formazione, opere notevoli, principali traguardi, ecc.)\nComposizione e produzione: (paroliere, compositore, arrangiatore, produttore, team creativo completo)\nData di uscita: (data specifica; elenca separatamente le diverse versioni)\nAlbum: (nome dell'album, numero traccia, lista tracce dell'album)\nContesto creativo: (descrizione dettagliata dell'ispirazione, storie dietro le quinte, aneddoti)\nSignificato del testo: (interpretazione approfondita, emozioni e temi espressi)\nStile musicale: (genere, BPM, tonalità, caratteristiche ritmiche, arrangiamenti speciali o strumenti)\nPerformance commerciale: (classifiche, vendite, streaming, certificazioni)\nPremi e nomination: (premi musicali, nomination)\nImpatto e recensioni: (recensioni della critica, influenza culturale, importanza storica)\nCover e utilizzi: (cover notevoli, utilizzi in cinema/pubblicità/videogiochi)\nAneddoti: (curiosità, aneddoti legati alla canzone)\n\nRequisiti:\n- Informazioni il più possibile accurate e dettagliate; evitate invenzioni. Segnala come «Secondo voci» o «Non confermato» ciò che è incerto.\n- Se ci sono più interpreti o versioni, priorità all'originale o alla versione più nota.\n- Sviluppa ogni punto in dettaglio, non essere troppo breve.\n- Assolutamente SENZA preambolo, saluto o autopresentazione. NON usare elenchi numerati.\n- Devi rispondere in italiano.",
+
+    recommendation_prompt_template: "Basato sulla cronologia di riproduzione musicale dell'utente, consiglia 10 canzoni che potrebbero piacergli. Restituisci solo un elenco di nomi di canzoni, uno per riga, senza numerazione, senza spiegazione.\n{}",
     now_playing_prefixes: &["In riproduzione: ", "In riproduzione："],
     tip_online_narrow: "Online: Enter|↑↓|DL|PgUp/Dn|Esc",
 
     help_lines: &[
-        "§Scorciatoie da tastiera",
+        "Scorciatoie da tastiera",
         "→ ↑/↓         Seleziona brano",
         "→ Enter       Riproduci brano",
         "→ Space       Riproduci/Pausa",
@@ -2986,7 +3105,7 @@ static IT: LangTexts = LangTexts {
         "→ ,/.         Indietro/Avanti 10s",
         "→ +/-         Volume",
         "",
-        "§Tasti funzione",
+        "Tasti funzione",
         "→ 1-5         Modalità riproduzione",
         "→ o           Apri cartella musica",
         "→ s           Ricerca locale",
@@ -3003,30 +3122,31 @@ static IT: LangTexts = LangTexts {
         "→ k           Configura API",
         "→ g           Configura GitHub Token",
         "→ z           Attiva/disattiva lyrics desktop",
+        "→ r           Attiva/disattiva raccomandazioni",
         "→ q           Esci",
         "",
-        "§Modalità di riproduzione",
+        "Modalità di riproduzione",
         "→ 1  Singola (stop dopo il brano)",
         "→ 2  Ripeti uno (loop sul brano corrente)",
         "→ 3  Sequenziale (ricomincia dall'inizio)",
         "→ 4  Ripeti lista (loop sull'intera lista)",
         "→ 5  Casuale (selezione casuale)",
         "",
-        "§Formati supportati",
+        "Formati supportati",
         "  MP3, WAV, FLAC, OGG, OGA,",
         "  Opus, M4A, AAC, AIFF, APE",
         "",
-        "§Riga di comando",
+        "Riga di comando",
         "→ -o <dir>    Apri cartella musica",
         "→ -h, --help  Mostra aiuto",
         "",
-        "§Mouse",
+        "Mouse",
         "  Clic sulla lista per selezionare",
         "  Clic sulla barra di progresso per saltare",
         "  Clic sulla barra del volume per regolare",
         "  Trascina area testi per saltare",
         "",
-        "§Repository GitHub",
+        "Repository GitHub",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -3065,6 +3185,7 @@ static IT: LangTexts = LangTexts {
         " k           Configura API",
         " g           Configura GitHub Token",
         " z           Attiva/disattiva lyrics desktop",
+        " r           Attiva/disattiva raccomandazioni",
         " q           Esci",
         "",
         "Modalità di riproduzione:",
@@ -3201,11 +3322,11 @@ static PT: LangTexts = LangTexts {
     search_prompt_juhe: "Juhe: ",
     search_prompt_online: "Pesquisa online: ",
     search_prompt_local: "Pesquisa local: ",
-    playlist_empty_hint: "Insira nome da playlist e pressione Enter",
+    playlist_empty_hint: "Insira keyword da playlist e pressione Enter",
     playlist_no_result: "Sem playlists. Altere e pressione Enter",
-    juhe_enter_hint: "Insira nome, depois Enter para Juhe",
-    online_enter_hint: "Insira nome, depois Enter para pesquisar online",
-    online_no_result: "Sem resultados. Altere palavra e pressione Enter",
+    juhe_enter_hint: "Insira keyword, depois Enter para Juhe",
+    online_enter_hint: "Insira keyword, depois Enter para pesquisar online",
+    online_no_result: "Sem resultados. Altere keyword e pressione Enter",
 
     app_title: "🎵 Ter-Music-Rust - Reprodutor terminal 🎵",
     song_info_label: "Info música",
@@ -3225,6 +3346,10 @@ static PT: LangTexts = LangTexts {
     no_lyrics_found: "Letras não encontradas",
     select_song_for_lyrics: "Selecione uma música",
     no_comments: "Sem comentários",
+
+    recommendation_title: "Recomendações: ",
+    recommendation_loading: "Obtendo recomendações...",
+    recommendation_no_data: "Reproduza músicas para recomendações",
 
     play_status_label: "Estado",
     volume_label: "Volume",
@@ -3254,11 +3379,13 @@ static PT: LangTexts = LangTexts {
     fmt_comment_name: "{}: ",
 
     ai_prompt_template: "Compile informações detalhadas sobre a música com base no título. NÃO exiba nenhum preâmbulo, saudação ou autopresentação. Exiba as informações diretamente.\n\nTítulo: {}\n\nEstrutura de saída com descrições detalhadas. Se algum item não puder ser verificado, escreva «Sem dados públicos»:\n\nIntérpretes: (voz principal, backing vocals, artistas convidados, etc.)\nDetalhes do artista: (nacionalidade, local de nascimento, data de nascimento, signo, tipo sanguíneo, altura, peso, profissão, formação, obras notáveis, principais conquistas, etc.)\nComposição e produção: (letrista, compositor, arranjador, produtor, equipe criativa completa)\nData de lançamento: (data específica; liste versões diferentes separadamente)\nÁlbum: (nome do álbum, número da faixa, lista de faixas do álbum)\nContexto criativo: (descrição detalhada da inspiração, histórias nos bastidores, anedotas da criação)\nSignificado da letra: (interpretação aprofundada, emoções e temas expressos)\nEstilo musical: (gênero, BPM, tonalidade, características rítmicas, arranjos especiais ou instrumentos)\nDesempenho comercial: (posições nas paradas, vendas, streaming, certificações)\nPrêmios e indicações: (prêmios musicais, indicações)\nImpacto e críticas: (avaliações da crítica, influência cultural, importância histórica)\nCovers e usos: (covers notáveis, usos em cinema/publicidade/jogos)\nAnedotas: (curiosidades, anedotas relacionadas à música)\n\nRequisitos:\n- Informações o mais precisas e detalhadas possível; evite invenções. Marque o incerto como «Supostamente» ou «Não confirmado».\n- Se houver vários intérpretes ou versões, priorize o original ou a versão mais conhecida.\n- Desenvolva cada ponto em detalhes, não seja muito breve.\n- Absolutamente SEM preâmbulo, saudação ou autopresentação. NÃO use listas numeradas.\n- Você DEVE responder em português.",
+
+    recommendation_prompt_template: "Com base no histórico de reprodução de música do usuário, recomenda 10 músicas que poderiam agradar ao usuário. Retorne apenas uma lista de nomes de músicas, uma por linha, sem numeração, sem explicação.\n{}",
     now_playing_prefixes: &["Reproduzindo: ", "Reproduzindo："],
     tip_online_narrow: "Online: Enter|↑↓|DL|PgUp/Dn|Esc",
 
     help_lines: &[
-        "§Atalhos de teclado",
+        "Atalhos de teclado",
         "→ ↑/↓         Selecionar música",
         "→ Enter       Reproduzir música",
         "→ Space       Reproduzir/Pausar",
@@ -3268,7 +3395,7 @@ static PT: LangTexts = LangTexts {
         "→ ,/.         Retroceder/Avançar 10s",
         "→ +/-         Volume",
         "",
-        "§Teclas de função",
+        "Teclas de função",
         "→ 1-5         Modo de reprodução",
         "→ o           Abrir pasta de música",
         "→ s           Pesquisa local",
@@ -3285,30 +3412,31 @@ static PT: LangTexts = LangTexts {
         "→ k           Configurar API",
         "→ g           Configurar GitHub Token",
         "→ z           Mostrar/ocultar letras do desktop",
+        "→ r           Ativar/desativar recomendações",
         "→ q           Sair",
         "",
-        "§Modos de reprodução",
+        "Modos de reprodução",
         "→ 1  Reprodução única (parar após a faixa)",
         "→ 2  Repetir uma (loop na faixa atual)",
         "→ 3  Sequencial (reiniciar do início)",
         "→ 4  Repetir lista (loop em toda a lista)",
         "→ 5  Aleatório (seleção aleatória)",
         "",
-        "§Formatos suportados",
+        "Formatos suportados",
         "  MP3, WAV, FLAC, OGG, OGA,",
         "  Opus, M4A, AAC, AIFF, APE",
         "",
-        "§Linha de comando",
+        "Linha de comando",
         "→ -o <dir>    Abrir pasta de música",
         "→ -h, --help  Mostrar ajuda",
         "",
-        "§Mouse",
+        "Mouse",
         "  Clicar na lista para selecionar",
         "  Clicar na barra de progresso para pular",
         "  Clicar na barra de volume para ajustar",
         "  Arrastar área de letras para pular",
         "",
-        "§Repositório GitHub",
+        "Repositório GitHub",
         "  https://github.com/xxgg121/ter-music-rust",
     ],
     cli_help_lines: &[
@@ -3347,6 +3475,7 @@ static PT: LangTexts = LangTexts {
         " k           Configurar API",
         " g           Configurar GitHub Token",
         " z           Mostrar/ocultar letras do desktop",
+        " r           Ativar/desativar recomendações",
         " q           Sair",
         "",
         "Modos de reprodução:",

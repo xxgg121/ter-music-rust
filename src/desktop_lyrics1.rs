@@ -7,43 +7,26 @@
 //   点击聚焦后支持: ←→上下曲, Space暂停, []/,.快进快退, +/-音量(含小键盘),
 //                    1-5模式(含小键盘), PgUp/PgDn位置, ↑↓透明度, T切换主题
 
-use chrono::Local;
 use std::sync::mpsc;
+use chrono::Local;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum DesktopLyricsPosition {
-    Bottom,
-    Top,
-}
+pub enum DesktopLyricsPosition { Bottom, Top }
 
 impl DesktopLyricsPosition {
     pub fn toggle(self) -> Self {
-        match self {
-            Self::Bottom => Self::Top,
-            Self::Top => Self::Bottom,
-        }
+        match self { Self::Bottom => Self::Top, Self::Top => Self::Bottom }
     }
     pub fn config_key(self) -> &'static str {
-        match self {
-            Self::Bottom => "bottom",
-            Self::Top => "top",
-        }
+        match self { Self::Bottom => "bottom", Self::Top => "top" }
     }
     pub fn from_config_key(s: &str) -> Self {
-        if s.eq_ignore_ascii_case("top") {
-            Self::Top
-        } else {
-            Self::Bottom
-        }
+        if s.eq_ignore_ascii_case("top") { Self::Top } else { Self::Bottom }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum DesktopLyricsScrollMode {
-    Vertical,
-    Horizontal,
-    Karaoke,
-}
+pub enum DesktopLyricsScrollMode { Vertical, Horizontal, Karaoke }
 
 impl DesktopLyricsScrollMode {
     pub fn toggle(self) -> Self {
@@ -74,10 +57,10 @@ pub struct DesktopLyricsCommand {
     pub lyrics_text: String,
     pub position: DesktopLyricsPosition,
     pub theme_name: String,
-    pub alpha: u8,   // 255=不变, 0-100=设定值
-    pub x: i32,      // -1=不变
-    pub y: i32,      // -1=不变
-    pub visible: i8, // -1=不变, 0=隐藏, 1=显示
+    pub alpha: u8,        // 255=不变, 0-100=设定值
+    pub x: i32,           // -1=不变
+    pub y: i32,           // -1=不变
+    pub visible: i8,      // -1=不变, 0=隐藏, 1=显示
     pub scroll_mode: DesktopLyricsScrollMode,
     /// 所有歌词的JSON格式: [{"text": "歌词", "time": 秒}, ...]
     pub all_lyrics_json: String,
@@ -105,16 +88,9 @@ impl DesktopLyricsCommand {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DesktopLyricsEvent {
-    PositionChanged {
-        x: i32,
-        y: i32,
-    },
-    KeyPress {
-        key: String,
-    },
-    ScrollModeChanged {
-        scroll_mode: DesktopLyricsScrollMode,
-    },
+    PositionChanged { x: i32, y: i32 },
+    KeyPress { key: String },
+    ScrollModeChanged { scroll_mode: DesktopLyricsScrollMode },
 }
 
 pub struct DesktopLyricsHandle {
@@ -149,37 +125,20 @@ impl DesktopLyricsHandle {
             child_process: None,
             active: false,
             position: DesktopLyricsPosition::Bottom,
-            alpha: 60,
+            alpha: 70,
             x: -1,
             y: -1,
             scroll_mode: DesktopLyricsScrollMode::Vertical,
         }
     }
-    pub fn is_active(&self) -> bool {
-        self.active
-    }
-    pub fn position(&self) -> DesktopLyricsPosition {
-        self.position
-    }
-    pub fn alpha(&self) -> u8 {
-        self.alpha
-    }
-    pub fn scroll_mode(&self) -> DesktopLyricsScrollMode {
-        self.scroll_mode
-    }
-    pub fn set_position(&mut self, p: DesktopLyricsPosition) {
-        self.position = p;
-    }
-    pub fn set_alpha(&mut self, a: u8) {
-        self.alpha = a.clamp(0, 100);
-    }
-    pub fn set_coords(&mut self, x: i32, y: i32) {
-        self.x = x;
-        self.y = y;
-    }
-    pub fn set_scroll_mode(&mut self, m: DesktopLyricsScrollMode) {
-        self.scroll_mode = m;
-    }
+    pub fn is_active(&self) -> bool { self.active }
+    pub fn position(&self) -> DesktopLyricsPosition { self.position }
+    pub fn alpha(&self) -> u8 { self.alpha }
+    pub fn scroll_mode(&self) -> DesktopLyricsScrollMode { self.scroll_mode }
+    pub fn set_position(&mut self, p: DesktopLyricsPosition) { self.position = p; }
+    pub fn set_alpha(&mut self, a: u8) { self.alpha = a.clamp(0, 100); }
+    pub fn set_coords(&mut self, x: i32, y: i32) { self.x = x; self.y = y; }
+    pub fn set_scroll_mode(&mut self, m: DesktopLyricsScrollMode) { self.scroll_mode = m; }
     #[allow(dead_code)]
     pub fn toggle_scroll_mode(&mut self) {
         self.scroll_mode = self.scroll_mode.toggle();
@@ -191,8 +150,7 @@ impl DesktopLyricsHandle {
 
     pub fn toggle_position(&mut self) {
         self.position = self.position.toggle();
-        self.x = -1;
-        self.y = -1;
+        self.x = -1; self.y = -1;
         let mut cmd = DesktopLyricsCommand::basic();
         cmd.position = self.position;
         cmd.scroll_mode = self.scroll_mode;
@@ -200,15 +158,9 @@ impl DesktopLyricsHandle {
     }
 
     pub fn adjust_alpha(&mut self, step: i8) {
-        let new_a = if step > 0 {
-            (self.alpha as i16 + 5).min(100) as u8
-        } else {
-            (self.alpha as i16 - 5).max(0) as u8
-        };
-        if new_a != self.alpha {
-            self.alpha = new_a;
-            self.send_alpha();
-        }
+        let new_a = if step > 0 { (self.alpha as i16 + 5).min(100) as u8 }
+                    else { (self.alpha as i16 - 5).max(0) as u8 };
+        if new_a != self.alpha { self.alpha = new_a; self.send_alpha(); }
     }
 
     fn send_alpha(&self) {
@@ -220,15 +172,11 @@ impl DesktopLyricsHandle {
     }
 
     fn send_cmd(&self, cmd: DesktopLyricsCommand) {
-        if let Some(ref s) = self.sender {
-            let _ = s.send(cmd);
-        }
+        if let Some(ref s) = self.sender { let _ = s.send(cmd); }
     }
 
     pub fn open(&mut self, theme_name: &str) {
-        if self.active {
-            return;
-        }
+        if self.active { return; }
 
         // 检测已有 sender 是否仍然存活
         let sender_alive = self.sender.as_ref().map_or(false, |s| {
@@ -299,11 +247,7 @@ impl DesktopLyricsHandle {
     }
 
     pub fn toggle(&mut self, theme_name: &str) {
-        if self.active {
-            self.close();
-        } else {
-            self.open(theme_name);
-        }
+        if self.active { self.close(); } else { self.open(theme_name); }
     }
 
     pub fn update_lyrics(&self, text: &str, theme_name: &str) {
@@ -315,12 +259,7 @@ impl DesktopLyricsHandle {
         self.send_cmd(cmd);
     }
 
-    pub fn update_all_lyrics(
-        &self,
-        all_lyrics: &[(String, f64)],
-        current_time_sec: f64,
-        theme_name: &str,
-    ) {
+    pub fn update_all_lyrics(&self, all_lyrics: &[(String, f64)], current_time_sec: f64, theme_name: &str) {
         let mut cmd = DesktopLyricsCommand::basic();
         cmd.all_lyrics_json = serde_json::to_string(all_lyrics).unwrap_or_default();
         cmd.current_time_sec = current_time_sec;
@@ -342,8 +281,7 @@ impl DesktopLyricsHandle {
     }
 
     pub fn move_window(&mut self, x: i32, y: i32) {
-        self.x = x;
-        self.y = y;
+        self.x = x; self.y = y;
         let mut cmd = DesktopLyricsCommand::basic();
         cmd.x = x;
         cmd.y = y;
@@ -356,9 +294,7 @@ impl DesktopLyricsHandle {
         self.event_rx.as_ref().and_then(|rx| rx.try_recv().ok())
     }
 
-    pub fn get_position_coords(&self) -> (i32, i32) {
-        (self.x, self.y)
-    }
+    pub fn get_position_coords(&self) -> (i32, i32) { (self.x, self.y) }
 
     #[cfg(windows)]
     fn launch_window(&mut self, theme_name: &str) {
@@ -370,16 +306,7 @@ impl DesktopLyricsHandle {
         let (ix, iy) = (self.x, self.y);
         let scroll_mode = self.scroll_mode;
         std::thread::spawn(move || {
-            windows_impl::run_desktop_lyrics_window(
-                rx,
-                pos,
-                &theme,
-                alpha,
-                ix,
-                iy,
-                ev_tx,
-                scroll_mode,
-            );
+            windows_impl::run_desktop_lyrics_window(rx, pos, &theme, alpha, ix, iy, ev_tx, scroll_mode);
         });
         self.sender = Some(tx);
         self.event_rx = Some(ev_rx);
@@ -414,10 +341,7 @@ impl DesktopLyricsHandle {
             .env("TER_DESKTOP_LYRICS_ALPHA", self.alpha.to_string())
             .env("TER_DESKTOP_LYRICS_X", self.x.to_string())
             .env("TER_DESKTOP_LYRICS_Y", self.y.to_string())
-            .env(
-                "TER_DESKTOP_LYRICS_SCROLL_MODE",
-                self.scroll_mode.config_key(),
-            );
+            .env("TER_DESKTOP_LYRICS_SCROLL_MODE", self.scroll_mode.config_key());
 
         let mut child = match cmd.spawn() {
             Ok(c) => c,
@@ -525,31 +449,36 @@ mod windows_impl {
     use winapi::shared::windef::{HDC, HWND, POINT, RECT};
     use winapi::um::libloaderapi::GetModuleHandleW;
     use winapi::um::wingdi::{
-        CreateCompatibleDC, CreateDIBSection, CreateFontIndirectW, CreateSolidBrush, DeleteDC,
-        DeleteObject, SelectObject, SetBkMode, SetTextColor, AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB,
-        BLENDFUNCTION, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DIB_RGB_COLORS,
-        FW_BOLD, FW_NORMAL, LOGFONTW, OUT_DEFAULT_PRECIS, RGB, TRANSPARENT,
+        CreateCompatibleDC, CreateDIBSection, CreateFontIndirectW,
+        CreateSolidBrush, DeleteDC, DeleteObject, LOGFONTW,
+        SelectObject, SetBkMode, SetTextColor, RGB,
+        BI_RGB, DIB_RGB_COLORS, FW_NORMAL, FW_BOLD,
+        TRANSPARENT, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_CHARSET, CLEARTYPE_QUALITY,
+        AC_SRC_OVER, AC_SRC_ALPHA, BLENDFUNCTION,
     };
     use winapi::um::winuser::{
-        CreateWindowExW, DefWindowProcW, DispatchMessageW, DrawTextW, FillRect, GetClientRect,
-        GetCursorPos, GetMessageW, GetWindowLongPtrW, GetWindowRect, KillTimer, LoadCursorW,
-        PostQuitMessage, RegisterClassW, ReleaseCapture, SetCapture, SetFocus, SetTimer,
-        SetWindowLongPtrW, SetWindowPos, ShowWindow, SystemParametersInfoW, TranslateMessage,
-        UpdateLayeredWindow, UpdateWindow, CS_HREDRAW, CS_VREDRAW, DT_CALCRECT, DT_CENTER, DT_LEFT,
-        DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, DT_WORD_ELLIPSIS, GWLP_USERDATA, HTCLIENT,
-        HTTRANSPARENT, HWND_TOPMOST, IDC_ARROW, MSG, SPI_GETWORKAREA, SWP_NOACTIVATE, SWP_NOSIZE,
-        SWP_SHOWWINDOW, SW_SHOW, ULW_ALPHA, WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_KEYDOWN,
-        WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCHITTEST, WM_RBUTTONUP, WM_SIZE, WM_TIMER,
-        WNDCLASSW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
+        CreateWindowExW, DefWindowProcW, DispatchMessageW, DrawTextW, FillRect,
+        GetClientRect, GetCursorPos, GetMessageW, GetWindowLongPtrW, GetWindowRect,
+        GWLP_USERDATA, KillTimer, LoadCursorW, PostQuitMessage,
+        RegisterClassW, ReleaseCapture, SetCapture,
+        SetFocus, SetTimer, SetWindowLongPtrW, SetWindowPos,
+        ShowWindow, SystemParametersInfoW, TranslateMessage, UpdateWindow,
+        UpdateLayeredWindow,
+        CS_HREDRAW, CS_VREDRAW, DT_CENTER, DT_NOPREFIX, DT_SINGLELINE,
+        DT_VCENTER, DT_WORD_ELLIPSIS, DT_LEFT, DT_CALCRECT, HTCLIENT, HTTRANSPARENT,
+        HWND_TOPMOST, IDC_ARROW, ULW_ALPHA,
+        SPI_GETWORKAREA, SWP_NOACTIVATE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_SHOW,
+        WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN,
+        WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCHITTEST, WM_RBUTTONUP, WM_TIMER, WM_SIZE,
+        WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+        WS_POPUP, WS_VISIBLE, MSG, WNDCLASSW,
     };
 
-    use super::{
-        DesktopLyricsCommand, DesktopLyricsEvent, DesktopLyricsPosition, DesktopLyricsScrollMode,
-    };
+    use super::{DesktopLyricsCommand, DesktopLyricsEvent, DesktopLyricsPosition, DesktopLyricsScrollMode};
 
     const TIMER_ID: usize = 1;
     const TIMER_INTERVAL_MS: u32 = 50;
-    const WINDOW_CORNER_RADIUS: f32 = 12.0;
 
     struct WindowData {
         all_lyrics: Vec<(String, f64)>,
@@ -557,22 +486,16 @@ mod windows_impl {
         scroll_offset: f32,
         old_all_lyrics: Vec<(String, f64)>,
         old_scroll_offset: f32,
-        old_prev_text: String,
-        old_curr_text: String,
-        old_next_text: String,
-        prev_text: String,
-        curr_text: String,
-        next_text: String,
+        old_prev_text: String, old_curr_text: String, old_next_text: String,
+        prev_text: String, curr_text: String, next_text: String,
         scroll_progress: f32,
         transitioning: bool,
         position: DesktopLyricsPosition,
         theme_name: String,
         alpha: u8,
-        x: i32,
-        y: i32,
+        x: i32, y: i32,
         dragging: bool,
-        drag_offset_x: i32,
-        drag_offset_y: i32,
+        drag_offset_x: i32, drag_offset_y: i32,
         rx: mpsc::Receiver<DesktopLyricsCommand>,
         ev_tx: mpsc::Sender<DesktopLyricsEvent>,
         scroll_mode: DesktopLyricsScrollMode,
@@ -583,7 +506,7 @@ mod windows_impl {
         horizontal_target_offset: f32,
     }
 
-    fn theme_colors(name: &str) -> ((u8, u8, u8), (u8, u8, u8), (u8, u8, u8)) {
+    fn theme_colors(name: &str) -> ((u8,u8,u8),(u8,u8,u8),(u8,u8,u8)) {
         match name {
             "GrayWhite" => ((30, 30, 30), (224, 233, 246), (188, 194, 202)),
             "Neon" => ((0, 20, 40), (255, 235, 80), (0, 255, 120)),
@@ -596,21 +519,13 @@ mod windows_impl {
     unsafe fn create_font(h: i32, bold: bool) -> winapi::shared::windef::HFONT {
         let mut lf = std::mem::zeroed::<LOGFONTW>();
         lf.lfHeight = h;
-        lf.lfWeight = if bold {
-            FW_BOLD as i32
-        } else {
-            FW_NORMAL as i32
-        };
+        lf.lfWeight = if bold { FW_BOLD as i32 } else { FW_NORMAL as i32 };
         lf.lfQuality = CLEARTYPE_QUALITY as u8;
         lf.lfOutPrecision = OUT_DEFAULT_PRECIS as u8;
         lf.lfClipPrecision = CLIP_DEFAULT_PRECIS as u8;
         lf.lfPitchAndFamily = DEFAULT_CHARSET as u8;
-        let face: Vec<u16> = "Consolas\0".encode_utf16().collect(); //Cascadia Mono
-        std::ptr::copy_nonoverlapping(
-            face.as_ptr(),
-            lf.lfFaceName.as_mut_ptr(),
-            face.len().min(32),
-        );
+        let face: Vec<u16> = "Consolas\0".encode_utf16().collect();//Cascadia Mono
+        std::ptr::copy_nonoverlapping(face.as_ptr(), lf.lfFaceName.as_mut_ptr(), face.len().min(32));
         CreateFontIndirectW(&lf)
     }
 
@@ -621,8 +536,7 @@ mod windows_impl {
     }
 
     fn clean_text(s: &str) -> String {
-        s.trim_end_matches(|c: char| c.is_control() || c == '\u{3000}')
-            .to_string()
+        s.trim_end_matches(|c: char| c.is_control() || c == '\u{3000}').to_string()
     }
 
     fn karaoke_group_start(all_lyrics: &[(String, f64)], current_idx: usize) -> usize {
@@ -650,11 +564,7 @@ mod windows_impl {
         0
     }
 
-    fn karaoke_lines_for_group(
-        all_lyrics: &[(String, f64)],
-        group_start: usize,
-        current_idx: usize,
-    ) -> (Vec<(String, bool)>, bool) {
+    fn karaoke_lines_for_group(all_lyrics: &[(String, f64)], group_start: usize, current_idx: usize) -> (Vec<(String, bool)>, bool) {
         let mut lines = Vec::new();
         let mut current_visible = false;
         let mut idx = group_start;
@@ -670,13 +580,8 @@ mod windows_impl {
         (lines, current_visible)
     }
 
-    unsafe fn draw_line(
-        mem_dc: HDC,
-        text: &str,
-        font: winapi::shared::windef::HFONT,
-        color: u32,
-        rect: RECT,
-    ) {
+    unsafe fn draw_line(mem_dc: HDC, text: &str, font: winapi::shared::windef::HFONT,
+                        color: u32, rect: RECT) {
         let old_font = SelectObject(mem_dc, font as _);
         SetTextColor(mem_dc, color);
         SetBkMode(mem_dc, TRANSPARENT as i32);
@@ -684,53 +589,17 @@ mod windows_impl {
         if !clean.is_empty() {
             let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
             let mut r = rect;
-            DrawTextW(
-                mem_dc,
-                wide.as_ptr(),
-                -1,
-                &mut r,
-                DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_WORD_ELLIPSIS,
-            );
+            DrawTextW(mem_dc, wide.as_ptr(), -1, &mut r,
+                DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_WORD_ELLIPSIS);
         }
         SelectObject(mem_dc, old_font);
     }
 
-    fn lerp_color(a: (u8, u8, u8), b: (u8, u8, u8), t: f32) -> (u8, u8, u8) {
+    fn lerp_color(a: (u8,u8,u8), b: (u8,u8,u8), t: f32) -> (u8,u8,u8) {
         let t = t.clamp(0.0, 1.0);
-        (
-            (a.0 as f32 + (b.0 as f32 - a.0 as f32) * t) as u8,
-            (a.1 as f32 + (b.1 as f32 - a.1 as f32) * t) as u8,
-            (a.2 as f32 + (b.2 as f32 - a.2 as f32) * t) as u8,
-        )
-    }
-
-    fn rounded_rect_alpha(x: u32, y: u32, w: u32, h: u32, radius: f32) -> f32 {
-        let radius = radius.min(w as f32 * 0.5).min(h as f32 * 0.5);
-        if radius <= 0.0 {
-            return 1.0;
-        }
-
-        let px = x as f32 + 0.5;
-        let py = y as f32 + 0.5;
-        let right = w as f32 - radius;
-        let bottom = h as f32 - radius;
-        let cx = if px < radius {
-            radius
-        } else if px > right {
-            right
-        } else {
-            px
-        };
-        let cy = if py < radius {
-            radius
-        } else if py > bottom {
-            bottom
-        } else {
-            py
-        };
-        let dx = px - cx;
-        let dy = py - cy;
-        (radius + 0.5 - (dx * dx + dy * dy).sqrt()).clamp(0.0, 1.0)
+        ((a.0 as f32 + (b.0 as f32 - a.0 as f32) * t) as u8,
+         (a.1 as f32 + (b.1 as f32 - a.1 as f32) * t) as u8,
+         (a.2 as f32 + (b.2 as f32 - a.2 as f32) * t) as u8)
     }
 
     unsafe fn render(hwnd: HWND, data: &mut WindowData) {
@@ -738,39 +607,23 @@ mod windows_impl {
         GetClientRect(hwnd, &mut client);
         let w = client.right - client.left;
         let h = client.bottom - client.top;
-        if w <= 0 || h <= 0 {
-            return;
-        }
+        if w <= 0 || h <= 0 { return; }
 
         let hdc = winapi::um::winuser::GetDC(hwnd);
-        if hdc.is_null() {
-            return;
-        }
+        if hdc.is_null() { return; }
 
         let mem_dc = CreateCompatibleDC(hdc);
         let mut bits_ptr: *mut u32 = std::ptr::null_mut();
-        let bmp = CreateDIBSection(
-            hdc,
-            &{
-                let mut bmi = std::mem::zeroed::<winapi::um::wingdi::BITMAPINFO>();
-                bmi.bmiHeader.biSize =
-                    std::mem::size_of::<winapi::um::wingdi::BITMAPINFOHEADER>() as u32;
-                bmi.bmiHeader.biWidth = w;
-                bmi.bmiHeader.biHeight = h;
-                bmi.bmiHeader.biPlanes = 1;
-                bmi.bmiHeader.biBitCount = 32;
-                bmi.bmiHeader.biCompression = BI_RGB;
-                bmi
-            },
-            DIB_RGB_COLORS,
-            &mut bits_ptr as *mut _ as _,
-            std::ptr::null_mut(),
-            0,
-        );
+        let bmp = CreateDIBSection(hdc, &{
+            let mut bmi = std::mem::zeroed::<winapi::um::wingdi::BITMAPINFO>();
+            bmi.bmiHeader.biSize = std::mem::size_of::<winapi::um::wingdi::BITMAPINFOHEADER>() as u32;
+            bmi.bmiHeader.biWidth = w; bmi.bmiHeader.biHeight = h;
+            bmi.bmiHeader.biPlanes = 1; bmi.bmiHeader.biBitCount = 32;
+            bmi.bmiHeader.biCompression = BI_RGB;
+            bmi
+        }, DIB_RGB_COLORS, &mut bits_ptr as *mut _ as _, std::ptr::null_mut(), 0);
         if bmp.is_null() || bits_ptr.is_null() {
-            if !bmp.is_null() {
-                DeleteObject(bmp as _);
-            }
+            if !bmp.is_null() { DeleteObject(bmp as _); }
             DeleteDC(mem_dc);
             winapi::um::winuser::ReleaseDC(hwnd, hdc);
             return;
@@ -805,60 +658,28 @@ mod windows_impl {
             let pg = ((px >> 8) & 0xFF) as u32;
             let pb = ((px >> 16) & 0xFF) as u32;
             let is_text = pr != bg.0 as u32 || pg != bg.1 as u32 || pb != bg.2 as u32;
-            let base_a = if is_text { txt_a255 } else { bg_a255 };
-            let x = (i as i32 % w) as u32;
-            let y = (i as i32 / w) as u32;
-            let mask = rounded_rect_alpha(x, y, w as u32, h as u32, WINDOW_CORNER_RADIUS);
-            let a = (base_a as f32 * mask).round() as u32;
-            if a == 0 {
-                *bits_ptr.add(i) = 0;
-            } else {
-                let edge = mask.clamp(0.0, 1.0);
-                let pr = (pr as f32 * edge).round() as u32;
-                let pg = (pg as f32 * edge).round() as u32;
-                let pb = (pb as f32 * edge).round() as u32;
-                *bits_ptr.add(i) = (pb << 16) | (pg << 8) | pr | (a << 24);
-            }
+            let a = if is_text { txt_a255 } else { bg_a255 };
+            *bits_ptr.add(i) = (pb << 16) | (pg << 8) | pr | ((a as u32) << 24);
         }
 
         let mut pt_src = POINT { x: 0, y: 0 };
         let mut size = std::mem::zeroed::<winapi::shared::windef::SIZE>();
-        size.cx = w;
-        size.cy = h;
+        size.cx = w; size.cy = h;
         let mut blend = BLENDFUNCTION {
             BlendOp: AC_SRC_OVER as u8,
             BlendFlags: 0,
             SourceConstantAlpha: 255,
             AlphaFormat: AC_SRC_ALPHA as u8,
         };
-        UpdateLayeredWindow(
-            hwnd,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            &mut size,
-            mem_dc,
-            &mut pt_src,
-            0,
-            &mut blend,
-            ULW_ALPHA,
-        );
+        UpdateLayeredWindow(hwnd, std::ptr::null_mut(), std::ptr::null_mut(), &mut size,
+            mem_dc, &mut pt_src, 0, &mut blend, ULW_ALPHA);
 
-        SelectObject(mem_dc, old_bmp);
-        DeleteObject(bmp as _);
-        DeleteDC(mem_dc);
+        SelectObject(mem_dc, old_bmp); DeleteObject(bmp as _); DeleteDC(mem_dc);
         winapi::um::winuser::ReleaseDC(hwnd, hdc);
     }
 
-    unsafe fn render_vertical(
-        mem_dc: HDC,
-        data: &WindowData,
-        w: i32,
-        h: i32,
-        bg: (u8, u8, u8),
-        fg_bright: (u8, u8, u8),
-        fg_dim: (u8, u8, u8),
-        _txt_a255: u8,
-    ) {
+    unsafe fn render_vertical(mem_dc: HDC, data: &WindowData, w: i32, h: i32,
+                              bg: (u8,u8,u8), fg_bright: (u8,u8,u8), fg_dim: (u8,u8,u8), _txt_a255: u8) {
         let main_fs = (h as f32 * 0.26) as i32;
         let sub_fs = (main_fs as f32 * 0.70) as i32;
         let main_font = create_font(main_fs, true);
@@ -874,26 +695,13 @@ mod windows_impl {
         let y_next = y_curr + main_line_h + gap;
         let spacing = y_curr - y_prev;
 
-        let empty = data.prev_text.is_empty()
-            && data.curr_text.is_empty()
-            && data.next_text.is_empty()
-            && data.old_prev_text.is_empty()
-            && data.old_curr_text.is_empty()
-            && data.old_next_text.is_empty();
+        let empty = data.prev_text.is_empty() && data.curr_text.is_empty() && data.next_text.is_empty()
+            && data.old_prev_text.is_empty() && data.old_curr_text.is_empty() && data.old_next_text.is_empty();
 
         if empty {
-            draw_line(
-                mem_dc,
-                "♫ ...",
-                main_font,
+            draw_line(mem_dc, "♫ ...", main_font,
                 RGB(fg_bright.0, fg_bright.1, fg_bright.2),
-                RECT {
-                    left: 4,
-                    top: 0,
-                    right: w - 4,
-                    bottom: h,
-                },
-            );
+                RECT{left:4, top:0, right:w-4, bottom:h});
         } else if data.transitioning {
             let t = data.scroll_progress;
             let te = t * t * (3.0 - 2.0 * t);
@@ -903,171 +711,54 @@ mod windows_impl {
             if a_out > 0.05 {
                 let ob = lerp_color(fg_bright, bg, 1.0 - a_out);
                 let od = lerp_color(fg_dim, bg, 1.0 - a_out);
-                draw_line(
-                    mem_dc,
-                    &data.old_prev_text,
-                    sub_font,
-                    RGB(od.0, od.1, od.2),
-                    RECT {
-                        left: 4,
-                        top: y_prev - off,
-                        right: w - 4,
-                        bottom: y_prev - off + sub_line_h,
-                    },
-                );
-                draw_line(
-                    mem_dc,
-                    &data.old_curr_text,
-                    main_font,
-                    RGB(ob.0, ob.1, ob.2),
-                    RECT {
-                        left: 4,
-                        top: y_curr - off,
-                        right: w - 4,
-                        bottom: y_curr - off + main_line_h,
-                    },
-                );
-                draw_line(
-                    mem_dc,
-                    &data.old_next_text,
-                    sub_font,
-                    RGB(od.0, od.1, od.2),
-                    RECT {
-                        left: 4,
-                        top: y_next - off,
-                        right: w - 4,
-                        bottom: y_next - off + sub_line_h,
-                    },
-                );
+                draw_line(mem_dc, &data.old_prev_text, sub_font, RGB(od.0,od.1,od.2),
+                    RECT{left:4, top:y_prev-off, right:w-4, bottom:y_prev-off+sub_line_h});
+                draw_line(mem_dc, &data.old_curr_text, main_font, RGB(ob.0,ob.1,ob.2),
+                    RECT{left:4, top:y_curr-off, right:w-4, bottom:y_curr-off+main_line_h});
+                draw_line(mem_dc, &data.old_next_text, sub_font, RGB(od.0,od.1,od.2),
+                    RECT{left:4, top:y_next-off, right:w-4, bottom:y_next-off+sub_line_h});
             }
             if a_in > 0.05 {
                 let nb = lerp_color(fg_bright, bg, 1.0 - a_in);
                 let nd = lerp_color(fg_dim, bg, 1.0 - a_in);
-                draw_line(
-                    mem_dc,
-                    &data.prev_text,
-                    sub_font,
-                    RGB(nd.0, nd.1, nd.2),
-                    RECT {
-                        left: 4,
-                        top: y_prev + spacing - off,
-                        right: w - 4,
-                        bottom: y_prev + spacing - off + sub_line_h,
-                    },
-                );
-                draw_line(
-                    mem_dc,
-                    &data.curr_text,
-                    main_font,
-                    RGB(nb.0, nb.1, nb.2),
-                    RECT {
-                        left: 4,
-                        top: y_curr + spacing - off,
-                        right: w - 4,
-                        bottom: y_curr + spacing - off + main_line_h,
-                    },
-                );
-                draw_line(
-                    mem_dc,
-                    &data.next_text,
-                    sub_font,
-                    RGB(nd.0, nd.1, nd.2),
-                    RECT {
-                        left: 4,
-                        top: y_next + spacing - off,
-                        right: w - 4,
-                        bottom: y_next + spacing - off + sub_line_h,
-                    },
-                );
+                draw_line(mem_dc, &data.prev_text, sub_font, RGB(nd.0,nd.1,nd.2),
+                    RECT{left:4, top:y_prev+spacing-off, right:w-4, bottom:y_prev+spacing-off+sub_line_h});
+                draw_line(mem_dc, &data.curr_text, main_font, RGB(nb.0,nb.1,nb.2),
+                    RECT{left:4, top:y_curr+spacing-off, right:w-4, bottom:y_curr+spacing-off+main_line_h});
+                draw_line(mem_dc, &data.next_text, sub_font, RGB(nd.0,nd.1,nd.2),
+                    RECT{left:4, top:y_next+spacing-off, right:w-4, bottom:y_next+spacing-off+sub_line_h});
             }
         } else {
-            draw_line(
-                mem_dc,
-                &data.prev_text,
-                sub_font,
-                RGB(fg_dim.0, fg_dim.1, fg_dim.2),
-                RECT {
-                    left: 4,
-                    top: y_prev,
-                    right: w - 4,
-                    bottom: y_prev + sub_line_h,
-                },
-            );
-            draw_line(
-                mem_dc,
-                &data.curr_text,
-                main_font,
-                RGB(fg_bright.0, fg_bright.1, fg_bright.2),
-                RECT {
-                    left: 4,
-                    top: y_curr,
-                    right: w - 4,
-                    bottom: y_curr + main_line_h,
-                },
-            );
-            draw_line(
-                mem_dc,
-                &data.next_text,
-                sub_font,
-                RGB(fg_dim.0, fg_dim.1, fg_dim.2),
-                RECT {
-                    left: 4,
-                    top: y_next,
-                    right: w - 4,
-                    bottom: y_next + sub_line_h,
-                },
-            );
+            draw_line(mem_dc, &data.prev_text, sub_font, RGB(fg_dim.0,fg_dim.1,fg_dim.2),
+                RECT{left:4, top:y_prev, right:w-4, bottom:y_prev+sub_line_h});
+            draw_line(mem_dc, &data.curr_text, main_font, RGB(fg_bright.0,fg_bright.1,fg_bright.2),
+                RECT{left:4, top:y_curr, right:w-4, bottom:y_curr+main_line_h});
+            draw_line(mem_dc, &data.next_text, sub_font, RGB(fg_dim.0,fg_dim.1,fg_dim.2),
+                RECT{left:4, top:y_next, right:w-4, bottom:y_next+sub_line_h});
         }
 
-        DeleteObject(main_font as _);
-        DeleteObject(sub_font as _);
+        DeleteObject(main_font as _); DeleteObject(sub_font as _);
     }
 
-    unsafe fn render_horizontal(
-        mem_dc: HDC,
-        data: &mut WindowData,
-        w: i32,
-        h: i32,
-        bg: (u8, u8, u8),
-        fg_bright: (u8, u8, u8),
-        fg_dim: (u8, u8, u8),
-        _txt_a255: u8,
-    ) {
+    unsafe fn render_horizontal(mem_dc: HDC, data: &mut WindowData, w: i32, h: i32,
+                               bg: (u8,u8,u8), fg_bright: (u8,u8,u8), fg_dim: (u8,u8,u8), _txt_a255: u8) {
         let fs = (h as f32 * 0.26) as i32;
 
         if !data.all_lyrics.is_empty() {
-            let current_idx = data
-                .all_lyrics
-                .partition_point(|&(_, t)| t <= data.current_time_sec);
+            let current_idx = data.all_lyrics.partition_point(|&(_, t)| t <= data.current_time_sec);
             let current_idx = if current_idx == 0 { 0 } else { current_idx - 1 };
 
             let gap = 40i32;
             let mut widths = vec![0i32; data.all_lyrics.len()];
             for (i, (text, _)) in data.all_lyrics.iter().enumerate() {
-                if text.is_empty() {
-                    continue;
-                }
-                let font = if i == current_idx {
-                    create_font(fs, true)
-                } else {
-                    create_font(fs, false)
-                };
+                if text.is_empty() { continue; }
+                let font = if i == current_idx { create_font(fs, true) } else { create_font(fs, false) };
                 let clean = clean_text(text);
                 let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
                 let old_f = SelectObject(mem_dc, font as _);
-                let mut calc_rect = RECT {
-                    left: 0,
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                };
-                DrawTextW(
-                    mem_dc,
-                    wide.as_ptr(),
-                    -1,
-                    &mut calc_rect,
-                    DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT,
-                );
+                let mut calc_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                DrawTextW(mem_dc, wide.as_ptr(), -1, &mut calc_rect,
+                    DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT);
                 widths[i] = calc_rect.right - calc_rect.left;
                 SelectObject(mem_dc, old_f);
                 DeleteObject(font as _);
@@ -1096,9 +787,7 @@ mod windows_impl {
             let y = (h - text_h) / 2;
 
             for (i, (text, _)) in data.all_lyrics.iter().enumerate() {
-                if text.is_empty() {
-                    continue;
-                }
+                if text.is_empty() { continue; }
                 let is_current = i == current_idx;
                 let color = if is_current { fg_bright } else { fg_dim };
                 let alpha = if is_current { 1.0 } else { 0.6 };
@@ -1109,32 +798,15 @@ mod windows_impl {
                 } else {
                     lerp_color(color, bg, 1.0 - alpha)
                 };
-                let font = if is_current {
-                    create_font(fs, true)
-                } else {
-                    create_font(fs, false)
-                };
+                let font = if is_current { create_font(fs, true) } else { create_font(fs, false) };
                 let clean = clean_text(text);
                 let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
                 let old_f = SelectObject(mem_dc, font as _);
-                SetTextColor(
-                    mem_dc,
-                    RGB(blended_color.0, blended_color.1, blended_color.2),
-                );
+                SetTextColor(mem_dc, RGB(blended_color.0, blended_color.1, blended_color.2));
                 let x = (positions[i] as f32 - final_offset) as i32;
-                let mut r = RECT {
-                    left: x,
-                    top: y,
-                    right: x + widths[i],
-                    bottom: y + text_h,
-                };
-                DrawTextW(
-                    mem_dc,
-                    wide.as_ptr(),
-                    -1,
-                    &mut r,
-                    DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
-                );
+                let mut r = RECT { left: x, top: y, right: x + widths[i], bottom: y + text_h };
+                DrawTextW(mem_dc, wide.as_ptr(), -1, &mut r,
+                    DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
                 SelectObject(mem_dc, old_f);
                 DeleteObject(font as _);
             }
@@ -1160,19 +832,9 @@ mod windows_impl {
             let clean = clean_text(text);
             let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
             let old_f = SelectObject(mem_dc, font as _);
-            let mut calc_rect = RECT {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-            };
-            DrawTextW(
-                mem_dc,
-                wide.as_ptr(),
-                -1,
-                &mut calc_rect,
-                DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT,
-            );
+            let mut calc_rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+            DrawTextW(mem_dc, wide.as_ptr(), -1, &mut calc_rect,
+                DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT);
             let text_w = calc_rect.right - calc_rect.left;
             widths.push(text_w);
             total_w += text_w;
@@ -1185,44 +847,24 @@ mod windows_impl {
         let mut current_x = start_x;
 
         for (i, text) in texts.iter().enumerate() {
-            if text.is_empty() {
-                continue;
-            }
+            if text.is_empty() { continue; }
             let color = if is_curr[i] { fg_bright } else { fg_dim };
             let font = create_font(fs, is_curr[i]);
             let clean = clean_text(text);
             let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
             let old_f = SelectObject(mem_dc, font as _);
             SetTextColor(mem_dc, RGB(color.0, color.1, color.2));
-            let mut r = RECT {
-                left: current_x,
-                top: y,
-                right: current_x + widths[i],
-                bottom: y + text_h,
-            };
-            DrawTextW(
-                mem_dc,
-                wide.as_ptr(),
-                -1,
-                &mut r,
-                DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
-            );
+            let mut r = RECT { left: current_x, top: y, right: current_x + widths[i], bottom: y + text_h };
+            DrawTextW(mem_dc, wide.as_ptr(), -1, &mut r,
+                DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
             SelectObject(mem_dc, old_f);
             DeleteObject(font as _);
             current_x += widths[i] + gap;
         }
     }
 
-    unsafe fn render_karaoke(
-        mem_dc: HDC,
-        data: &mut WindowData,
-        w: i32,
-        h: i32,
-        bg: (u8, u8, u8),
-        fg_bright: (u8, u8, u8),
-        fg_dim: (u8, u8, u8),
-        _txt_a255: u8,
-    ) {
+    unsafe fn render_karaoke(mem_dc: HDC, data: &mut WindowData, w: i32, h: i32,
+                              bg: (u8,u8,u8), fg_bright: (u8,u8,u8), fg_dim: (u8,u8,u8), _txt_a255: u8) {
         let fs = (h as f32 * 0.26) as i32;
 
         let lines: Vec<(String, bool)>;
@@ -1230,9 +872,7 @@ mod windows_impl {
         let mut line_char_progress: f64 = 0.0;
 
         if !data.all_lyrics.is_empty() {
-            let current_idx = data
-                .all_lyrics
-                .partition_point(|&(_, t)| t <= data.current_time_sec);
+            let current_idx = data.all_lyrics.partition_point(|&(_, t)| t <= data.current_time_sec);
             let current_idx = if current_idx == 0 { 0 } else { current_idx - 1 };
 
             if data.karaoke_line_group == usize::MAX {
@@ -1241,30 +881,16 @@ mod windows_impl {
             let group_start = data.karaoke_line_group;
 
             let current_visible;
-            (lines, current_visible) =
-                karaoke_lines_for_group(&data.all_lyrics, group_start, current_idx);
-            if data.karaoke_transition_progress < 1.0
-                && data.old_karaoke_line_group != usize::MAX
-                && data.old_karaoke_line_group != group_start
-            {
-                old_lines = karaoke_lines_for_group(
-                    &data.all_lyrics,
-                    data.old_karaoke_line_group,
-                    current_idx,
-                )
-                .0;
+            (lines, current_visible) = karaoke_lines_for_group(&data.all_lyrics, group_start, current_idx);
+            if data.karaoke_transition_progress < 1.0 && data.old_karaoke_line_group != usize::MAX && data.old_karaoke_line_group != group_start {
+                old_lines = karaoke_lines_for_group(&data.all_lyrics, data.old_karaoke_line_group, current_idx).0;
             }
 
             if current_visible {
                 let current_line_time = data.all_lyrics[current_idx].1;
-                let next_line_time = data
-                    .all_lyrics
-                    .get(current_idx + 1)
-                    .map(|&(_, t)| t)
-                    .unwrap_or(current_line_time + 4.0);
+                let next_line_time = data.all_lyrics.get(current_idx + 1).map(|&(_, t)| t).unwrap_or(current_line_time + 4.0);
                 let duration = (next_line_time - current_line_time).max(0.1);
-                line_char_progress =
-                    ((data.current_time_sec - current_line_time) / duration).clamp(0.0, 1.0);
+                line_char_progress = ((data.current_time_sec - current_line_time) / duration).clamp(0.0, 1.0);
             }
         } else {
             lines = vec![
@@ -1281,62 +907,16 @@ mod windows_impl {
             let t = data.karaoke_transition_progress.clamp(0.0, 1.0);
             let eased = t * t * (3.0 - 2.0 * t);
             let slide = (h as f32 * 0.12) as i32;
-            render_karaoke_group(
-                mem_dc,
-                &old_lines,
-                w,
-                h,
-                fs,
-                bg,
-                fg_bright,
-                fg_dim,
-                1.0 - eased,
-                -(slide as f32 * eased) as i32,
-                0.0,
-            );
-            render_karaoke_group(
-                mem_dc,
-                &lines,
-                w,
-                h,
-                fs,
-                bg,
-                fg_bright,
-                fg_dim,
-                eased,
-                (slide as f32 * (1.0 - eased)) as i32,
-                line_char_progress,
-            );
+            render_karaoke_group(mem_dc, &old_lines, w, h, fs, bg, fg_bright, fg_dim, 1.0 - eased, -(slide as f32 * eased) as i32, 0.0);
+            render_karaoke_group(mem_dc, &lines, w, h, fs, bg, fg_bright, fg_dim, eased, (slide as f32 * (1.0 - eased)) as i32, line_char_progress);
         } else {
-            render_karaoke_group(
-                mem_dc,
-                &lines,
-                w,
-                h,
-                fs,
-                bg,
-                fg_bright,
-                fg_dim,
-                1.0,
-                0,
-                line_char_progress,
-            );
+            render_karaoke_group(mem_dc, &lines, w, h, fs, bg, fg_bright, fg_dim, 1.0, 0, line_char_progress);
         }
     }
 
-    unsafe fn render_karaoke_group(
-        mem_dc: HDC,
-        lines: &[(String, bool)],
-        w: i32,
-        h: i32,
-        fs: i32,
-        bg: (u8, u8, u8),
-        fg_bright: (u8, u8, u8),
-        fg_dim: (u8, u8, u8),
-        alpha: f32,
-        y_offset: i32,
-        line_char_progress: f64,
-    ) {
+    unsafe fn render_karaoke_group(mem_dc: HDC, lines: &[(String, bool)], w: i32, h: i32, fs: i32,
+                                   bg: (u8,u8,u8), fg_bright: (u8,u8,u8), fg_dim: (u8,u8,u8), alpha: f32,
+                                   y_offset: i32, line_char_progress: f64) {
         if alpha <= 0.01 {
             return;
         }
@@ -1356,19 +936,9 @@ mod windows_impl {
                 let clean = clean_text(&lines[i].0);
                 let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
                 let old_f = SelectObject(mem_dc, f as _);
-                let mut calc_r = RECT {
-                    left: 0,
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                };
-                DrawTextW(
-                    mem_dc,
-                    wide.as_ptr(),
-                    -1,
-                    &mut calc_r,
-                    DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT,
-                );
+                let mut calc_r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                DrawTextW(mem_dc, wide.as_ptr(), -1, &mut calc_r,
+                    DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT);
                 top_widths[i] = calc_r.right - calc_r.left;
                 SelectObject(mem_dc, old_f);
                 DeleteObject(f as _);
@@ -1384,19 +954,9 @@ mod windows_impl {
                 let clean = clean_text(&lines[idx].0);
                 let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
                 let old_f = SelectObject(mem_dc, f as _);
-                let mut calc_r = RECT {
-                    left: 0,
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                };
-                DrawTextW(
-                    mem_dc,
-                    wide.as_ptr(),
-                    -1,
-                    &mut calc_r,
-                    DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT,
-                );
+                let mut calc_r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                DrawTextW(mem_dc, wide.as_ptr(), -1, &mut calc_r,
+                    DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT);
                 bot_widths[i] = calc_r.right - calc_r.left;
                 SelectObject(mem_dc, old_f);
                 DeleteObject(f as _);
@@ -1420,19 +980,23 @@ mod windows_impl {
             }
         };
 
-        // 左上一行：保持第一句完整布局，第二句超出右边界时由 DrawTextW 追加省略号。
-        let top_xs = [left_margin, second_x(left_margin, top_widths)];
+        // 左上一行：从左边距开始显示，保持卡拉OK上行逻辑。
+        let top_xs = [
+            left_margin,
+            second_x(left_margin, top_widths),
+        ];
 
         // 右下一行：按整行实际宽度右对齐，短句也贴近右侧形成视觉平衡。
         let bot_total_width = row_total_width(bot_widths);
         let bot_max_x = w - left_margin;
         let bot_start_x = (bot_max_x - bot_total_width).max(left_margin);
-        let bot_xs = [bot_start_x, second_x(bot_start_x, bot_widths)];
+        let bot_xs = [
+            bot_start_x,
+            second_x(bot_start_x, bot_widths),
+        ];
 
         for (i, (text, is_current)) in lines.iter().enumerate() {
-            if text.is_empty() {
-                continue;
-            }
+            if text.is_empty() { continue; }
 
             let (x, y) = match i {
                 0 => (top_xs[0], top_y + y_offset),
@@ -1442,6 +1006,7 @@ mod windows_impl {
                 _ => continue,
             };
             let max_right = match i {
+                0 if top_widths[1] > 0 => top_xs[1] - 2,
                 0 => w - left_margin,
                 1 => w - left_margin,
                 2 if bot_widths[1] > 0 => (bot_xs[1] - 2).min(w - left_margin),
@@ -1466,19 +1031,9 @@ mod windows_impl {
                     let ch_str: String = ch.to_string();
                     let wide: Vec<u16> = ch_str.encode_utf16().chain(std::iter::once(0)).collect();
                     let old_f = SelectObject(mem_dc, measure_font as _);
-                    let mut calc_r = RECT {
-                        left: 0,
-                        top: 0,
-                        right: 0,
-                        bottom: 0,
-                    };
-                    DrawTextW(
-                        mem_dc,
-                        wide.as_ptr(),
-                        -1,
-                        &mut calc_r,
-                        DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT,
-                    );
+                    let mut calc_r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+                    DrawTextW(mem_dc, wide.as_ptr(), -1, &mut calc_r,
+                        DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT);
                     char_widths.push(calc_r.right - calc_r.left);
                     SelectObject(mem_dc, old_f);
                 }
@@ -1495,19 +1050,9 @@ mod windows_impl {
                     SetTextColor(mem_dc, RGB(color.0, color.1, color.2));
                     let ch_str: String = ch.to_string();
                     let wide: Vec<u16> = ch_str.encode_utf16().chain(std::iter::once(0)).collect();
-                    let mut r = RECT {
-                        left: draw_x,
-                        top: y,
-                        right: draw_x + 200,
-                        bottom: y + text_h,
-                    };
-                    DrawTextW(
-                        mem_dc,
-                        wide.as_ptr(),
-                        -1,
-                        &mut r,
-                        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
-                    );
+                    let mut r = RECT { left: draw_x, top: y, right: draw_x + 200, bottom: y + text_h };
+                    DrawTextW(mem_dc, wide.as_ptr(), -1, &mut r,
+                        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
                     draw_x += char_widths[j] + char_spacing;
                     SelectObject(mem_dc, old_f);
                 }
@@ -1521,19 +1066,9 @@ mod windows_impl {
                 let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
                 let old_f = SelectObject(mem_dc, f as _);
                 SetTextColor(mem_dc, RGB(color.0, color.1, color.2));
-                let mut r = RECT {
-                    left: x,
-                    top: y,
-                    right: max_right,
-                    bottom: y + text_h,
-                };
-                DrawTextW(
-                    mem_dc,
-                    wide.as_ptr(),
-                    -1,
-                    &mut r,
-                    DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_WORD_ELLIPSIS,
-                );
+                let mut r = RECT { left: x, top: y, right: max_right, bottom: y + text_h };
+                DrawTextW(mem_dc, wide.as_ptr(), -1, &mut r,
+                    DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_WORD_ELLIPSIS);
                 SelectObject(mem_dc, old_f);
                 DeleteObject(f as _);
             }
@@ -1542,37 +1077,22 @@ mod windows_impl {
 
     fn key_to_string(vk: i32) -> String {
         match vk {
-            0x25 => "LEFT".into(),
-            0x27 => "RIGHT".into(),
-            0x26 => "UP".into(),
-            0x28 => "DOWN".into(),
-            0x20 => "SPACE".into(),
-            0x21 => "PAGEUP".into(),
-            0x22 => "PAGEDOWN".into(),
-            0xBD => "-".into(),
-            0xBB => "=".into(),
-            0x6D => "-".into(),
-            0x6B => "=".into(),
-            0xDB => "[".into(),
-            0xDD => "]".into(),
-            0xBC => ",".into(),
-            0xBE => ".".into(),
-            0x31 | 0x61 => "1".into(),
-            0x32 | 0x62 => "2".into(),
-            0x33 | 0x63 => "3".into(),
-            0x34 | 0x64 => "4".into(),
-            0x35 | 0x65 => "5".into(),
-            0x54 => "T".into(),
+            0x25 => "LEFT".into(), 0x27 => "RIGHT".into(),
+            0x26 => "UP".into(),   0x28 => "DOWN".into(),
+            0x20 => "SPACE".into(), 0x21 => "PAGEUP".into(), 0x22 => "PAGEDOWN".into(),
+            0xBD => "-".into(), 0xBB => "=".into(), 0x6D => "-".into(), 0x6B => "=".into(),
+            0xDB => "[".into(), 0xDD => "]".into(),
+            0xBC => ",".into(), 0xBE => ".".into(),
+            0x31 | 0x61 => "1".into(), 0x32 | 0x62 => "2".into(),
+            0x33 | 0x63 => "3".into(), 0x34 | 0x64 => "4".into(),
+            0x35 | 0x65 => "5".into(), 0x54 => "T".into(),
             _ => String::new(),
         }
     }
 
     unsafe extern "system" fn wnd_proc(
-        hwnd: HWND,
-        msg: UINT,
-        wparam: WPARAM,
-        lparam: LPARAM,
-    ) -> LRESULT {
+        hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> LRESULT
+    {
         match msg {
             WM_NCHITTEST => {
                 let x = (lparam & 0xFFFF) as i16 as i32;
@@ -1614,17 +1134,9 @@ mod windows_impl {
                         GetCursorPos(&mut cursor);
                         let new_x = cursor.x + data.drag_offset_x;
                         let new_y = cursor.y + data.drag_offset_y;
-                        data.x = new_x;
-                        data.y = new_y;
-                        SetWindowPos(
-                            hwnd,
-                            HWND_TOPMOST,
-                            new_x,
-                            new_y,
-                            0,
-                            0,
-                            SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-                        );
+                        data.x = new_x; data.y = new_y;
+                        SetWindowPos(hwnd, HWND_TOPMOST, new_x, new_y, 0, 0,
+                            SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
                     }
                 }
                 0
@@ -1637,9 +1149,7 @@ mod windows_impl {
                         data.dragging = false;
                         ReleaseCapture();
                         let _ = data.ev_tx.send(DesktopLyricsEvent::PositionChanged {
-                            x: data.x,
-                            y: data.y,
-                        });
+                            x: data.x, y: data.y });
                     }
                 }
                 0
@@ -1650,9 +1160,7 @@ mod windows_impl {
                     let data = &mut *p;
                     let new_mode = data.scroll_mode.toggle();
                     data.scroll_mode = new_mode;
-                    let _ = data.ev_tx.send(DesktopLyricsEvent::ScrollModeChanged {
-                        scroll_mode: new_mode,
-                    });
+                    let _ = data.ev_tx.send(DesktopLyricsEvent::ScrollModeChanged { scroll_mode: new_mode });
                 }
                 0
             }
@@ -1688,29 +1196,20 @@ mod windows_impl {
                             }
                             DesktopLyricsScrollMode::Horizontal => {
                                 let smooth_factor = 0.12;
-                                data.scroll_offset += (data.horizontal_target_offset
-                                    - data.scroll_offset)
-                                    * smooth_factor;
+                                data.scroll_offset += (data.horizontal_target_offset - data.scroll_offset) * smooth_factor;
                                 changed = true;
                             }
                             DesktopLyricsScrollMode::Karaoke => {
-                                let current_idx = data
-                                    .all_lyrics
-                                    .partition_point(|&(_, t)| t <= data.current_time_sec);
-                                let current_idx =
-                                    if current_idx == 0 { 0 } else { current_idx - 1 };
-                                let target_group =
-                                    karaoke_group_start(&data.all_lyrics, current_idx);
-                                if data.karaoke_line_group != target_group
-                                    && !data.all_lyrics.is_empty()
-                                {
+                                let current_idx = data.all_lyrics.partition_point(|&(_, t)| t <= data.current_time_sec);
+                                let current_idx = if current_idx == 0 { 0 } else { current_idx - 1 };
+                                let target_group = karaoke_group_start(&data.all_lyrics, current_idx);
+                                if data.karaoke_line_group != target_group && !data.all_lyrics.is_empty() {
                                     data.old_karaoke_line_group = data.karaoke_line_group;
                                     data.karaoke_line_group = target_group;
                                     data.karaoke_transition_progress = 0.0;
                                 }
                                 if data.karaoke_transition_progress < 1.0 {
-                                    data.karaoke_transition_progress =
-                                        (data.karaoke_transition_progress + 0.08).min(1.0);
+                                    data.karaoke_transition_progress = (data.karaoke_transition_progress + 0.08).min(1.0);
                                     if data.karaoke_transition_progress >= 1.0 {
                                         data.old_karaoke_line_group = usize::MAX;
                                     }
@@ -1725,171 +1224,105 @@ mod windows_impl {
                                         ShowWindow(hwnd, 0);
                                     } else if cmd.visible == 1 {
                                         ShowWindow(hwnd, SW_SHOW);
-                                        SetWindowPos(
-                                            hwnd,
-                                            HWND_TOPMOST,
-                                            data.x,
-                                            data.y,
-                                            0,
-                                            0,
-                                            SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-                                        );
+                                        SetWindowPos(hwnd, HWND_TOPMOST, data.x, data.y, 0, 0,
+                                            SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
                                     }
                                     if cmd.alpha != 255 && cmd.alpha != data.alpha {
                                         data.alpha = cmd.alpha.clamp(0, 100);
                                         changed = true;
                                     }
-                                    if !cmd.theme_name.is_empty()
-                                        && cmd.theme_name != data.theme_name
-                                    {
+                                    if !cmd.theme_name.is_empty() && cmd.theme_name != data.theme_name {
                                         data.theme_name = cmd.theme_name;
                                         changed = true;
                                     }
-                                    if cmd.x >= 0
-                                        && cmd.y >= 0
-                                        && (cmd.x != data.x || cmd.y != data.y)
-                                    {
-                                        data.x = cmd.x;
-                                        data.y = cmd.y;
-                                        SetWindowPos(
-                                            hwnd,
-                                            HWND_TOPMOST,
-                                            cmd.x,
-                                            cmd.y,
-                                            0,
-                                            0,
-                                            SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-                                        );
+                                    if cmd.x >= 0 && cmd.y >= 0 && (cmd.x != data.x || cmd.y != data.y) {
+                                        data.x = cmd.x; data.y = cmd.y;
+                                        SetWindowPos(hwnd, HWND_TOPMOST, cmd.x, cmd.y, 0, 0,
+                                            SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
                                     }
                                     if cmd.position != data.position {
                                         data.position = cmd.position;
-                                        reposition_window(
-                                            hwnd,
-                                            data.position,
-                                            &mut data.x,
-                                            &mut data.y,
-                                        );
+                                        reposition_window(hwnd, data.position, &mut data.x, &mut data.y);
                                         changed = true;
                                     }
                                     if cmd.scroll_mode != data.scroll_mode {
                                         data.scroll_mode = cmd.scroll_mode;
                                         changed = true;
                                     }
-                                    if !cmd.lyrics_text.is_empty()
-                                        || !cmd.all_lyrics_json.is_empty()
-                                    {
-                                        if !cmd.all_lyrics_json.is_empty() {
-                                            // 新格式：所有歌词的 JSON
-                                            if let Ok(new_lyrics) =
-                                                serde_json::from_str::<Vec<(String, f64)>>(
-                                                    &cmd.all_lyrics_json,
-                                                )
-                                            {
-                                                if new_lyrics != data.all_lyrics
-                                                    || (cmd.current_time_sec
-                                                        - data.current_time_sec)
-                                                        .abs()
-                                                        > 0.1
-                                                {
-                                                    data.old_all_lyrics = data.all_lyrics.clone();
-                                                    data.old_scroll_offset = data.scroll_offset;
-                                                    data.all_lyrics = new_lyrics;
-                                                    data.current_time_sec = cmd.current_time_sec;
-                                                    data.horizontal_progress = 0.0;
-                                                    data.transitioning = true;
-                                                    changed = true;
-                                                }
-                                            }
-                                        } else {
-                                            // 旧格式：三句歌词
-                                            let parts: Vec<&str> =
-                                                cmd.lyrics_text.splitn(3, '\n').collect();
-                                            let np =
-                                                clean_text(parts.first().copied().unwrap_or(""));
-                                            let nc =
-                                                clean_text(parts.get(1).copied().unwrap_or(""));
-                                            let nn =
-                                                clean_text(parts.get(2).copied().unwrap_or(""));
-                                            if np != data.prev_text
-                                                || nc != data.curr_text
-                                                || nn != data.next_text
-                                            {
-                                                data.old_prev_text = data.prev_text.clone();
-                                                data.old_curr_text = data.curr_text.clone();
-                                                data.old_next_text = data.next_text.clone();
-                                                data.prev_text = np;
-                                                data.curr_text = nc;
-                                                data.next_text = nn;
-                                                data.scroll_progress = 0.0;
-                                                data.horizontal_progress = 0.0;
-                                                data.transitioning = true;
-                                                changed = true;
-                                            }
-                                        }
-                                    }
+                                     if !cmd.lyrics_text.is_empty() || !cmd.all_lyrics_json.is_empty() {
+                                         if !cmd.all_lyrics_json.is_empty() {
+                                             // 新格式：所有歌词的 JSON
+                                             if let Ok(new_lyrics) = serde_json::from_str::<Vec<(String, f64)>>(&cmd.all_lyrics_json) {
+                                                 if new_lyrics != data.all_lyrics || (cmd.current_time_sec - data.current_time_sec).abs() > 0.1 {
+                                                     data.old_all_lyrics = data.all_lyrics.clone();
+                                                     data.old_scroll_offset = data.scroll_offset;
+                                                     data.all_lyrics = new_lyrics;
+                                                     data.current_time_sec = cmd.current_time_sec;
+                                                     data.horizontal_progress = 0.0;
+                                                     data.transitioning = true;
+                                                     changed = true;
+                                                 }
+                                             }
+                                         } else {
+                                             // 旧格式：三句歌词
+                                             let parts: Vec<&str> = cmd.lyrics_text.splitn(3, '\n').collect();
+                                             let np = clean_text(parts.first().copied().unwrap_or(""));
+                                             let nc = clean_text(parts.get(1).copied().unwrap_or(""));
+                                             let nn = clean_text(parts.get(2).copied().unwrap_or(""));
+                                             if np != data.prev_text || nc != data.curr_text || nn != data.next_text {
+                                                 data.old_prev_text = data.prev_text.clone();
+                                                 data.old_curr_text = data.curr_text.clone();
+                                                 data.old_next_text = data.next_text.clone();
+                                                 data.prev_text = np;
+                                                 data.curr_text = nc;
+                                                 data.next_text = nn;
+                                                 data.scroll_progress = 0.0;
+                                                 data.horizontal_progress = 0.0;
+                                                 data.transitioning = true;
+                                                 changed = true;
+                                             }
+                                         }
+                                     }
                                 }
                                 Err(mpsc::TryRecvError::Empty) => break,
-                                Err(mpsc::TryRecvError::Disconnected) => {
-                                    PostQuitMessage(0);
-                                    return 0;
-                                }
+                                Err(mpsc::TryRecvError::Disconnected) => { PostQuitMessage(0); return 0; }
                             }
                         }
-                        if changed {
-                            render(hwnd, data);
-                        }
+                        if changed { render(hwnd, data); }
                     }
                 }
                 0
             }
             WM_SIZE => {
                 let p = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut WindowData;
-                if !p.is_null() {
-                    render(hwnd, &mut *p);
-                }
+                if !p.is_null() { render(hwnd, &mut *p); }
                 0
             }
             WM_DESTROY => {
                 KillTimer(hwnd, TIMER_ID);
                 let p = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut WindowData;
-                if !p.is_null() {
-                    drop(Box::from_raw(p));
-                }
-                PostQuitMessage(0);
-                0
+                if !p.is_null() { drop(Box::from_raw(p)); }
+                PostQuitMessage(0); 0
             }
             _ => DefWindowProcW(hwnd, msg, wparam, lparam),
         }
     }
 
-    unsafe fn reposition_window(
-        hwnd: HWND,
-        position: DesktopLyricsPosition,
-        x: &mut i32,
-        y: &mut i32,
-    ) {
+    unsafe fn reposition_window(hwnd: HWND, position: DesktopLyricsPosition,
+                                 x: &mut i32, y: &mut i32) {
         let work = get_work_area();
         let mut r = std::mem::zeroed::<RECT>();
         GetClientRect(hwnd, &mut r);
         let ww = r.right - r.left;
         let wh = r.bottom - r.top;
-        if ww <= 0 || wh <= 0 {
-            return;
-        }
+        if ww <= 0 || wh <= 0 { return; }
         *x = ((work.right - work.left) - ww) / 2 + work.left;
         *y = match position {
             DesktopLyricsPosition::Bottom => work.bottom - wh,
             DesktopLyricsPosition::Top => work.top,
         };
-        SetWindowPos(
-            hwnd,
-            HWND_TOPMOST,
-            *x,
-            *y,
-            0,
-            0,
-            SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-        );
+        SetWindowPos(hwnd, HWND_TOPMOST, *x, *y, 0, 0,
+            SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 
     pub fn run_desktop_lyrics_window(
@@ -1897,8 +1330,7 @@ mod windows_impl {
         position: DesktopLyricsPosition,
         theme_name: &str,
         alpha: u8,
-        x: i32,
-        y: i32,
+        x: i32, y: i32,
         ev_tx: mpsc::Sender<DesktopLyricsEvent>,
         scroll_mode: DesktopLyricsScrollMode,
     ) {
@@ -1906,27 +1338,20 @@ mod windows_impl {
             let hi = GetModuleHandleW(std::ptr::null());
             let cn: Vec<u16> = "TerMusicDesktopLyrics\0".encode_utf16().collect();
             let wc = WNDCLASSW {
-                style: CS_HREDRAW | CS_VREDRAW,
-                lpfnWndProc: Some(wnd_proc),
-                cbClsExtra: 0,
-                cbWndExtra: 0,
-                hInstance: hi,
-                hIcon: std::ptr::null_mut(),
-                hCursor: LoadCursorW(std::ptr::null_mut(), IDC_ARROW),
-                hbrBackground: std::ptr::null_mut(),
-                lpszMenuName: std::ptr::null(),
+                style: CS_HREDRAW | CS_VREDRAW, lpfnWndProc: Some(wnd_proc),
+                cbClsExtra: 0, cbWndExtra: 0, hInstance: hi,
+                hIcon: std::ptr::null_mut(), hCursor: LoadCursorW(std::ptr::null_mut(), IDC_ARROW),
+                hbrBackground: std::ptr::null_mut(), lpszMenuName: std::ptr::null(),
                 lpszClassName: cn.as_ptr(),
             };
             RegisterClassW(&wc);
 
             let work = get_work_area();
             let sw = work.right - work.left;
-            let ww = ((sw as f32 * 0.58) as i32).min(1110).max(500);
+            let ww = ((sw as f32 * 0.58) as i32).min(1115).max(500);
             let wh: i32 = 100;
 
-            let (ix, iy) = if x >= 0 && y >= 0 {
-                (x, y)
-            } else {
+            let (ix, iy) = if x >= 0 && y >= 0 { (x, y) } else {
                 let cx = (sw - ww) / 2 + work.left;
                 let cy = match position {
                     DesktopLyricsPosition::Bottom => work.bottom - wh,
@@ -1938,21 +1363,10 @@ mod windows_impl {
             let title: Vec<u16> = "Ter Music Lyrics\0".encode_utf16().collect();
             let hwnd = CreateWindowExW(
                 WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
-                cn.as_ptr(),
-                title.as_ptr(),
-                WS_POPUP | WS_VISIBLE,
-                ix,
-                iy,
-                ww,
-                wh,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                hi,
-                std::ptr::null_mut(),
+                cn.as_ptr(), title.as_ptr(), WS_POPUP | WS_VISIBLE,
+                ix, iy, ww, wh, std::ptr::null_mut(), std::ptr::null_mut(), hi, std::ptr::null_mut(),
             );
-            if hwnd.is_null() {
-                return;
-            }
+            if hwnd.is_null() { return; }
 
             let data = Box::new(WindowData {
                 all_lyrics: Vec::new(),
@@ -1960,24 +1374,13 @@ mod windows_impl {
                 scroll_offset: 0.0,
                 old_all_lyrics: Vec::new(),
                 old_scroll_offset: 0.0,
-                prev_text: String::new(),
-                curr_text: String::new(),
-                next_text: String::new(),
-                old_prev_text: String::new(),
-                old_curr_text: String::new(),
-                old_next_text: String::new(),
-                scroll_progress: 1.0,
-                transitioning: false,
-                position,
-                theme_name: theme_name.to_string(),
-                alpha: alpha.clamp(0, 100),
-                x: ix,
-                y: iy,
-                dragging: false,
-                drag_offset_x: 0,
-                drag_offset_y: 0,
-                rx,
-                ev_tx,
+                prev_text: String::new(), curr_text: String::new(), next_text: String::new(),
+                old_prev_text: String::new(), old_curr_text: String::new(), old_next_text: String::new(),
+                scroll_progress: 1.0, transitioning: false,
+                position, theme_name: theme_name.to_string(), alpha: alpha.clamp(0, 100),
+                x: ix, y: iy,
+                dragging: false, drag_offset_x: 0, drag_offset_y: 0,
+                rx, ev_tx,
                 scroll_mode,
                 horizontal_progress: 0.0,
                 karaoke_line_group: usize::MAX,
@@ -1987,16 +1390,12 @@ mod windows_impl {
             });
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, Box::into_raw(data) as _);
             SetTimer(hwnd, TIMER_ID, TIMER_INTERVAL_MS, None);
-            ShowWindow(hwnd, SW_SHOW);
-            UpdateWindow(hwnd);
+            ShowWindow(hwnd, SW_SHOW); UpdateWindow(hwnd);
 
             let mut msg = std::mem::zeroed::<MSG>();
             loop {
-                if GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) <= 0 {
-                    break;
-                }
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
+                if GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) <= 0 { break; }
+                TranslateMessage(&msg); DispatchMessageW(&msg);
             }
         }
     }
@@ -2018,15 +1417,12 @@ pub mod unix_impl {
     use winit::keyboard::{Key, NamedKey};
     use winit::window::{Window, WindowAttributes, WindowId, WindowLevel};
 
-    use super::{
-        DesktopLyricsCommand, DesktopLyricsEvent, DesktopLyricsPosition, DesktopLyricsScrollMode,
-    };
+    use super::{DesktopLyricsCommand, DesktopLyricsEvent, DesktopLyricsPosition, DesktopLyricsScrollMode};
 
     const TIMER_INTERVAL_MS: u64 = 16;
     const WINDOW_HEIGHT: u32 = 100;
     const SCROLL_ANIMATION_STEP: f32 = 0.08;
     const FALLBACK_BOTTOM_PANEL_HEIGHT: u32 = 48;
-    const WINDOW_CORNER_RADIUS: f32 = 12.0;
 
     fn theme_colors(name: &str) -> ((u8, u8, u8), (u8, u8, u8), (u8, u8, u8)) {
         match name {
@@ -2039,8 +1435,7 @@ pub mod unix_impl {
     }
 
     fn clean_text(s: &str) -> String {
-        s.trim_end_matches(|c: char| c.is_control() || c == '\u{3000}')
-            .to_string()
+        s.trim_end_matches(|c: char| c.is_control() || c == '\u{3000}').to_string()
     }
 
     fn karaoke_group_start(all_lyrics: &[(String, f64)], current_idx: usize) -> usize {
@@ -2068,11 +1463,7 @@ pub mod unix_impl {
         0
     }
 
-    fn karaoke_lines_for_group(
-        all_lyrics: &[(String, f64)],
-        group_start: usize,
-        current_idx: usize,
-    ) -> (Vec<(String, bool)>, bool) {
+    fn karaoke_lines_for_group(all_lyrics: &[(String, f64)], group_start: usize, current_idx: usize) -> (Vec<(String, bool)>, bool) {
         let mut lines = Vec::new();
         let mut current_visible = false;
         let mut idx = group_start;
@@ -2090,11 +1481,9 @@ pub mod unix_impl {
 
     fn lerp_color(a: (u8, u8, u8), b: (u8, u8, u8), t: f32) -> (u8, u8, u8) {
         let t = t.clamp(0.0, 1.0);
-        (
-            (a.0 as f32 + (b.0 as f32 - a.0 as f32) * t) as u8,
-            (a.1 as f32 + (b.1 as f32 - a.1 as f32) * t) as u8,
-            (a.2 as f32 + (b.2 as f32 - a.2 as f32) * t) as u8,
-        )
+        ((a.0 as f32 + (b.0 as f32 - a.0 as f32) * t) as u8,
+         (a.1 as f32 + (b.1 as f32 - a.1 as f32) * t) as u8,
+         (a.2 as f32 + (b.2 as f32 - a.2 as f32) * t) as u8)
     }
 
     fn key_to_string(key: &Key) -> String {
@@ -2109,13 +1498,7 @@ pub mod unix_impl {
             Key::Character(c) => {
                 let s = c.as_str();
                 match s {
-                    "-" | "=" | "[" | "]" | "," | "." | "1" | "2" | "3" | "4" | "5" => {
-                        s.to_string()
-                    }
-                    "【" | "［" => "[".into(),
-                    "】" | "］" | "’" | "‘" => "]".into(),
-                    "，" | "、" => ",".into(),
-                    "。" => ".".into(),
+                    "-" | "=" | "[" | "]" | "," | "." | "1" | "2" | "3" | "4" | "5" => s.to_string(),
                     "t" | "T" => "T".into(),
                     _ => String::new(),
                 }
@@ -2125,19 +1508,12 @@ pub mod unix_impl {
     }
 
     struct GlyphQuad {
-        x: f32,
-        y: f32,
-        width: usize,
-        height: usize,
+        x: f32, y: f32,
+        width: usize, height: usize,
         pixels: Vec<f32>,
     }
 
-    fn rasterize_font_text(
-        font: &Font,
-        _latin_font: &Font,
-        text: &str,
-        scale: f32,
-    ) -> Vec<GlyphQuad> {
+    fn rasterize_font_text(font: &Font, _latin_font: &Font, text: &str, scale: f32) -> Vec<GlyphQuad> {
         let mut quads = Vec::new();
         let mut pen_x = 0.0f32;
         for ch in text.chars() {
@@ -2149,13 +1525,7 @@ pub mod unix_impl {
             pen_x += metrics.advance_width;
             if w > 0 && h > 0 {
                 let pixels: Vec<f32> = bitmap.iter().map(|&c| c as f32 / 255.0).collect();
-                quads.push(GlyphQuad {
-                    x,
-                    y,
-                    width: w,
-                    height: h,
-                    pixels,
-                });
+                quads.push(GlyphQuad { x, y, width: w, height: h, pixels });
             }
         }
         quads
@@ -2167,83 +1537,13 @@ pub mod unix_impl {
 
     fn glyph_centered_baseline(quads: &[GlyphQuad], center_y: f32) -> f32 {
         let min_y = quads.iter().map(|q| q.y).fold(0.0f32, f32::min);
-        let max_y = quads
-            .iter()
-            .map(|q| q.y + q.height as f32)
-            .fold(0.0f32, f32::max);
+        let max_y = quads.iter().map(|q| q.y + q.height as f32).fold(0.0f32, f32::max);
         center_y - (min_y + max_y) * 0.5
     }
 
-    fn rounded_rect_alpha(x: u32, y: u32, w: u32, h: u32, radius: f32) -> f32 {
-        let radius = radius.min(w as f32 * 0.5).min(h as f32 * 0.5);
-        if radius <= 0.0 {
-            return 1.0;
-        }
-
-        let px = x as f32 + 0.5;
-        let py = y as f32 + 0.5;
-        let right = w as f32 - radius;
-        let bottom = h as f32 - radius;
-        let cx = if px < radius {
-            radius
-        } else if px > right {
-            right
-        } else {
-            px
-        };
-        let cy = if py < radius {
-            radius
-        } else if py > bottom {
-            bottom
-        } else {
-            py
-        };
-        let dx = px - cx;
-        let dy = py - cy;
-        (radius + 0.5 - (dx * dx + dy * dy).sqrt()).clamp(0.0, 1.0)
-    }
-
-    fn fill_buffer(buf: &mut [u32], w: u32, h: u32, bg: (u8, u8, u8), bg_alpha: u8) {
-        for y in 0..h {
-            for x in 0..w {
-                let mask = rounded_rect_alpha(x, y, w, h, WINDOW_CORNER_RADIUS);
-                let idx = (y * w + x) as usize;
-                let alpha = (bg_alpha as f32 * mask).round() as u32;
-                if alpha == 0 {
-                    buf[idx] = 0;
-                } else {
-                    let edge = mask.clamp(0.0, 1.0);
-                    let r = (bg.0 as f32 * edge).round() as u32;
-                    let g = (bg.1 as f32 * edge).round() as u32;
-                    let b = (bg.2 as f32 * edge).round() as u32;
-                    buf[idx] = (r << 16) | (g << 8) | b | (alpha << 24);
-                }
-            }
-        }
-    }
-
-    fn clip_to_rounded_rect(buf: &mut [u32], w: u32, h: u32) {
-        for y in 0..h {
-            for x in 0..w {
-                let mask = rounded_rect_alpha(x, y, w, h, WINDOW_CORNER_RADIUS);
-                if mask >= 1.0 {
-                    continue;
-                }
-                let idx = (y * w + x) as usize;
-                let px = buf[idx];
-                let alpha = ((px >> 24) & 0xFF) as f32;
-                let alpha = (alpha * mask).round() as u32;
-                if alpha == 0 {
-                    buf[idx] = 0;
-                } else {
-                    let edge = mask.clamp(0.0, 1.0);
-                    let r = (((px >> 16) & 0xFF) as f32 * edge).round() as u32;
-                    let g = (((px >> 8) & 0xFF) as f32 * edge).round() as u32;
-                    let b = ((px & 0xFF) as f32 * edge).round() as u32;
-                    buf[idx] = (r << 16) | (g << 8) | b | (alpha << 24);
-                }
-            }
-        }
+    fn fill_buffer(buf: &mut [u32], bg: (u8, u8, u8), bg_alpha: u8) {
+        let bgc = ((bg.0 as u32) << 16) | ((bg.1 as u32) << 8) | (bg.2 as u32) | ((bg_alpha as u32) << 24);
+        for p in buf.iter_mut() { *p = bgc; }
     }
 
     fn render_to_buffer(buf: &mut [u32], w: u32, h: u32, state: &mut RenderState) {
@@ -2252,7 +1552,7 @@ pub mod unix_impl {
         let txt_pct = (state.alpha as u32 + 10).min(100);
         let txt_a = ((txt_pct * 255 + 50) / 100).min(255) as u8;
 
-        fill_buffer(buf, w, h, bg, bg_a);
+        fill_buffer(buf, bg, bg_a);
 
         match state.scroll_mode {
             DesktopLyricsScrollMode::Vertical => {
@@ -2265,20 +1565,10 @@ pub mod unix_impl {
                 render_to_buffer_karaoke(buf, w, h, state, bg, fg_bright, fg_dim, txt_a);
             }
         }
-
-        clip_to_rounded_rect(buf, w, h);
     }
 
-    fn render_to_buffer_vertical(
-        buf: &mut [u32],
-        w: u32,
-        h: u32,
-        state: &RenderState,
-        bg: (u8, u8, u8),
-        fg_bright: (u8, u8, u8),
-        fg_dim: (u8, u8, u8),
-        txt_a: u8,
-    ) {
+    fn render_to_buffer_vertical(buf: &mut [u32], w: u32, h: u32, state: &RenderState,
+                                   bg: (u8,u8,u8), fg_bright: (u8,u8,u8), fg_dim: (u8,u8,u8), txt_a: u8) {
         let wh = h as f32;
         let main_fs = wh * 0.26;
         let sub_fs = main_fs * 0.70;
@@ -2293,21 +1583,11 @@ pub mod unix_impl {
 
         let ww = w as f32;
 
-        let render_line = |buf: &mut [u32],
-                           text: &str,
-                           font: &Font,
-                           latin_font: &Font,
-                           fs: f32,
-                           center_y: f32,
-                           col: (u8, u8, u8),
-                           a: u8| {
+        let render_line = |buf: &mut [u32], text: &str, font: &Font, latin_font: &Font, fs: f32, center_y: f32, col: (u8,u8,u8), a: u8| {
             let quads = rasterize_font_text(font, latin_font, text, fs);
             let text_w = glyph_text_width(&quads);
             let min_y = quads.iter().map(|q| q.y).fold(0.0f32, f32::min);
-            let max_y = quads
-                .iter()
-                .map(|q| q.y + q.height as f32)
-                .fold(0.0f32, f32::max);
+            let max_y = quads.iter().map(|q| q.y + q.height as f32).fold(0.0f32, f32::max);
             let baseline = center_y - (min_y + max_y) * 0.5;
             let off_x = (ww - text_w) / 2.0;
             for q in &quads {
@@ -2315,27 +1595,19 @@ pub mod unix_impl {
                 let oy = (baseline + q.y) as i32;
                 for gy in 0..q.height {
                     let py = oy + gy as i32;
-                    if py < 0 || py >= h as i32 {
-                        continue;
-                    }
+                    if py < 0 || py >= h as i32 { continue; }
                     for gx in 0..q.width {
                         let px = ox + gx as i32;
-                        if px < 0 || px >= w as i32 {
-                            continue;
-                        }
+                        if px < 0 || px >= w as i32 { continue; }
                         let cov = q.pixels[gy * q.width + gx];
-                        if cov <= 0.001 {
-                            continue;
-                        }
+                        if cov <= 0.001 { continue; }
                         let cov = cov.powf(0.75).min(1.0);
                         let blend = cov;
                         let rr = (bg.0 as f32 + (col.0 as f32 - bg.0 as f32) * blend) as u32;
                         let gg = (bg.1 as f32 + (col.1 as f32 - bg.1 as f32) * blend) as u32;
                         let bb = (bg.2 as f32 + (col.2 as f32 - bg.2 as f32) * blend) as u32;
                         let ca = a as u32;
-                        if ca == 0 {
-                            continue;
-                        }
+                        if ca == 0 { continue; }
                         let idx = (py as u32 * w + px as u32) as usize;
                         buf[idx] = (rr << 16) | (gg << 8) | bb | (ca << 24);
                     }
@@ -2343,24 +1615,11 @@ pub mod unix_impl {
             }
         };
 
-        let empty = state.prev_text.is_empty()
-            && state.curr_text.is_empty()
-            && state.next_text.is_empty()
-            && state.old_prev_text.is_empty()
-            && state.old_curr_text.is_empty()
-            && state.old_next_text.is_empty();
+        let empty = state.prev_text.is_empty() && state.curr_text.is_empty() && state.next_text.is_empty()
+            && state.old_prev_text.is_empty() && state.old_curr_text.is_empty() && state.old_next_text.is_empty();
 
         if empty {
-            render_line(
-                buf,
-                "♫ ...",
-                &state.font_bold,
-                &state.font_latin_bold,
-                main_fs,
-                y_center_curr,
-                fg_bright,
-                txt_a,
-            );
+            render_line(buf, "♫ ...", &state.font_bold, &state.font_latin_bold, main_fs, y_center_curr, fg_bright, txt_a);
         } else if state.transitioning {
             let t = state.scroll_progress;
             let te = t * t * (3.0 - 2.0 * t);
@@ -2371,139 +1630,38 @@ pub mod unix_impl {
             if a_out > 0.01 {
                 let ob = lerp_color(fg_bright, bg, 1.0 - a_out);
                 let od = lerp_color(fg_dim, bg, 1.0 - a_out);
-                render_line(
-                    buf,
-                    &state.old_prev_text,
-                    &state.font,
-                    &state.font_latin,
-                    sub_fs,
-                    y_center_prev - off,
-                    od,
-                    txt_a,
-                );
-                render_line(
-                    buf,
-                    &state.old_curr_text,
-                    &state.font_bold,
-                    &state.font_latin_bold,
-                    main_fs,
-                    y_center_curr - off,
-                    ob,
-                    txt_a,
-                );
-                render_line(
-                    buf,
-                    &state.old_next_text,
-                    &state.font,
-                    &state.font_latin,
-                    sub_fs,
-                    y_center_next - off,
-                    od,
-                    txt_a,
-                );
+                render_line(buf, &state.old_prev_text, &state.font, &state.font_latin, sub_fs, y_center_prev - off, od, txt_a);
+                render_line(buf, &state.old_curr_text, &state.font_bold, &state.font_latin_bold, main_fs, y_center_curr - off, ob, txt_a);
+                render_line(buf, &state.old_next_text, &state.font, &state.font_latin, sub_fs, y_center_next - off, od, txt_a);
             }
             if a_in > 0.01 {
                 let nb = lerp_color(fg_bright, bg, 1.0 - a_in);
                 let nd = lerp_color(fg_dim, bg, 1.0 - a_in);
-                render_line(
-                    buf,
-                    &state.prev_text,
-                    &state.font,
-                    &state.font_latin,
-                    sub_fs,
-                    y_center_prev + spacing - off,
-                    nd,
-                    txt_a,
-                );
-                render_line(
-                    buf,
-                    &state.curr_text,
-                    &state.font_bold,
-                    &state.font_latin_bold,
-                    main_fs,
-                    y_center_curr + spacing - off,
-                    nb,
-                    txt_a,
-                );
-                render_line(
-                    buf,
-                    &state.next_text,
-                    &state.font,
-                    &state.font_latin,
-                    sub_fs,
-                    y_center_next + spacing - off,
-                    nd,
-                    txt_a,
-                );
+                render_line(buf, &state.prev_text, &state.font, &state.font_latin, sub_fs, y_center_prev + spacing - off, nd, txt_a);
+                render_line(buf, &state.curr_text, &state.font_bold, &state.font_latin_bold, main_fs, y_center_curr + spacing - off, nb, txt_a);
+                render_line(buf, &state.next_text, &state.font, &state.font_latin, sub_fs, y_center_next + spacing - off, nd, txt_a);
             }
         } else {
-            render_line(
-                buf,
-                &state.prev_text,
-                &state.font,
-                &state.font_latin,
-                sub_fs,
-                y_center_prev,
-                fg_dim,
-                txt_a,
-            );
-            render_line(
-                buf,
-                &state.curr_text,
-                &state.font_bold,
-                &state.font_latin_bold,
-                main_fs,
-                y_center_curr,
-                fg_bright,
-                txt_a,
-            );
-            render_line(
-                buf,
-                &state.next_text,
-                &state.font,
-                &state.font_latin,
-                sub_fs,
-                y_center_next,
-                fg_dim,
-                txt_a,
-            );
+            render_line(buf, &state.prev_text, &state.font, &state.font_latin, sub_fs, y_center_prev, fg_dim, txt_a);
+            render_line(buf, &state.curr_text, &state.font_bold, &state.font_latin_bold, main_fs, y_center_curr, fg_bright, txt_a);
+            render_line(buf, &state.next_text, &state.font, &state.font_latin, sub_fs, y_center_next, fg_dim, txt_a);
         }
     }
 
-    fn render_to_buffer_horizontal(
-        buf: &mut [u32],
-        w: u32,
-        h: u32,
-        state: &mut RenderState,
-        bg: (u8, u8, u8),
-        fg_bright: (u8, u8, u8),
-        fg_dim: (u8, u8, u8),
-        txt_a: u8,
-    ) {
+    fn render_to_buffer_horizontal(buf: &mut [u32], w: u32, h: u32, state: &mut RenderState,
+                                      bg: (u8,u8,u8), fg_bright: (u8,u8,u8), fg_dim: (u8,u8,u8), txt_a: u8) {
         let fs = h as f32 * 0.26;
 
         if !state.all_lyrics.is_empty() {
-            let current_idx = state
-                .all_lyrics
-                .partition_point(|&(_, t)| t <= state.current_time_sec);
+            let current_idx = state.all_lyrics.partition_point(|&(_, t)| t <= state.current_time_sec);
             let current_idx = if current_idx == 0 { 0 } else { current_idx - 1 };
 
             let gap = 40.0;
             let mut widths = vec![0.0; state.all_lyrics.len()];
             for (i, (text, _)) in state.all_lyrics.iter().enumerate() {
-                if text.is_empty() {
-                    continue;
-                }
-                let font_to_use = if i == current_idx {
-                    &state.font_bold
-                } else {
-                    &state.font
-                };
-                let latin_font_to_use = if i == current_idx {
-                    &state.font_latin_bold
-                } else {
-                    &state.font_latin
-                };
+                if text.is_empty() { continue; }
+                let font_to_use = if i == current_idx { &state.font_bold } else { &state.font };
+                let latin_font_to_use = if i == current_idx { &state.font_latin_bold } else { &state.font_latin };
                 let clean = clean_text(text);
                 let quads = rasterize_font_text(font_to_use, latin_font_to_use, &clean, fs);
                 widths[i] = glyph_text_width(&quads);
@@ -2529,21 +1687,11 @@ pub mod unix_impl {
             let center_y = h as f32 * 0.5;
 
             for (i, (text, _)) in state.all_lyrics.iter().enumerate() {
-                if text.is_empty() {
-                    continue;
-                }
+                if text.is_empty() { continue; }
                 let is_current = i == current_idx;
                 let color = if is_current { fg_bright } else { fg_dim };
-                let font_to_use = if is_current {
-                    &state.font_bold
-                } else {
-                    &state.font
-                };
-                let latin_font_to_use = if is_current {
-                    &state.font_latin_bold
-                } else {
-                    &state.font_latin
-                };
+                let font_to_use = if is_current { &state.font_bold } else { &state.font };
+                let latin_font_to_use = if is_current { &state.font_latin_bold } else { &state.font_latin };
                 let clean = clean_text(text);
                 let quads = rasterize_font_text(font_to_use, latin_font_to_use, &clean, fs);
                 let x = positions[i] - final_offset;
@@ -2553,27 +1701,19 @@ pub mod unix_impl {
                     let oy = (baseline + q.y) as i32;
                     for gy in 0..q.height {
                         let py = oy + gy as i32;
-                        if py < 0 || py >= h as i32 {
-                            continue;
-                        }
+                        if py < 0 || py >= h as i32 { continue; }
                         for gx in 0..q.width {
                             let px = ox + gx as i32;
-                            if px < 0 || px >= w as i32 {
-                                continue;
-                            }
+                            if px < 0 || px >= w as i32 { continue; }
                             let cov = q.pixels[gy * q.width + gx];
-                            if cov <= 0.001 {
-                                continue;
-                            }
+                            if cov <= 0.001 { continue; }
                             let cov = cov.powf(0.75).min(1.0);
                             let blend = cov;
                             let rr = (bg.0 as f32 + (color.0 as f32 - bg.0 as f32) * blend) as u32;
                             let gg = (bg.1 as f32 + (color.1 as f32 - bg.1 as f32) * blend) as u32;
                             let bb = (bg.2 as f32 + (color.2 as f32 - bg.2 as f32) * blend) as u32;
                             let ca = txt_a as u32;
-                            if ca == 0 {
-                                continue;
-                            }
+                            if ca == 0 { continue; }
                             let idx = (py as u32 * w + px as u32) as usize;
                             buf[idx] = (rr << 16) | (gg << 8) | bb | (ca << 24);
                         }
@@ -2607,9 +1747,7 @@ pub mod unix_impl {
         let mut current_x = start_x;
 
         for (i, text) in texts.iter().enumerate() {
-            if text.is_empty() {
-                continue;
-            }
+            if text.is_empty() { continue; }
             let color = if is_curr[i] { fg_bright } else { fg_dim };
             let quads = rasterize_font_text(&state.font, &state.font_latin, text, fs);
             let baseline = glyph_centered_baseline(&quads, center_y);
@@ -2618,27 +1756,19 @@ pub mod unix_impl {
                 let oy = (baseline + q.y) as i32;
                 for gy in 0..q.height {
                     let py = oy + gy as i32;
-                    if py < 0 || py >= h as i32 {
-                        continue;
-                    }
+                    if py < 0 || py >= h as i32 { continue; }
                     for gx in 0..q.width {
                         let px = ox + gx as i32;
-                        if px < 0 || px >= w as i32 {
-                            continue;
-                        }
+                        if px < 0 || px >= w as i32 { continue; }
                         let cov = q.pixels[gy * q.width + gx];
-                        if cov <= 0.001 {
-                            continue;
-                        }
+                        if cov <= 0.001 { continue; }
                         let cov = cov.powf(0.75).min(1.0);
                         let blend = cov;
                         let rr = (bg.0 as f32 + (color.0 as f32 - bg.0 as f32) * blend) as u32;
                         let gg = (bg.1 as f32 + (color.1 as f32 - bg.1 as f32) * blend) as u32;
                         let bb = (bg.2 as f32 + (color.2 as f32 - bg.2 as f32) * blend) as u32;
                         let ca = txt_a as u32;
-                        if ca == 0 {
-                            continue;
-                        }
+                        if ca == 0 { continue; }
                         let idx = (py as u32 * w + px as u32) as usize;
                         buf[idx] = (rr << 16) | (gg << 8) | bb | (ca << 24);
                     }
@@ -2648,16 +1778,8 @@ pub mod unix_impl {
         }
     }
 
-    fn render_to_buffer_karaoke(
-        buf: &mut [u32],
-        w: u32,
-        h: u32,
-        state: &RenderState,
-        bg: (u8, u8, u8),
-        fg_bright: (u8, u8, u8),
-        fg_dim: (u8, u8, u8),
-        txt_a: u8,
-    ) {
+    fn render_to_buffer_karaoke(buf: &mut [u32], w: u32, h: u32, state: &RenderState,
+                                bg: (u8,u8,u8), fg_bright: (u8,u8,u8), fg_dim: (u8,u8,u8), txt_a: u8) {
         let fs = h as f32 * 0.26;
 
         let lines: Vec<(String, bool)>;
@@ -2665,9 +1787,7 @@ pub mod unix_impl {
         let mut line_char_progress: f64 = 0.0;
 
         if !state.all_lyrics.is_empty() {
-            let current_idx = state
-                .all_lyrics
-                .partition_point(|&(_, t)| t <= state.current_time_sec);
+            let current_idx = state.all_lyrics.partition_point(|&(_, t)| t <= state.current_time_sec);
             let current_idx = if current_idx == 0 { 0 } else { current_idx - 1 };
 
             let group_start = if state.karaoke_line_group == usize::MAX {
@@ -2677,30 +1797,16 @@ pub mod unix_impl {
             };
 
             let current_visible;
-            (lines, current_visible) =
-                karaoke_lines_for_group(&state.all_lyrics, group_start, current_idx);
-            if state.karaoke_transition_progress < 1.0
-                && state.old_karaoke_line_group != usize::MAX
-                && state.old_karaoke_line_group != group_start
-            {
-                old_lines = karaoke_lines_for_group(
-                    &state.all_lyrics,
-                    state.old_karaoke_line_group,
-                    current_idx,
-                )
-                .0;
+            (lines, current_visible) = karaoke_lines_for_group(&state.all_lyrics, group_start, current_idx);
+            if state.karaoke_transition_progress < 1.0 && state.old_karaoke_line_group != usize::MAX && state.old_karaoke_line_group != group_start {
+                old_lines = karaoke_lines_for_group(&state.all_lyrics, state.old_karaoke_line_group, current_idx).0;
             }
 
             if current_visible {
                 let current_line_time = state.all_lyrics[current_idx].1;
-                let next_line_time = state
-                    .all_lyrics
-                    .get(current_idx + 1)
-                    .map(|&(_, t)| t)
-                    .unwrap_or(current_line_time + 4.0);
+                let next_line_time = state.all_lyrics.get(current_idx + 1).map(|&(_, t)| t).unwrap_or(current_line_time + 4.0);
                 let duration = (next_line_time - current_line_time).max(0.1);
-                line_char_progress =
-                    ((state.current_time_sec - current_line_time) / duration).clamp(0.0, 1.0);
+                line_char_progress = ((state.current_time_sec - current_line_time) / duration).clamp(0.0, 1.0);
             }
         } else {
             lines = vec![
@@ -2715,70 +1821,17 @@ pub mod unix_impl {
             let t = state.karaoke_transition_progress.clamp(0.0, 1.0);
             let eased = t * t * (3.0 - 2.0 * t);
             let slide = h as f32 * 0.56;
-            render_to_buffer_karaoke_group(
-                buf,
-                w,
-                h,
-                state,
-                &old_lines,
-                fs,
-                bg,
-                fg_bright,
-                fg_dim,
-                txt_a,
-                1.0,
-                -slide * eased,
-                0.0,
-            );
-            render_to_buffer_karaoke_group(
-                buf,
-                w,
-                h,
-                state,
-                &lines,
-                fs,
-                bg,
-                fg_bright,
-                fg_dim,
-                txt_a,
-                1.0,
-                slide * (1.0 - eased),
-                line_char_progress,
-            );
+            render_to_buffer_karaoke_group(buf, w, h, state, &old_lines, fs, bg, fg_bright, fg_dim, txt_a, 1.0, -slide * eased, 0.0);
+            render_to_buffer_karaoke_group(buf, w, h, state, &lines, fs, bg, fg_bright, fg_dim, txt_a, 1.0, slide * (1.0 - eased), line_char_progress);
         } else {
-            render_to_buffer_karaoke_group(
-                buf,
-                w,
-                h,
-                state,
-                &lines,
-                fs,
-                bg,
-                fg_bright,
-                fg_dim,
-                txt_a,
-                1.0,
-                0.0,
-                line_char_progress,
-            );
+            render_to_buffer_karaoke_group(buf, w, h, state, &lines, fs, bg, fg_bright, fg_dim, txt_a, 1.0, 0.0, line_char_progress);
         }
     }
 
-    fn render_to_buffer_karaoke_group(
-        buf: &mut [u32],
-        w: u32,
-        h: u32,
-        state: &RenderState,
-        lines: &[(String, bool)],
-        fs: f32,
-        bg: (u8, u8, u8),
-        fg_bright: (u8, u8, u8),
-        fg_dim: (u8, u8, u8),
-        txt_a: u8,
-        alpha: f32,
-        y_offset: f32,
-        line_char_progress: f64,
-    ) {
+    fn render_to_buffer_karaoke_group(buf: &mut [u32], w: u32, h: u32, state: &RenderState,
+                                      lines: &[(String, bool)], fs: f32, bg: (u8,u8,u8), fg_bright: (u8,u8,u8),
+                                      fg_dim: (u8,u8,u8), txt_a: u8, alpha: f32, y_offset: f32,
+                                      line_char_progress: f64) {
         if alpha <= 0.01 {
             return;
         }
@@ -2826,19 +1879,23 @@ pub mod unix_impl {
             }
         };
 
-        // 左上一行：保持第一句完整布局，第二句超出右边界时手动追加省略号。
-        let top_xs = [left_margin, second_x(left_margin, top_widths)];
+        // 左上一行：从左边距开始显示，保持卡拉OK上行逻辑。
+        let top_xs = [
+            left_margin,
+            second_x(left_margin, top_widths),
+        ];
 
         // 右下一行：按整行实际宽度右对齐，短句也贴近右侧形成视觉平衡。
         let bot_total_width = row_total_width(bot_widths);
         let bot_max_x = w as f32 - left_margin;
         let bot_start_x = (bot_max_x - bot_total_width).max(left_margin);
-        let bot_xs = [bot_start_x, second_x(bot_start_x, bot_widths)];
+        let bot_xs = [
+            bot_start_x,
+            second_x(bot_start_x, bot_widths),
+        ];
 
         for (i, (text, is_current)) in lines.iter().enumerate() {
-            if text.is_empty() {
-                continue;
-            }
+            if text.is_empty() { continue; }
 
             let (x, y) = match i {
                 0 => (top_xs[0], top_y + y_offset),
@@ -2847,68 +1904,17 @@ pub mod unix_impl {
                 3 => (bot_xs[1], bottom_y + y_offset),
                 _ => continue,
             };
-            let max_right = match i {
-                0 | 1 => w as f32 - left_margin,
-                2 if bot_widths[1] > 0.0 => (bot_xs[1] - gap * 0.5).min(w as f32 - left_margin),
-                2 | 3 => w as f32 - left_margin,
-                _ => w as f32 - left_margin,
-            };
 
             // 逐字符渲染，带字间距，使用颜色高亮而不改变字体
             let chars: Vec<char> = text.chars().collect();
+            let total_chars = chars.len().max(1);
             // Pre-calculate character widths using regular font
             let mut char_widths = Vec::with_capacity(chars.len());
             for ch in &chars {
-                let quads =
-                    rasterize_font_text(&state.font, &state.font_latin, &ch.to_string(), fs);
+                let quads = rasterize_font_text(&state.font, &state.font_latin, &ch.to_string(), fs);
                 let width = quads.last().map(|q| q.x + q.width as f32).unwrap_or(0.0);
                 char_widths.push(width);
             }
-            let full_width = char_widths.iter().sum::<f32>()
-                + char_spacing * chars.len().saturating_sub(1) as f32;
-            let max_width = (max_right - x).max(0.0);
-            let should_ellipsize = matches!(i, 1 | 3);
-            let (chars, char_widths) = if !should_ellipsize || full_width <= max_width {
-                (chars, char_widths)
-            } else {
-                let ellipsis: Vec<char> = "...".chars().collect();
-                let ellipsis_widths: Vec<f32> = ellipsis
-                    .iter()
-                    .map(|ch| {
-                        let quads = rasterize_font_text(
-                            &state.font,
-                            &state.font_latin,
-                            &ch.to_string(),
-                            fs,
-                        );
-                        quads.last().map(|q| q.x + q.width as f32).unwrap_or(0.0)
-                    })
-                    .collect();
-                let ellipsis_total = ellipsis_widths.iter().sum::<f32>()
-                    + char_spacing * ellipsis.len().saturating_sub(1) as f32;
-                let available = (max_width - ellipsis_total).max(0.0);
-                let mut clipped_chars = Vec::new();
-                let mut clipped_widths = Vec::new();
-                let mut used = 0.0;
-                for (ch, width) in chars.into_iter().zip(char_widths.into_iter()) {
-                    let next =
-                        used + if clipped_chars.is_empty() {
-                            0.0
-                        } else {
-                            char_spacing
-                        } + width;
-                    if next > available {
-                        break;
-                    }
-                    used = next;
-                    clipped_chars.push(ch);
-                    clipped_widths.push(width);
-                }
-                clipped_chars.extend(ellipsis.iter().copied());
-                clipped_widths.extend(ellipsis_widths);
-                (clipped_chars, clipped_widths)
-            };
-            let total_chars = chars.len().max(1);
             let mut draw_x = x;
             let (reg_font, reg_latin) = (&state.font, &state.font_latin);
             for (j, ch) in chars.iter().enumerate() {
@@ -2916,11 +1922,7 @@ pub mod unix_impl {
                     && line_char_progress > 0.0
                     && (j as f64) < (line_char_progress * total_chars as f64);
                 let color = if *is_current {
-                    if is_highlighted {
-                        fg_bright
-                    } else {
-                        lerp_color(fg_bright, bg, 0.25)
-                    }
+                    if is_highlighted { fg_bright } else { lerp_color(fg_bright, bg, 0.25) }
                 } else {
                     fg_dim
                 };
@@ -2930,27 +1932,19 @@ pub mod unix_impl {
                     let oy = (y + q.y) as i32;
                     for gy in 0..q.height {
                         let py = oy + gy as i32;
-                        if py < 0 || py >= h as i32 {
-                            continue;
-                        }
+                        if py < 0 || py >= h as i32 { continue; }
                         for gx in 0..q.width {
                             let px = ox + gx as i32;
-                            if px < 0 || px >= w as i32 {
-                                continue;
-                            }
+                            if px < 0 || px >= w as i32 { continue; }
                             let cov = q.pixels[gy * q.width + gx];
-                            if cov <= 0.001 {
-                                continue;
-                            }
+                            if cov <= 0.001 { continue; }
                             let cov = cov.powf(0.75).min(1.0);
                             let blend = cov;
                             let rr = (bg.0 as f32 + (color.0 as f32 - bg.0 as f32) * blend) as u32;
                             let gg = (bg.1 as f32 + (color.1 as f32 - bg.1 as f32) * blend) as u32;
                             let bb = (bg.2 as f32 + (color.2 as f32 - bg.2 as f32) * blend) as u32;
                             let ca = (txt_a as f32 * alpha) as u32;
-                            if ca == 0 {
-                                continue;
-                            }
+                            if ca == 0 { continue; }
                             let idx = (py as u32 * w + px as u32) as usize;
                             buf[idx] = (rr << 16) | (gg << 8) | bb | (ca << 24);
                         }
@@ -3016,23 +2010,10 @@ pub mod unix_impl {
 
     impl AppState {
         fn make_font(bytes: &[u8], scale: f32) -> Option<Font> {
-            fontdue::Font::from_bytes(
-                bytes,
-                fontdue::FontSettings {
-                    scale,
-                    ..Default::default()
-                },
-            )
-            .ok()
+            fontdue::Font::from_bytes(bytes, fontdue::FontSettings { scale, ..Default::default() }).ok()
         }
 
-        fn reload_fonts(
-            regular: &[u8],
-            bold: &[u8],
-            latin_regular: &[u8],
-            latin_bold: &[u8],
-            scale: f32,
-        ) -> Option<(Font, Font, Font, Font)> {
+        fn reload_fonts(regular: &[u8], bold: &[u8], latin_regular: &[u8], latin_bold: &[u8], scale: f32) -> Option<(Font, Font, Font, Font)> {
             Some((
                 Self::make_font(regular, scale)?,
                 Self::make_font(bold, scale)?,
@@ -3042,9 +2023,7 @@ pub mod unix_impl {
         }
 
         fn request_redraw(&self) {
-            if let Some(ref w) = self.window {
-                w.request_redraw();
-            }
+            if let Some(ref w) = self.window { w.request_redraw(); }
         }
 
         fn reposition_window(&mut self) {
@@ -3057,8 +2036,7 @@ pub mod unix_impl {
                         DesktopLyricsPosition::Bottom => work_y + work_h as i32 - sz.height as i32,
                         DesktopLyricsPosition::Top => work_y,
                     };
-                    self.x = nx;
-                    self.y = ny;
+                    self.x = nx; self.y = ny;
                     let _ = w.set_outer_position(LogicalPosition::new(nx, ny));
                 }
             }
@@ -3071,18 +2049,14 @@ pub mod unix_impl {
                     Ok(cmd) => {
                         if cmd.visible == 0 {
                             super::append_desktop_lyrics_log("unix cmd: visible=0 (hide)");
-                            if let Some(ref w) = self.window {
-                                w.set_visible(false);
-                            }
+                            if let Some(ref w) = self.window { w.set_visible(false); }
                         } else if cmd.visible == 1 {
                             super::append_desktop_lyrics_log("unix cmd: visible=1 (show)");
                             if let Some(ref w) = self.window {
                                 w.set_visible(true);
                                 w.request_redraw();
                             } else {
-                                super::append_desktop_lyrics_log(
-                                    "unix cmd: visible=1 but window is None",
-                                );
+                                super::append_desktop_lyrics_log("unix cmd: visible=1 but window is None");
                             }
                         }
                         if cmd.alpha != 255 && cmd.alpha != self.alpha {
@@ -3096,8 +2070,7 @@ pub mod unix_impl {
                             changed = true;
                         }
                         if cmd.x >= 0 && cmd.y >= 0 && (cmd.x != self.x || cmd.y != self.y) {
-                            self.x = cmd.x;
-                            self.y = cmd.y;
+                            self.x = cmd.x; self.y = cmd.y;
                             if let Some(ref w) = self.window {
                                 let _ = w.set_outer_position(LogicalPosition::new(self.x, self.y));
                             }
@@ -3114,19 +2087,10 @@ pub mod unix_impl {
                         if !cmd.lyrics_text.is_empty() || !cmd.all_lyrics_json.is_empty() {
                             if !cmd.all_lyrics_json.is_empty() {
                                 // 新格式：所有歌词的 JSON
-                                if let Ok(new_lyrics) =
-                                    serde_json::from_str::<Vec<(String, f64)>>(&cmd.all_lyrics_json)
-                                {
-                                    if new_lyrics != self.render_state.all_lyrics
-                                        || (cmd.current_time_sec
-                                            - self.render_state.current_time_sec)
-                                            .abs()
-                                            > 0.1
-                                    {
-                                        self.render_state.old_all_lyrics =
-                                            self.render_state.all_lyrics.clone();
-                                        self.render_state.old_scroll_offset =
-                                            self.render_state.scroll_offset;
+                                if let Ok(new_lyrics) = serde_json::from_str::<Vec<(String, f64)>>(&cmd.all_lyrics_json) {
+                                    if new_lyrics != self.render_state.all_lyrics || (cmd.current_time_sec - self.render_state.current_time_sec).abs() > 0.1 {
+                                        self.render_state.old_all_lyrics = self.render_state.all_lyrics.clone();
+                                        self.render_state.old_scroll_offset = self.render_state.scroll_offset;
                                         self.render_state.all_lyrics = new_lyrics;
                                         self.render_state.current_time_sec = cmd.current_time_sec;
                                         self.render_state.horizontal_progress = 0.0;
@@ -3140,16 +2104,10 @@ pub mod unix_impl {
                                 let np = clean_text(parts.first().copied().unwrap_or(""));
                                 let nc = clean_text(parts.get(1).copied().unwrap_or(""));
                                 let nn = clean_text(parts.get(2).copied().unwrap_or(""));
-                                if np != self.render_state.prev_text
-                                    || nc != self.render_state.curr_text
-                                    || nn != self.render_state.next_text
-                                {
-                                    self.render_state.old_prev_text =
-                                        self.render_state.prev_text.clone();
-                                    self.render_state.old_curr_text =
-                                        self.render_state.curr_text.clone();
-                                    self.render_state.old_next_text =
-                                        self.render_state.next_text.clone();
+                                if np != self.render_state.prev_text || nc != self.render_state.curr_text || nn != self.render_state.next_text {
+                                    self.render_state.old_prev_text = self.render_state.prev_text.clone();
+                                    self.render_state.old_curr_text = self.render_state.curr_text.clone();
+                                    self.render_state.old_next_text = self.render_state.next_text.clone();
                                     self.render_state.prev_text = np;
                                     self.render_state.curr_text = nc;
                                     self.render_state.next_text = nn;
@@ -3163,9 +2121,7 @@ pub mod unix_impl {
                     }
                     Err(mpsc::TryRecvError::Empty) => break,
                     Err(mpsc::TryRecvError::Disconnected) => {
-                        super::append_desktop_lyrics_log(
-                            "unix cmd channel disconnected, request app exit",
-                        );
+                        super::append_desktop_lyrics_log("unix cmd channel disconnected, request app exit");
                         if let Some(ref w) = self.window {
                             w.set_visible(false);
                         }
@@ -3191,8 +2147,7 @@ pub mod unix_impl {
         // 避免 PgDn 定位时贴到屏幕底边并覆盖底部任务栏。
         let mpos = monitor.position();
         let sz = monitor.size();
-        let panel_h = ((FALLBACK_BOTTOM_PANEL_HEIGHT as f64 * monitor.scale_factor()).round()
-            as u32)
+        let panel_h = ((FALLBACK_BOTTOM_PANEL_HEIGHT as f64 * monitor.scale_factor()).round() as u32)
             .min(sz.height / 4);
         (mpos.x, mpos.y, sz.width, sz.height.saturating_sub(panel_h))
     }
@@ -3214,24 +2169,11 @@ pub mod unix_impl {
             type XOpenDisplay = unsafe extern "C" fn(*const libc::c_char) -> *mut libc::c_void;
             type XCloseDisplay = unsafe extern "C" fn(*mut libc::c_void) -> libc::c_int;
             type XDefaultRootWindow = unsafe extern "C" fn(*mut libc::c_void) -> libc::c_ulong;
-            type XInternAtom = unsafe extern "C" fn(
-                *mut libc::c_void,
-                *const libc::c_char,
-                libc::c_int,
-            ) -> libc::c_ulong;
+            type XInternAtom = unsafe extern "C" fn(*mut libc::c_void, *const libc::c_char, libc::c_int) -> libc::c_ulong;
             type XGetWindowProperty = unsafe extern "C" fn(
-                *mut libc::c_void,
-                libc::c_ulong,
-                libc::c_ulong,
-                libc::c_long,
-                libc::c_long,
-                libc::c_int,
-                libc::c_ulong,
-                *mut libc::c_ulong,
-                *mut libc::c_int,
-                *mut libc::c_ulong,
-                *mut libc::c_ulong,
-                *mut *mut libc::c_uchar,
+                *mut libc::c_void, libc::c_ulong, libc::c_ulong, libc::c_long, libc::c_long,
+                libc::c_int, libc::c_ulong, *mut libc::c_ulong, *mut libc::c_int,
+                *mut libc::c_ulong, *mut libc::c_ulong, *mut *mut libc::c_uchar,
             ) -> libc::c_int;
             type XFree = unsafe extern "C" fn(*mut libc::c_void);
 
@@ -3243,11 +2185,9 @@ pub mod unix_impl {
 
             let x_open_display: XOpenDisplay = std::mem::transmute(sym!(lib, "XOpenDisplay"));
             let x_close_display: XCloseDisplay = std::mem::transmute(sym!(lib, "XCloseDisplay"));
-            let x_default_root_window: XDefaultRootWindow =
-                std::mem::transmute(sym!(lib, "XDefaultRootWindow"));
+            let x_default_root_window: XDefaultRootWindow = std::mem::transmute(sym!(lib, "XDefaultRootWindow"));
             let x_intern_atom: XInternAtom = std::mem::transmute(sym!(lib, "XInternAtom"));
-            let x_get_window_property: XGetWindowProperty =
-                std::mem::transmute(sym!(lib, "XGetWindowProperty"));
+            let x_get_window_property: XGetWindowProperty = std::mem::transmute(sym!(lib, "XGetWindowProperty"));
             let x_free: XFree = std::mem::transmute(sym!(lib, "XFree"));
 
             let display = x_open_display(std::ptr::null());
@@ -3274,24 +2214,17 @@ pub mod unix_impl {
 
             // XGetWindowProperty returns 0 (Success) on success
             let ret = x_get_window_property(
-                display,
-                root,
-                atom,
-                0,
-                1024, // offset, length (enough for many desktops)
-                0,    // delete = False
-                0,    // AnyPropertyType
-                &mut actual_type,
-                &mut actual_format,
-                &mut nitems,
-                &mut bytes_after,
+                display, root, atom,
+                0, 1024, // offset, length (enough for many desktops)
+                0, // delete = False
+                0, // AnyPropertyType
+                &mut actual_type, &mut actual_format,
+                &mut nitems, &mut bytes_after,
                 &mut prop,
             );
 
             if ret != 0 || actual_format != 32 || nitems < 4 || prop.is_null() {
-                if !prop.is_null() {
-                    x_free(prop as *mut libc::c_void);
-                }
+                if !prop.is_null() { x_free(prop as *mut libc::c_void); }
                 x_close_display(display);
                 libc::dlclose(lib);
                 return None;
@@ -3335,9 +2268,7 @@ pub mod unix_impl {
 
     impl ApplicationHandler<UserEvent> for AppState {
         fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-            if self.window.is_some() {
-                return;
-            }
+            if self.window.is_some() { return; }
 
             super::append_desktop_lyrics_log("unix resumed: begin create window");
 
@@ -3347,7 +2278,7 @@ pub mod unix_impl {
                 .with_transparent(true)
                 .with_window_level(WindowLevel::AlwaysOnTop)
                 .with_resizable(false)
-                .with_inner_size(LogicalSize::new(1110.0, WINDOW_HEIGHT as f64));
+                .with_inner_size(LogicalSize::new(1115.0, WINDOW_HEIGHT as f64));
 
             let window = match event_loop.create_window(wa) {
                 Ok(w) => w,
@@ -3361,14 +2292,12 @@ pub mod unix_impl {
             let monitor = match window.current_monitor() {
                 Some(m) => m,
                 None => {
-                    super::append_desktop_lyrics_log(
-                        "unix resumed: current_monitor is None, skip window init",
-                    );
+                    super::append_desktop_lyrics_log("unix resumed: current_monitor is None, skip window init");
                     return;
                 }
             };
             let (work_x, work_y, work_w, work_h) = get_linux_work_area(&monitor);
-            let ww = ((work_w as f32 * 0.58) as u32).min(1110).max(500);
+            let ww = ((work_w as f32 * 0.58) as u32).min(1115).max(500);
 
             let _ = window.request_inner_size(LogicalSize::new(ww as f64, WINDOW_HEIGHT as f64));
 
@@ -3384,8 +2313,7 @@ pub mod unix_impl {
                     DesktopLyricsPosition::Bottom => work_y + work_h as i32 - WINDOW_HEIGHT as i32,
                     DesktopLyricsPosition::Top => work_y,
                 };
-                self.x = nx;
-                self.y = ny;
+                self.x = nx; self.y = ny;
                 let _ = window.set_outer_position(LogicalPosition::new(nx, ny));
             }
 
@@ -3434,18 +2362,14 @@ pub mod unix_impl {
             let proxy = self.proxy.clone();
             std::thread::spawn(move || loop {
                 std::thread::sleep(std::time::Duration::from_millis(TIMER_INTERVAL_MS));
-                if proxy.send_event(UserEvent::Timer).is_err() {
-                    break;
-                }
+                if proxy.send_event(UserEvent::Timer).is_err() { break; }
             });
         }
 
         fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, ev: WindowEvent) {
             match ev {
                 WindowEvent::RedrawRequested => {
-                    if self.process_commands() {
-                        self.request_redraw();
-                    }
+                    if self.process_commands() { self.request_redraw(); }
                     if let (Some(ref w), Some(ref mut surf)) = (&self.window, &mut self.surface) {
                         let dpi = w.scale_factor();
                         let sz = w.inner_size();
@@ -3472,9 +2396,7 @@ pub mod unix_impl {
 
                             render_to_buffer(&mut self.buffer, pw, ph, &mut self.render_state);
 
-                            if let (Some(wpw), Some(wph)) =
-                                (NonZeroU32::new(pw), NonZeroU32::new(ph))
-                            {
+                            if let (Some(wpw), Some(wph)) = (NonZeroU32::new(pw), NonZeroU32::new(ph)) {
                                 let _ = surf.resize(wpw, wph);
                                 let mut dst = surf.buffer_mut().unwrap();
                                 let n = dst.len().min(self.buffer.len());
@@ -3488,52 +2410,33 @@ pub mod unix_impl {
                     }
                     self.last_render = Instant::now();
                 }
-                WindowEvent::MouseInput {
-                    state: ElementState::Pressed,
-                    button: winit::event::MouseButton::Left,
-                    ..
-                } => {
+                WindowEvent::MouseInput { state: ElementState::Pressed, button: winit::event::MouseButton::Left, .. } => {
                     self.dragging = true;
                     if let Some(ref w) = self.window {
                         let _ = w.set_cursor(winit::window::CursorIcon::Grabbing);
                         // 记录拖动起始时窗口位置与鼠标屏幕坐标的偏移
                         // winit 0.30 没有 cursor_position()，使用缓存的 CursorMoved 坐标
-                        let outer = w
-                            .outer_position()
-                            .unwrap_or(winit::dpi::PhysicalPosition::new(0, 0));
+                        let outer = w.outer_position().unwrap_or(winit::dpi::PhysicalPosition::new(0, 0));
                         let screen_x = outer.x + self.cursor_x as i32;
                         let screen_y = outer.y + self.cursor_y as i32;
                         self.drag_offset_x = self.x - screen_x;
                         self.drag_offset_y = self.y - screen_y;
                     }
                 }
-                WindowEvent::MouseInput {
-                    state: ElementState::Released,
-                    button: winit::event::MouseButton::Left,
-                    ..
-                } => {
+                WindowEvent::MouseInput { state: ElementState::Released, button: winit::event::MouseButton::Left, .. } => {
                     if self.dragging {
                         self.dragging = false;
                         if let Some(ref w) = self.window {
                             let _ = w.set_cursor(winit::window::CursorIcon::Default);
                         }
-                        let _ = self.ev_tx.send(DesktopLyricsEvent::PositionChanged {
-                            x: self.x,
-                            y: self.y,
-                        });
+                        let _ = self.ev_tx.send(DesktopLyricsEvent::PositionChanged { x: self.x, y: self.y });
                     }
                 }
-                WindowEvent::MouseInput {
-                    state: ElementState::Pressed,
-                    button: winit::event::MouseButton::Right,
-                    ..
-                } => {
+                WindowEvent::MouseInput { state: ElementState::Pressed, button: winit::event::MouseButton::Right, .. } => {
                     // 右键切换滚动模式
                     let new_mode = self.render_state.scroll_mode.toggle();
                     self.render_state.scroll_mode = new_mode;
-                    let _ = self.ev_tx.send(DesktopLyricsEvent::ScrollModeChanged {
-                        scroll_mode: new_mode,
-                    });
+                    let _ = self.ev_tx.send(DesktopLyricsEvent::ScrollModeChanged { scroll_mode: new_mode });
                     self.request_redraw();
                 }
                 WindowEvent::CursorMoved { position, .. } => {
@@ -3544,28 +2447,17 @@ pub mod unix_impl {
                         if let Some(ref w) = self.window {
                             // position 是窗口内相对坐标，需要加上窗口当前位置得到屏幕坐标，
                             // 再加上拖动起始偏移，避免窗口跳动。
-                            let outer = w
-                                .outer_position()
-                                .unwrap_or(winit::dpi::PhysicalPosition::new(0, 0));
+                            let outer = w.outer_position().unwrap_or(winit::dpi::PhysicalPosition::new(0, 0));
                             let screen_x = outer.x + position.x as i32;
                             let screen_y = outer.y + position.y as i32;
                             let new_x = screen_x + self.drag_offset_x;
                             let new_y = screen_y + self.drag_offset_y;
-                            self.x = new_x;
-                            self.y = new_y;
+                            self.x = new_x; self.y = new_y;
                             let _ = w.set_outer_position(LogicalPosition::new(new_x, new_y));
                         }
                     }
                 }
-                WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            state: ElementState::Pressed,
-                            logical_key,
-                            ..
-                        },
-                    ..
-                } => {
+                WindowEvent::KeyboardInput { event: KeyEvent { state: ElementState::Pressed, logical_key, .. }, .. } => {
                     let k = key_to_string(&logical_key);
                     if !k.is_empty() {
                         let _ = self.ev_tx.send(DesktopLyricsEvent::KeyPress { key: k });
@@ -3594,31 +2486,20 @@ pub mod unix_impl {
                 }
                 DesktopLyricsScrollMode::Horizontal => {
                     let smooth_factor = 0.12;
-                    self.render_state.scroll_offset += (self.render_state.horizontal_target_offset
-                        - self.render_state.scroll_offset)
-                        * smooth_factor;
+                    self.render_state.scroll_offset += (self.render_state.horizontal_target_offset - self.render_state.scroll_offset) * smooth_factor;
                     dirty = true;
                 }
                 DesktopLyricsScrollMode::Karaoke => {
-                    let current_idx = self
-                        .render_state
-                        .all_lyrics
-                        .partition_point(|&(_, t)| t <= self.render_state.current_time_sec);
+                    let current_idx = self.render_state.all_lyrics.partition_point(|&(_, t)| t <= self.render_state.current_time_sec);
                     let current_idx = if current_idx == 0 { 0 } else { current_idx - 1 };
-                    let target_group =
-                        karaoke_group_start(&self.render_state.all_lyrics, current_idx);
-                    if self.render_state.karaoke_line_group != target_group
-                        && !self.render_state.all_lyrics.is_empty()
-                    {
-                        self.render_state.old_karaoke_line_group =
-                            self.render_state.karaoke_line_group;
+                    let target_group = karaoke_group_start(&self.render_state.all_lyrics, current_idx);
+                    if self.render_state.karaoke_line_group != target_group && !self.render_state.all_lyrics.is_empty() {
+                        self.render_state.old_karaoke_line_group = self.render_state.karaoke_line_group;
                         self.render_state.karaoke_line_group = target_group;
                         self.render_state.karaoke_transition_progress = 0.0;
                     }
                     if self.render_state.karaoke_transition_progress < 1.0 {
-                        self.render_state.karaoke_transition_progress =
-                            (self.render_state.karaoke_transition_progress + SCROLL_ANIMATION_STEP)
-                                .min(1.0);
+                        self.render_state.karaoke_transition_progress = (self.render_state.karaoke_transition_progress + SCROLL_ANIMATION_STEP).min(1.0);
                         if self.render_state.karaoke_transition_progress >= 1.0 {
                             self.render_state.old_karaoke_line_group = usize::MAX;
                         }
@@ -3626,9 +2507,7 @@ pub mod unix_impl {
                     dirty = true;
                 }
             }
-            if dirty {
-                self.request_redraw();
-            }
+            if dirty { self.request_redraw(); }
         }
     }
 
@@ -3683,11 +2562,7 @@ pub mod unix_impl {
         if !output.status.success() {
             return None;
         }
-        let path = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .next()?
-            .trim()
-            .to_string();
+        let path = String::from_utf8_lossy(&output.stdout).lines().next()?.trim().to_string();
         if path.is_empty() {
             return None;
         }
@@ -3897,13 +2772,7 @@ pub mod unix_impl {
         }
 
         #[cfg(target_os = "linux")]
-        for pattern in [
-            "Noto Sans",
-            "DejaVu Sans",
-            "Liberation Sans",
-            "Ubuntu",
-            "sans-serif",
-        ] {
+        for pattern in ["Noto Sans", "DejaVu Sans", "Liberation Sans", "Ubuntu", "sans-serif"] {
             if let Some(data) = read_fontconfig_match(pattern) {
                 return data;
             }
@@ -3911,11 +2780,7 @@ pub mod unix_impl {
 
         try_read_font(paths).unwrap_or_else(|| {
             let fb = find_system_font_regular();
-            if !fb.is_empty() {
-                fb
-            } else {
-                Vec::new()
-            }
+            if !fb.is_empty() { fb } else { Vec::new() }
         })
     }
 
@@ -3968,13 +2833,7 @@ pub mod unix_impl {
         }
 
         #[cfg(target_os = "linux")]
-        for pattern in [
-            "Noto Sans:style=Bold",
-            "DejaVu Sans:style=Bold",
-            "Liberation Sans:style=Bold",
-            "Ubuntu:style=Bold",
-            "sans-serif:style=Bold",
-        ] {
+        for pattern in ["Noto Sans:style=Bold", "DejaVu Sans:style=Bold", "Liberation Sans:style=Bold", "Ubuntu:style=Bold", "sans-serif:style=Bold"] {
             if let Some(data) = read_fontconfig_match(pattern) {
                 return data;
             }
@@ -4087,10 +2946,9 @@ pub mod unix_impl {
 
             // 尝试检测 XDG_SESSION_TYPE 以辅助诊断
             if let Ok(session) = std::env::var("XDG_SESSION_TYPE") {
-                super::append_desktop_lyrics_log(&format!(
-                    "unix env: XDG_SESSION_TYPE='{}'",
-                    session
-                ));
+                super::append_desktop_lyrics_log(
+                    &format!("unix env: XDG_SESSION_TYPE='{}'", session),
+                );
             }
 
             super::append_desktop_lyrics_log("unix build: creating EventLoop...");
@@ -4109,14 +2967,11 @@ pub mod unix_impl {
             super::append_desktop_lyrics_log("unix build: proxy created");
 
             let mut state = AppState {
-                rx,
-                ev_tx,
-                proxy,
+                rx, ev_tx, proxy,
                 position,
                 theme_name: theme_name.to_string(),
                 alpha: alpha.clamp(0, 100),
-                x,
-                y,
+                x, y,
                 window: None,
                 surface: None,
                 font_regular_bytes: fb,

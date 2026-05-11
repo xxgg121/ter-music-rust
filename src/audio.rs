@@ -29,7 +29,7 @@ pub struct AudioPlayer {
     finished: Arc<AtomicBool>,
     /// 播放模式
     play_mode: PlayMode,
-    
+
     /// 实时音量级别 (0-1000，代表 0.0-1.0 的音量)
     volume_level: Arc<AtomicU32>,
 
@@ -66,30 +66,42 @@ impl AudioPlayer {
         self.stop();
 
         // 初始化音频输出流
-        let (stream, stream_handle) =
-            OutputStream::try_default().map_err(|e| crate::langs::global_texts().fmt_audio_init_failed.replace("{}", &e.to_string()))?;
+        let (stream, stream_handle) = OutputStream::try_default().map_err(|e| {
+            crate::langs::global_texts()
+                .fmt_audio_init_failed
+                .replace("{}", &e.to_string())
+        })?;
 
         // 创建播放控制器
-        let sink =
-            Sink::try_new(&stream_handle).map_err(|e| crate::langs::global_texts().fmt_audio_sink_failed.replace("{}", &e.to_string()))?;
+        let sink = Sink::try_new(&stream_handle).map_err(|e| {
+            crate::langs::global_texts()
+                .fmt_audio_sink_failed
+                .replace("{}", &e.to_string())
+        })?;
 
         // 打开音频文件
-        let audio_file = std::fs::File::open(&file.path)
-            .map_err(|e| crate::langs::global_texts().fmt_audio_open_failed.replace("{:?}", &format!("{:?}", file.path)).replace("{}", &e.to_string()))?;
+        let audio_file = std::fs::File::open(&file.path).map_err(|e| {
+            crate::langs::global_texts()
+                .fmt_audio_open_failed
+                .replace("{:?}", &format!("{:?}", file.path))
+                .replace("{}", &e.to_string())
+        })?;
 
         // 创建音频解码器
-        let source = Decoder::new(BufReader::new(audio_file))
-            .map_err(|e| crate::langs::global_texts().fmt_audio_decode_failed.replace("{}", &e.to_string()))?;
+        let source = Decoder::new(BufReader::new(audio_file)).map_err(|e| {
+            crate::langs::global_texts()
+                .fmt_audio_decode_failed
+                .replace("{}", &e.to_string())
+        })?;
 
         // 获取总时长
         self.total_duration = source.total_duration();
-        
+
         // 重置音量级别
         self.volume_level.store(0, Ordering::Relaxed);
 
         // 将音频源转换为 f32 格式，然后创建音频分析器
-        let source_f32: Box<dyn Source<Item = f32> + Send> = 
-            Box::new(source.convert_samples());
+        let source_f32: Box<dyn Source<Item = f32> + Send> = Box::new(source.convert_samples());
         let analyzed_source = AudioAnalyzer::new(source_f32, self.volume_level.clone());
 
         // 设置音量
@@ -151,7 +163,7 @@ impl AudioPlayer {
         self.state = PlayState::Stopped;
         self.current_file = None;
         self.finished.store(false, Ordering::SeqCst);
-        
+
         // 重置音量级别
         self.volume_level.store(0, Ordering::Relaxed);
 
@@ -179,6 +191,7 @@ impl AudioPlayer {
     }
 
     /// 格式化时间显示 (mm:ss / mm:ss)
+    #[allow(dead_code)]
     pub fn format_progress(&self) -> String {
         let (current, total) = self.get_progress();
 
@@ -260,14 +273,18 @@ impl AudioPlayer {
     pub fn get_play_mode(&self) -> PlayMode {
         self.play_mode
     }
-    
+
     /// 跳转到指定比例位置播放（0.0-1.0）
     pub fn seek(&mut self, ratio: f64) -> Result<(), String> {
         if let Some(sink) = &self.sink {
             if let Some(total) = self.total_duration {
-                let target_time = Duration::from_secs_f64(total.as_secs_f64() * ratio.clamp(0.0, 1.0));
-                sink.try_seek(target_time)
-                    .map_err(|e| crate::langs::global_texts().fmt_seek_failed.replace("{}", &e.to_string()))?;
+                let target_time =
+                    Duration::from_secs_f64(total.as_secs_f64() * ratio.clamp(0.0, 1.0));
+                sink.try_seek(target_time).map_err(|e| {
+                    crate::langs::global_texts()
+                        .fmt_seek_failed
+                        .replace("{}", &e.to_string())
+                })?;
 
                 // 更新时间追踪
                 self.accumulated_time = target_time;
@@ -279,10 +296,14 @@ impl AudioPlayer {
 
                 Ok(())
             } else {
-                Err(crate::langs::global_texts().seek_error_unknown_duration.to_string())
+                Err(crate::langs::global_texts()
+                    .seek_error_unknown_duration
+                    .to_string())
             }
         } else {
-            Err(crate::langs::global_texts().seek_error_not_playing.to_string())
+            Err(crate::langs::global_texts()
+                .seek_error_not_playing
+                .to_string())
         }
     }
 

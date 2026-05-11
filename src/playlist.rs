@@ -1,10 +1,10 @@
 // 播放列表管理
 
+use rayon::prelude::*;
 use rodio::{Decoder, Source};
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-use rayon::prelude::*;
 
 use crate::defs::{is_supported_audio, MusicFile, Playlist};
 
@@ -29,11 +29,15 @@ fn get_audio_duration(path: &Path) -> Option<std::time::Duration> {
 /// 扫描目录中的音乐文件（并行获取时长）
 pub fn scan_music_directory(dir: &Path) -> Result<Playlist, String> {
     if !dir.exists() {
-        return Err(crate::langs::global_texts().fmt_dir_not_exist.replace("{}", &format!("{:?}", dir)));
+        return Err(crate::langs::global_texts()
+            .fmt_dir_not_exist
+            .replace("{}", &format!("{:?}", dir)));
     }
 
     if !dir.is_dir() {
-        return Err(crate::langs::global_texts().fmt_not_a_dir.replace("{}", &format!("{:?}", dir)));
+        return Err(crate::langs::global_texts()
+            .fmt_not_a_dir
+            .replace("{}", &format!("{:?}", dir)));
     }
 
     // 先收集所有音频文件路径
@@ -46,7 +50,9 @@ pub fn scan_music_directory(dir: &Path) -> Result<Playlist, String> {
         .collect();
 
     if audio_paths.is_empty() {
-        return Err(crate::langs::global_texts().no_music_files_found.to_string());
+        return Err(crate::langs::global_texts()
+            .no_music_files_found
+            .to_string());
     }
 
     // 并行获取时长并创建 MusicFile
@@ -107,7 +113,10 @@ pub fn open_folder_dialog() -> FolderDialogResult {
     let output = match Command::new("osascript")
         .args(&[
             "-e",
-            &format!("POSIX path of (choose folder with prompt \"{}\")", crate::langs::global_texts().open_music_dir_title)
+            &format!(
+                "POSIX path of (choose folder with prompt \"{}\")",
+                crate::langs::global_texts().open_music_dir_title
+            ),
         ])
         .output()
     {
@@ -197,7 +206,10 @@ fn open_folder_zenity() -> FolderDialogResult {
         .args(&[
             "--file-selection",
             "--directory",
-            &format!("--title={}", crate::langs::global_texts().open_music_dir_title),
+            &format!(
+                "--title={}",
+                crate::langs::global_texts().open_music_dir_title
+            ),
         ])
         .output()
     {
@@ -216,7 +228,10 @@ fn open_folder_zenity() -> FolderDialogResult {
     // 区分：如果 stderr 包含 "No such file" 等说明是工具问题，否则是用户取消
     // zenity 取消时退出码为 1，且无 stdout 输出
     let stderr = String::from_utf8_lossy(&output.stderr);
-    if stderr.contains("not found") || stderr.contains("No such file") || stderr.contains("command not found") {
+    if stderr.contains("not found")
+        || stderr.contains("No such file")
+        || stderr.contains("command not found")
+    {
         return FolderDialogResult::NoDialogAvailable;
     }
     FolderDialogResult::Cancelled
@@ -229,7 +244,10 @@ fn open_folder_kdialog() -> FolderDialogResult {
     let output = match Command::new("kdialog")
         .args(&[
             "--getexistingdirectory",
-            &format!("--title={}", crate::langs::global_texts().open_music_dir_title),
+            &format!(
+                "--title={}",
+                crate::langs::global_texts().open_music_dir_title
+            ),
         ])
         .output()
     {
@@ -256,7 +274,10 @@ fn open_folder_yad() -> FolderDialogResult {
         .args(&[
             "--file-selection",
             "--directory",
-            &format!("--title={}", crate::langs::global_texts().open_music_dir_title),
+            &format!(
+                "--title={}",
+                crate::langs::global_texts().open_music_dir_title
+            ),
         ])
         .output()
     {
@@ -282,7 +303,10 @@ fn open_folder_qarma() -> FolderDialogResult {
         .args(&[
             "--file-selection",
             "--directory",
-            &format!("--title={}", crate::langs::global_texts().open_music_dir_title),
+            &format!(
+                "--title={}",
+                crate::langs::global_texts().open_music_dir_title
+            ),
         ])
         .output()
     {
@@ -302,14 +326,17 @@ fn open_folder_qarma() -> FolderDialogResult {
 
 #[cfg(target_os = "linux")]
 fn open_folder_python_tk() -> FolderDialogResult {
-    let script = format!(r#"import tkinter as tk
+    let script = format!(
+        r#"import tkinter as tk
 from tkinter import filedialog
 root = tk.Tk()
 root.withdraw()
 root.attributes('-topmost', True)
 path = filedialog.askdirectory(title='{}')
 print(path if path else '')
-"#, crate::langs::global_texts().open_music_dir_title);
+"#,
+        crate::langs::global_texts().open_music_dir_title
+    );
 
     // 先尝试 python3，再尝试 python
     for python_cmd in &["python3", "python"] {
@@ -322,7 +349,8 @@ print(path if path else '')
 
 #[cfg(target_os = "linux")]
 fn open_folder_python_qt() -> FolderDialogResult {
-    let script = format!(r#"import sys
+    let script = format!(
+        r#"import sys
 try:
     from PyQt5.QtWidgets import QApplication, QFileDialog
 except Exception:
@@ -331,7 +359,9 @@ except Exception:
 app = QApplication.instance() or QApplication(sys.argv)
 path = QFileDialog.getExistingDirectory(None, '{}')
 print(path if path else '')
-"#, crate::langs::global_texts().open_music_dir_title);
+"#,
+        crate::langs::global_texts().open_music_dir_title
+    );
 
     for python_cmd in &["python3", "python"] {
         if let Some(result) = try_python_script(python_cmd, &script) {
@@ -343,7 +373,8 @@ print(path if path else '')
 
 #[cfg(target_os = "linux")]
 fn open_folder_python_pyside2() -> FolderDialogResult {
-    let script = format!(r#"import sys
+    let script = format!(
+        r#"import sys
 try:
     from PySide2.QtWidgets import QApplication, QFileDialog
 except Exception:
@@ -352,7 +383,9 @@ except Exception:
 app = QApplication.instance() or QApplication(sys.argv)
 path = QFileDialog.getExistingDirectory(None, '{}')
 print(path if path else '')
-"#, crate::langs::global_texts().open_music_dir_title);
+"#,
+        crate::langs::global_texts().open_music_dir_title
+    );
 
     for python_cmd in &["python3", "python"] {
         if let Some(result) = try_python_script(python_cmd, &script) {
@@ -364,7 +397,8 @@ print(path if path else '')
 
 #[cfg(target_os = "linux")]
 fn open_folder_python_gtk() -> FolderDialogResult {
-    let script = format!(r#"import sys
+    let script = format!(
+        r#"import sys
 try:
     import gi
     gi.require_version('Gtk', '3.0')
@@ -386,7 +420,9 @@ if response == Gtk.ResponseType.OK:
 else:
     print('')
 dialog.destroy()
-"#, crate::langs::global_texts().open_music_dir_title);
+"#,
+        crate::langs::global_texts().open_music_dir_title
+    );
 
     for python_cmd in &["python3", "python"] {
         if let Some(result) = try_python_script(python_cmd, &script) {
@@ -401,10 +437,7 @@ dialog.destroy()
 fn try_python_script(python_cmd: &str, script: &str) -> Option<FolderDialogResult> {
     use std::process::Command;
 
-    let output = match Command::new(python_cmd)
-        .args(["-c", script])
-        .output()
-    {
+    let output = match Command::new(python_cmd).args(["-c", script]).output() {
         Ok(o) => o,
         Err(_) => return None,
     };

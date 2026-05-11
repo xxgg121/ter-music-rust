@@ -146,6 +146,7 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 | `lyrics_alpha` | デスクトップ歌詞の背景透明度（10-100） |
 | `lyrics_x` | デスクトップ歌詞ウィンドウのX座標 |
 | `lyrics_y` | デスクトップ歌詞ウィンドウのY座標 |
+| `recommand` | 今日のおすすめ曲切り替え (デフォルト `false`) |
 
 **自動保存のタイミング**: 曲切り替え、テーマ変更、言語変更、お気に入り変更、30 秒ごと、終了時（Ctrl+C 含む）
 
@@ -244,6 +245,7 @@ cargo run --release -- -o d:\Music
 | `k` | API エンドポイント設定 |
 | `g` | GitHub Token 設定 |
 | `z` | デスクトップ歌詞の表示切替 |
+| `r` | おすすめ曲の切替 |
 | `q` | 終了 |
 
 ### 検索画面
@@ -565,14 +567,24 @@ registry = "https://mirrors.ustc.edu.cn/crates.io-index"
 src/
 ├── main.rs       # エントリーポイント（引数解析、初期化、設定復元/保存）
 ├── defs.rs       # 共通定義（PlayMode/PlayState 列挙、MusicFile/Playlist 構造体）
+├── langs.rs      # 言語パック（11言語の翻訳テキスト集中管理、グローバル言語アクセサー）
 ├── audio.rs      # 音声制御（rodio ラッパー、再生/停止/シーク/音量/進捗）
 ├── analyzer.rs   # 音声解析（リアルタイム RMS、EMA 平滑化、波形表示）
 ├── playlist.rs   # プレイリスト管理（ディレクトリ走査、再生時間並列取得、フォルダ選択）
-├── lyrics.rs     # 歌詞解析（LRC、ローカル検索、エンコード判定、バックグラウンド取得）
-├── desktop_lyrics.rs  # デスクトップ歌詞（Windows API + Linux子プロセス、透明度/位置/ドラッグ/ショートカット）
+├── lyrics.rs     # 歌詞解析（LRC 形式、ローカル検索、エンコード判定、バックグラウンドダウンロード）
 ├── search.rs     # ネット検索/取得（酷我+酷狗+網易検索、ダウンロード、コメント取得、楽曲情報ストリーミング検索）
-├── config.rs     # 設定管理（JSON シリアライズ、8 項目の永続化）
-└── ui.rs         # UI（ターミナル描画、イベント処理、マルチビュー、テーマ/言語）
+├── config.rs     # 設定管理（JSON シリアライズ、設定項目の永続化）
+├── desktop_lyrics.rs # デスクトップ歌詞フローティングウィンドウ（Windows API/Linux子プロセス、透明度/位置/ドラッグ/ショートカット）
+├── ui.rs         # ユーザーインターフェース（Ratatui フレームワーク、ターミナル描画、イベント処理、マルチビュー、テーマ/言語システム）
+└── ui/
+    ├── input.rs      # 入力処理
+    ├── render.rs     # レンダリングロジック
+    ├── layout.rs     # レイアウト管理
+    ├── theme.rs      # テーマシステム
+    ├── mouse.rs      # マウス操作
+    ├── terminal.rs   # ターミナル管理
+    ├── format.rs     # フォーマットツール
+    └── view_model.rs # ビューモデル
 ```
 
 ### 技術スタック
@@ -693,14 +705,45 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 初回は依存関係のダウンロードとコンパイルが発生するため時間がかかります。2 回目以降は大幅に高速化されます。
 
 ### Release のダウンロード
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605090949394710_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605090950148659_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605090950302081_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605090950383775_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新履歴
+
+## バージョン 1.9.0 (2026-05-11)
+
+### 🎉 新機能
+
+#### Ratatui UIリファクタリング
+- ✨ **UIフレームワークのアップグレード**: 直接 crossterm を使用する UI コードを Ratatui フレームワークを使用するようリファクタリングし、より高度な TUI 抽象化とより良いコード組織を提供
+- ✨ **モジュラー化リファクタリング**: `ui.rs` を複数のサブモジュールに分割: `input.rs`(入力処理), `render.rs`(レンダリングロジック), `layout.rs`(レイアウト管理), `theme.rs`(テーマシステム), `mouse.rs`(マウス操作), `terminal.rs`(ターミナル管理), `format.rs`(フォーマットツール), `view_model.rs`(ビューモデル)
+- ✨ **コード構造の最適化**: UI コードがよりモジュラー化され、メンテナンス性が向上し、各機能の責任が明確に分離される
+
+#### 今日のおすすめ曲
+- ✨ **おすすめ曲の切替**: `r` キーで今日のおすすめ曲機能をオン/オフ
+- ✨ **自動おすすめ取得**: オンにするとネットワークからおすすめ曲リストを自動取得し、インターフェースの上部に表示
+- ✨ **クリックダウンロード再生**: おすすめ曲名をクリックすると直接ダウンロードして再生
+- ✨ **マウスホイールスクロール**: おすすめ曲名が長い場合、マウスホイールで水平スクロールして曲名全体を確認
+- ✨ **設定の永続化**: おすすめ曲切替状態が自動保存および復元
+
+### 🔧 機能改善
+
+- 🎨 **UIの一貫性向上**: Ratatui が統合コンポーネントとスタイルシステムを提供し、インターフェース要素の一貫性と拡張性を保証
+
+### 💻 技術詳細
+
+#### 依存関係の更新
+- ➕ `ratatui` 依存関係を追加（バージョン 0.29、crossterm 機能を有効化）
+- ♻️ `crossterm` を基礎となるターミナル制御ライブラリとして保持
+
+#### プロジェクト構造の更新
+- ♻️ `ui/` ディレクトリ: 機能分離とコード再利用のための複数の UI サブモジュールを追加
+
+---
 
 ## バージョン 1.8.0 (2026-05-08)
 

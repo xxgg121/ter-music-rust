@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::defs::PlayMode;
 
-
 fn default_lyrics_visible() -> bool {
     false
 }
@@ -52,6 +51,10 @@ fn default_api_model() -> String {
 
 fn default_github_token() -> String {
     String::new()
+}
+
+fn default_recommand() -> bool {
+    false
 }
 
 /// 获取用户配置目录（可写）
@@ -138,6 +141,9 @@ pub struct Config {
     /// GitHub Token（用于创建 Discussions，为空则使用默认 Token）
     #[serde(default = "default_github_token")]
     pub github_token: String,
+    /// 今日推荐歌曲开关（沿用用户要求字段名 recommand）
+    #[serde(default = "default_recommand")]
+    pub recommand: bool,
     /// 桌面歌词是否可见
     #[serde(default = "default_lyrics_visible")]
     pub lyrics_visible: bool,
@@ -156,7 +162,6 @@ pub struct Config {
     /// 桌面歌词窗口 Y 坐标 (-1 = 使用默认计算位置)
     #[serde(default = "default_lyrics_coord")]
     pub lyrics_y: i32,
-    
 }
 
 impl Default for Config {
@@ -174,6 +179,7 @@ impl Default for Config {
             api_base_url: default_api_base_url(),
             api_model: default_api_model(),
             github_token: default_github_token(),
+            recommand: default_recommand(),
             lyrics_visible: default_lyrics_visible(),
             lyrics_position: default_lyrics_position(),
             lyrics_alpha: default_lyrics_alpha(),
@@ -202,7 +208,8 @@ impl Config {
             || self.theme != default_theme()
             || self.language != default_language()
             || !self.api_key.trim().is_empty()
-        || !self.github_token.trim().is_empty()
+            || !self.github_token.trim().is_empty()
+            || self.recommand
     }
 
     /// 自动修复常见历史配置错误：相邻字符串项缺少逗号
@@ -310,9 +317,20 @@ impl Config {
                 Ok(content) => match Self::parse_with_repair(&content) {
                     Ok((config, repaired_text)) => {
                         if let Some(repaired) = repaired_text {
-                            eprintln!("{}", crate::langs::global_texts().fmt_config_auto_fix_detected.replace("{}", &format!("{}", config_path.display())));
+                            eprintln!(
+                                "{}",
+                                crate::langs::global_texts()
+                                    .fmt_config_auto_fix_detected
+                                    .replace("{}", &format!("{}", config_path.display()))
+                            );
                             if let Err(e) = fs::write(&config_path, repaired) {
-                                eprintln!("{}", crate::langs::global_texts().fmt_config_auto_fix_failed.replacen("{}", &format!("{}", config_path.display()), 1).replacen("{}", &e.to_string(), 1));
+                                eprintln!(
+                                    "{}",
+                                    crate::langs::global_texts()
+                                        .fmt_config_auto_fix_failed
+                                        .replacen("{}", &format!("{}", config_path.display()), 1)
+                                        .replacen("{}", &e.to_string(), 1)
+                                );
                             }
                         }
 
@@ -326,11 +344,23 @@ impl Config {
                         }
                     }
                     Err(e) => {
-                        eprintln!("{}", crate::langs::global_texts().fmt_config_parse_error.replacen("{}", &format!("{}", config_path.display()), 1).replacen("{}", &e.to_string(), 1));
+                        eprintln!(
+                            "{}",
+                            crate::langs::global_texts()
+                                .fmt_config_parse_error
+                                .replacen("{}", &format!("{}", config_path.display()), 1)
+                                .replacen("{}", &e.to_string(), 1)
+                        );
                     }
                 },
                 Err(e) => {
-                    eprintln!("{}", crate::langs::global_texts().fmt_config_read_error.replacen("{}", &format!("{}", config_path.display()), 1).replacen("{}", &e.to_string(), 1));
+                    eprintln!(
+                        "{}",
+                        crate::langs::global_texts()
+                            .fmt_config_read_error
+                            .replacen("{}", &format!("{}", config_path.display()), 1)
+                            .replacen("{}", &e.to_string(), 1)
+                    );
                 }
             }
         }
@@ -344,7 +374,12 @@ impl Config {
 
         if let Some(parent) = config_path.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
-                eprintln!("{}", crate::langs::global_texts().fmt_config_mkdir_failed.replace("{}", &e.to_string()));
+                eprintln!(
+                    "{}",
+                    crate::langs::global_texts()
+                        .fmt_config_mkdir_failed
+                        .replace("{}", &e.to_string())
+                );
                 return;
             }
         }
@@ -353,11 +388,21 @@ impl Config {
             Ok(json) => match fs::write(&config_path, json) {
                 Ok(()) => {}
                 Err(e) => {
-                    eprintln!("{}", crate::langs::global_texts().fmt_config_save_failed.replace("{}", &e.to_string()));
+                    eprintln!(
+                        "{}",
+                        crate::langs::global_texts()
+                            .fmt_config_save_failed
+                            .replace("{}", &e.to_string())
+                    );
                 }
             },
             Err(e) => {
-                eprintln!("{}", crate::langs::global_texts().fmt_config_serialize_failed.replace("{}", &e.to_string()));
+                eprintln!(
+                    "{}",
+                    crate::langs::global_texts()
+                        .fmt_config_serialize_failed
+                        .replace("{}", &e.to_string())
+                );
             }
         }
     }

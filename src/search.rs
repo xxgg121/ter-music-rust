@@ -27,7 +27,6 @@ fn preview_for_log(text: &str, max_chars: usize) -> String {
     text.chars().take(max_chars).collect()
 }
 
-
 /// 网络搜索结果
 #[derive(Debug, Clone)]
 pub struct OnlineSong {
@@ -99,13 +98,12 @@ pub struct OnlinePlaylist {
     pub description: String,
 
     /// 播放数
+    #[allow(dead_code)]
     pub play_count: Option<usize>,
     /// 日期（创建/发布时间，yyyy-MM-dd）
     #[allow(dead_code)]
     pub date_text: Option<String>,
-
 }
-
 
 /// 歌单搜索结果
 pub struct PlaylistSearchResult {
@@ -132,6 +130,7 @@ pub struct SongCommentReply {
     /// 回复内容
     pub content: String,
     /// 回复时间（优先使用接口返回的可读时间）
+    #[allow(dead_code)]
     pub time_text: Option<String>,
 }
 
@@ -147,7 +146,6 @@ pub struct SongCommentItem {
     /// 被回复信息（若存在）
     pub reply: Option<SongCommentReply>,
 }
-
 
 /// 歌曲评论结果
 #[derive(Debug, Clone)]
@@ -383,7 +381,11 @@ fn format_datetime_from_millis(ms: i64) -> Option<String> {
 
 /// 将秒/毫秒时间戳转换为日期文本（yyyy-MM-dd）
 fn format_date_from_timestamp(ts: i64) -> Option<String> {
-    let secs = if ts >= 1_000_000_000_000 { ts / 1000 } else { ts };
+    let secs = if ts >= 1_000_000_000_000 {
+        ts / 1000
+    } else {
+        ts
+    };
     Local
         .timestamp_opt(secs, 0)
         .single()
@@ -424,14 +426,15 @@ fn pick_date_field(v: &serde_json::Value, keys: &[&str]) -> Option<String> {
     None
 }
 
-
 // ============================================================
 // 公共接口
 // ============================================================
 
-
 /// 在后台线程中搜索网络歌曲
-pub fn search_online_background(query: String, page: usize) -> mpsc::Receiver<SearchDownloadResult> {
+pub fn search_online_background(
+    query: String,
+    page: usize,
+) -> mpsc::Receiver<SearchDownloadResult> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let result = search_online(&query, page);
@@ -441,7 +444,10 @@ pub fn search_online_background(query: String, page: usize) -> mpsc::Receiver<Se
 }
 
 /// 在后台线程中下载歌曲（带进度回调）
-pub fn download_song_background(song: OnlineSong, save_dir: PathBuf) -> mpsc::Receiver<DownloadProgress> {
+pub fn download_song_background(
+    song: OnlineSong,
+    save_dir: PathBuf,
+) -> mpsc::Receiver<DownloadProgress> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let result = download_song_with_progress(&song, &save_dir, |percent| {
@@ -453,7 +459,10 @@ pub fn download_song_background(song: OnlineSong, save_dir: PathBuf) -> mpsc::Re
 }
 
 /// 在后台线程中搜索歌单（合并酷狗 + 酷我 + 网易所有平台结果）
-pub fn search_playlist_background(query: String, page: usize) -> mpsc::Receiver<PlaylistSearchResult> {
+pub fn search_playlist_background(
+    query: String,
+    page: usize,
+) -> mpsc::Receiver<PlaylistSearchResult> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let result = search_playlist(&query, page);
@@ -463,7 +472,9 @@ pub fn search_playlist_background(query: String, page: usize) -> mpsc::Receiver<
 }
 
 /// 在后台线程中加载歌单歌曲
-pub fn fetch_playlist_songs_background(playlist: OnlinePlaylist) -> mpsc::Receiver<PlaylistSongsResult> {
+pub fn fetch_playlist_songs_background(
+    playlist: OnlinePlaylist,
+) -> mpsc::Receiver<PlaylistSongsResult> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let songs = fetch_playlist_songs(&playlist);
@@ -473,7 +484,11 @@ pub fn fetch_playlist_songs_background(playlist: OnlinePlaylist) -> mpsc::Receiv
 }
 
 /// 在后台线程中获取歌曲评论（基于歌曲名搜索网易）
-pub fn fetch_song_comments_background(query: String, page: usize, page_size: usize) -> mpsc::Receiver<SongCommentsResult> {
+pub fn fetch_song_comments_background(
+    query: String,
+    page: usize,
+    page_size: usize,
+) -> mpsc::Receiver<SongCommentsResult> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let result = fetch_song_comments(&query, page, page_size);
@@ -493,7 +508,10 @@ pub struct AiQueryConfig {
 }
 
 /// 在后台线程中查询歌曲详细信息（支持自定义 OpenAI 兼容接口 / OpenRouter 免费模型兜底）- 流式输出
-pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc::Receiver<SongInfoChunk> {
+pub fn fetch_song_info_streaming(
+    prompt: String,
+    config: AiQueryConfig,
+) -> mpsc::Receiver<SongInfoChunk> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         // 确定最终的 API URL、模型、认证头
@@ -502,13 +520,18 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
             // 用户配置了 API Key，使用自定义接口
             let base = config.api_base_url.trim().trim_end_matches('/');
             let url = format!("{}/chat/completions", base);
-            (url, config.api_model.trim().to_string(), format!("Bearer {}", config.api_key.trim()))
+            (
+                url,
+                config.api_model.trim().to_string(),
+                format!("Bearer {}", config.api_key.trim()),
+            )
         } else {
             // 无 API Key，使用内置 OpenRouter 免费模型兜底
             (
                 "https://openrouter.ai/api/v1/chat/completions".to_string(),
                 "minimax/minimax-m2.5:free".to_string(),
-                "Bearer sk-xxxxxx".to_string(),
+                "Bearer sk-xxxxxx"
+                    .to_string(),
             )
         };
 
@@ -522,7 +545,11 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
                 let _ = tx.send(SongInfoChunk {
                     delta: String::new(),
                     done: true,
-                    error: Some(crate::langs::global_texts().fmt_http_client_failed.replace("{}", &e.to_string())),
+                    error: Some(
+                        crate::langs::global_texts()
+                            .fmt_http_client_failed
+                            .replace("{}", &e.to_string()),
+                    ),
                 });
                 return;
             }
@@ -549,7 +576,11 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
                 let _ = tx.send(SongInfoChunk {
                     delta: String::new(),
                     done: true,
-                    error: Some(crate::langs::global_texts().fmt_api_request_failed.replace("{}", &e.to_string())),
+                    error: Some(
+                        crate::langs::global_texts()
+                            .fmt_api_request_failed
+                            .replace("{}", &e.to_string()),
+                    ),
                 });
                 return;
             }
@@ -567,7 +598,11 @@ pub fn fetch_song_info_streaming(prompt: String, config: AiQueryConfig) -> mpsc:
             let _ = tx.send(SongInfoChunk {
                 delta: String::new(),
                 done: true,
-                error: Some(crate::langs::global_texts().fmt_api_request_error.replace("{}", &msg)),
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_api_request_error
+                        .replace("{}", &msg),
+                ),
             });
             return;
         }
@@ -678,7 +713,6 @@ fn kuwo_auth_cookie_and_csrf(client: &reqwest::blocking::Client) -> (String, Str
 
 /// 搜索网络歌曲（同步）
 fn search_online(query: &str, page: usize) -> SearchDownloadResult {
-
     let client = match create_search_client() {
         Some(c) => c,
         None => {
@@ -726,7 +760,11 @@ fn search_online(query: &str, page: usize) -> SearchDownloadResult {
 }
 
 /// 酷我音乐搜索
-fn search_kuwo(client: &reqwest::blocking::Client, query: &str, page: usize) -> Option<Vec<OnlineSong>> {
+fn search_kuwo(
+    client: &reqwest::blocking::Client,
+    query: &str,
+    page: usize,
+) -> Option<Vec<OnlineSong>> {
     let search_url = format!(
         "https://www.kuwo.cn/api/www/search/searchMusicBykeyWord?key={}&pn={}&rn=20&httpsStatus=1",
         urlencoding::encode(query),
@@ -745,25 +783,35 @@ fn search_kuwo(client: &reqwest::blocking::Client, query: &str, page: usize) -> 
     let data = search_result.data?;
     let lists = data.lists?;
 
-    Some(lists.into_iter().map(|s| {
-        let duration_ms = s.duration
-            .and_then(|d| d.parse::<i64>().ok())
-            .map(|secs| secs * 1000);
-        OnlineSong {
-            name: s.name,
-            artist: s.artist.unwrap_or_default(),
-            id: s.rid,
-            hash: String::new(),
-            duration_ms,
-            source: MusicSource::Kuwo,
-            juhe_platform: String::new(),
-            juhe_song_id: String::new(),
-        }
-    }).collect())
+    Some(
+        lists
+            .into_iter()
+            .map(|s| {
+                let duration_ms = s
+                    .duration
+                    .and_then(|d| d.parse::<i64>().ok())
+                    .map(|secs| secs * 1000);
+                OnlineSong {
+                    name: s.name,
+                    artist: s.artist.unwrap_or_default(),
+                    id: s.rid,
+                    hash: String::new(),
+                    duration_ms,
+                    source: MusicSource::Kuwo,
+                    juhe_platform: String::new(),
+                    juhe_song_id: String::new(),
+                }
+            })
+            .collect(),
+    )
 }
 
 /// 网易音乐搜索（备用）
-fn search_netease(client: &reqwest::blocking::Client, query: &str, page: usize) -> Option<Vec<OnlineSong>> {
+fn search_netease(
+    client: &reqwest::blocking::Client,
+    query: &str,
+    page: usize,
+) -> Option<Vec<OnlineSong>> {
     let offset = (page.saturating_sub(1)) * 20;
     let search_url = format!(
         "https://music.163.com/api/search/get?s={}&type=1&limit=20&offset={}",
@@ -771,7 +819,8 @@ fn search_netease(client: &reqwest::blocking::Client, query: &str, page: usize) 
         offset
     );
 
-    let response = client.get(&search_url)
+    let response = client
+        .get(&search_url)
         .header("Referer", "https://music.163.com/")
         .header("Cookie", "MUSIC_U=; appver=2.0.2;")
         .send()
@@ -783,25 +832,40 @@ fn search_netease(client: &reqwest::blocking::Client, query: &str, page: usize) 
     let result = search_result.result?;
     let songs = result.songs?;
 
-    Some(songs.into_iter().map(|s| {
-        let artist = s.artists
-            .map(|a| a.iter().map(|ar| ar.name.as_str()).collect::<Vec<&str>>().join(", "))
-            .unwrap_or_default();
-        OnlineSong {
-            name: s.name,
-            artist,
-            id: s.id,
-            hash: String::new(),
-            duration_ms: s.duration,
-            source: MusicSource::NetEase,
-            juhe_platform: String::new(),
-            juhe_song_id: String::new(),
-        }
-    }).collect())
+    Some(
+        songs
+            .into_iter()
+            .map(|s| {
+                let artist = s
+                    .artists
+                    .map(|a| {
+                        a.iter()
+                            .map(|ar| ar.name.as_str())
+                            .collect::<Vec<&str>>()
+                            .join(", ")
+                    })
+                    .unwrap_or_default();
+                OnlineSong {
+                    name: s.name,
+                    artist,
+                    id: s.id,
+                    hash: String::new(),
+                    duration_ms: s.duration,
+                    source: MusicSource::NetEase,
+                    juhe_platform: String::new(),
+                    juhe_song_id: String::new(),
+                }
+            })
+            .collect(),
+    )
 }
 
 /// 酷狗音乐搜索
-fn search_kugou(client: &reqwest::blocking::Client, query: &str, page: usize) -> Option<Vec<OnlineSong>> {
+fn search_kugou(
+    client: &reqwest::blocking::Client,
+    query: &str,
+    page: usize,
+) -> Option<Vec<OnlineSong>> {
     let search_url = format!(
         "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword={}&page={}&pagesize=20",
         urlencoding::encode(query),
@@ -853,27 +917,32 @@ fn search_kugou(client: &reqwest::blocking::Client, query: &str, page: usize) ->
 
     log_file!("[Kugou] 解析到 {} 首歌", info.len());
 
-    Some(info.into_iter().filter_map(|s| {
-        let hash = s.hash.unwrap_or_default();
-        if hash.is_empty() {
-            return None;
-        }
-        let name = s.songname.unwrap_or_default();
-        let artist = s.singername.unwrap_or_default();
-        let duration_ms = s.duration
-            .and_then(|d| d.to_seconds())
-            .map(|secs| secs * 1000);
-        Some(OnlineSong {
-            name,
-            artist,
-            id: 0,
-            hash,
-            duration_ms,
-            source: MusicSource::Kugou,
-            juhe_platform: String::new(),
-            juhe_song_id: String::new(),
-        })
-    }).collect())
+    Some(
+        info.into_iter()
+            .filter_map(|s| {
+                let hash = s.hash.unwrap_or_default();
+                if hash.is_empty() {
+                    return None;
+                }
+                let name = s.songname.unwrap_or_default();
+                let artist = s.singername.unwrap_or_default();
+                let duration_ms = s
+                    .duration
+                    .and_then(|d| d.to_seconds())
+                    .map(|secs| secs * 1000);
+                Some(OnlineSong {
+                    name,
+                    artist,
+                    id: 0,
+                    hash,
+                    duration_ms,
+                    source: MusicSource::Kugou,
+                    juhe_platform: String::new(),
+                    juhe_song_id: String::new(),
+                })
+            })
+            .collect(),
+    )
 }
 
 /// 从 JSON 条目中提取字符串字段（按候选字段名）
@@ -934,15 +1003,27 @@ fn pick_song_count(v: &serde_json::Value) -> Option<usize> {
     pick_usize_field(v, &keys)
 }
 
-
 /// 将 JSON 条目解析为歌单信息
 #[allow(dead_code)]
 fn parse_playlist_item(v: &serde_json::Value, source: PlaylistSource) -> Option<OnlinePlaylist> {
-
-    let playlist_id = pick_str_field(v, &["id", "rid", "dissid", "list_id", "playlist_id", "specialid"])?;
+    let playlist_id = pick_str_field(
+        v,
+        &["id", "rid", "dissid", "list_id", "playlist_id", "specialid"],
+    )?;
     let name = pick_str_field(v, &["name", "title", "listname", "dissname", "specialname"])?;
-    let author = pick_str_field(v, &["author", "creator", "nickname", "nickName", "uname", "username", "singername"])
-        .unwrap_or_default();
+    let author = pick_str_field(
+        v,
+        &[
+            "author",
+            "creator",
+            "nickname",
+            "nickName",
+            "uname",
+            "username",
+            "singername",
+        ],
+    )
+    .unwrap_or_default();
     let description = pick_str_field(v, &["description", "intro", "desc"]).unwrap_or_default();
     let song_count = pick_song_count(v);
 
@@ -954,9 +1035,18 @@ fn parse_playlist_item(v: &serde_json::Value, source: PlaylistSource) -> Option<
         song_count,
         description,
         play_count: None,
-        date_text: pick_date_field(v, &["createTime", "create_time", "publishTime", "publish_time", "publish", "ctime"]),
+        date_text: pick_date_field(
+            v,
+            &[
+                "createTime",
+                "create_time",
+                "publishTime",
+                "publish_time",
+                "publish",
+                "ctime",
+            ],
+        ),
     })
-
 }
 
 /// 在任意 JSON 中提取数组（优先常见路径）
@@ -1022,7 +1112,11 @@ fn parse_kuwo_legacy_value(text: &str) -> Option<serde_json::Value> {
 }
 
 /// 酷我歌单搜索（旧接口兜底，规避新接口风控）
-fn search_kuwo_playlists_legacy(client: &reqwest::blocking::Client, query: &str, page: usize) -> Vec<OnlinePlaylist> {
+fn search_kuwo_playlists_legacy(
+    client: &reqwest::blocking::Client,
+    query: &str,
+    page: usize,
+) -> Vec<OnlinePlaylist> {
     let pn = page.saturating_sub(1);
     let url = format!(
         "http://search.kuwo.cn/r.s?all={}&ft=playlist&itemset=web_2013&client=kt&pn={}&rn=20&rformat=json&encoding=utf8",
@@ -1044,7 +1138,10 @@ fn search_kuwo_playlists_legacy(client: &reqwest::blocking::Client, query: &str,
         }
     };
 
-    log_file!("[Playlist][KW][Legacy] 响应(前200): {}", preview_for_log(&text, 200));
+    log_file!(
+        "[Playlist][KW][Legacy] 响应(前200): {}",
+        preview_for_log(&text, 200)
+    );
 
     let v = match parse_kuwo_legacy_value(&text) {
         Some(v) => v,
@@ -1064,10 +1161,22 @@ fn search_kuwo_playlists_legacy(client: &reqwest::blocking::Client, query: &str,
         .filter_map(|item| {
             let playlist_id = pick_str_field(&item, &["playlistid", "DC_TARGETID", "id"])?;
             let name = pick_str_field(&item, &["name", "title"])?;
-            let author = pick_str_field(&item, &["nickname", "uname", "author"]).unwrap_or_default();
-            let song_count = pick_usize_field(&item, &["songnum", "song_count", "songCount", "total"]);
-            let description = pick_str_field(&item, &["intro", "description", "desc"]).unwrap_or_default();
-            let play_count = pick_usize_field(&item, &["playcnt", "play_count", "playCount", "listencount", "listen_count"]);
+            let author =
+                pick_str_field(&item, &["nickname", "uname", "author"]).unwrap_or_default();
+            let song_count =
+                pick_usize_field(&item, &["songnum", "song_count", "songCount", "total"]);
+            let description =
+                pick_str_field(&item, &["intro", "description", "desc"]).unwrap_or_default();
+            let play_count = pick_usize_field(
+                &item,
+                &[
+                    "playcnt",
+                    "play_count",
+                    "playCount",
+                    "listencount",
+                    "listen_count",
+                ],
+            );
 
             Some(OnlinePlaylist {
                 name,
@@ -1084,7 +1193,11 @@ fn search_kuwo_playlists_legacy(client: &reqwest::blocking::Client, query: &str,
 }
 
 /// 酷狗歌单搜索
-fn search_kugou_playlists(client: &reqwest::blocking::Client, query: &str, page: usize) -> Vec<OnlinePlaylist> {
+fn search_kugou_playlists(
+    client: &reqwest::blocking::Client,
+    query: &str,
+    page: usize,
+) -> Vec<OnlinePlaylist> {
     let url = format!(
         "http://mobilecdn.kugou.com/api/v3/search/special?format=json&keyword={}&page={}&pagesize=20",
         urlencoding::encode(query),
@@ -1124,12 +1237,24 @@ fn search_kugou_playlists(client: &reqwest::blocking::Client, query: &str, page:
             }
             let name = pick_str_field(&item, &["specialname", "name", "title"])?;
 
-            let author = pick_str_field(&item, &["nickname", "author", "username"]).unwrap_or_default();
+            let author =
+                pick_str_field(&item, &["nickname", "author", "username"]).unwrap_or_default();
             let song_count = pick_song_count(&item);
-            let description = pick_str_field(&item, &["intro", "description", "desc"]).unwrap_or_default();
+            let description =
+                pick_str_field(&item, &["intro", "description", "desc"]).unwrap_or_default();
             let play_count = pick_usize_field(
                 &item,
-                &["play_count", "playCount", "playcount", "total_play", "totalPlay", "listencount", "listen_count", "pv", "visit"],
+                &[
+                    "play_count",
+                    "playCount",
+                    "playcount",
+                    "total_play",
+                    "totalPlay",
+                    "listencount",
+                    "listen_count",
+                    "pv",
+                    "visit",
+                ],
             );
 
             Some(OnlinePlaylist {
@@ -1140,15 +1265,28 @@ fn search_kugou_playlists(client: &reqwest::blocking::Client, query: &str, page:
                 song_count,
                 description,
                 play_count,
-                date_text: pick_date_field(&item, &["publish_time", "publishTime", "publish", "createTime", "create_time", "ctime"]),
+                date_text: pick_date_field(
+                    &item,
+                    &[
+                        "publish_time",
+                        "publishTime",
+                        "publish",
+                        "createTime",
+                        "create_time",
+                        "ctime",
+                    ],
+                ),
             })
-
         })
         .collect()
 }
 
 /// 酷我歌单搜索
-fn search_kuwo_playlists(client: &reqwest::blocking::Client, query: &str, page: usize) -> Vec<OnlinePlaylist> {
+fn search_kuwo_playlists(
+    client: &reqwest::blocking::Client,
+    query: &str,
+    page: usize,
+) -> Vec<OnlinePlaylist> {
     let mut arr: Vec<serde_json::Value> = Vec::new();
 
     // 酷我接口页码在不同环境可能有 0 基 / 1 基差异：两种都尝试一次
@@ -1164,7 +1302,10 @@ fn search_kuwo_playlists(client: &reqwest::blocking::Client, query: &str, page: 
         log_file!("[Playlist][KW] 搜索URL: {}", url);
 
         let (cookie, csrf) = kuwo_auth_cookie_and_csrf(client);
-        let referer = format!("https://www.kuwo.cn/search/list?key={}", urlencoding::encode(query));
+        let referer = format!(
+            "https://www.kuwo.cn/search/list?key={}",
+            urlencoding::encode(query)
+        );
         let text = match client
             .get(&url)
             .header("Referer", &referer)
@@ -1179,7 +1320,10 @@ fn search_kuwo_playlists(client: &reqwest::blocking::Client, query: &str, page: 
                 continue;
             }
         };
-        log_file!("[Playlist][KW] 响应(前200): {}", preview_for_log(&text, 200));
+        log_file!(
+            "[Playlist][KW] 响应(前200): {}",
+            preview_for_log(&text, 200)
+        );
 
         let v: serde_json::Value = match serde_json::from_str(&text) {
             Ok(v) => v,
@@ -1191,7 +1335,11 @@ fn search_kuwo_playlists(client: &reqwest::blocking::Client, query: &str, page: 
 
         let mut candidate = v
             .get("data")
-            .and_then(|d| d.get("list").and_then(|x| x.as_array()).or_else(|| d.get("abslist").and_then(|x| x.as_array())))
+            .and_then(|d| {
+                d.get("list")
+                    .and_then(|x| x.as_array())
+                    .or_else(|| d.get("abslist").and_then(|x| x.as_array()))
+            })
             .cloned()
             .or_else(|| extract_first_array(&v).cloned())
             .unwrap_or_default();
@@ -1206,7 +1354,10 @@ fn search_kuwo_playlists(client: &reqwest::blocking::Client, query: &str, page: 
                 .unwrap_or(false);
 
         if illegal_blocked {
-            log_file!("[Playlist][KW] 命中风控(pn={})，跳过备用URL与其他页，直接走旧接口", pn);
+            log_file!(
+                "[Playlist][KW] 命中风控(pn={})，跳过备用URL与其他页，直接走旧接口",
+                pn
+            );
             break;
         }
 
@@ -1224,11 +1375,18 @@ fn search_kuwo_playlists(client: &reqwest::blocking::Client, query: &str, page: 
                 .send()
                 .and_then(|r| r.text())
             {
-                log_file!("[Playlist][KW] 备用响应(前200): {}", &t2[..t2.len().min(200)]);
+                log_file!(
+                    "[Playlist][KW] 备用响应(前200): {}",
+                    &t2[..t2.len().min(200)]
+                );
                 if let Ok(v2) = serde_json::from_str::<serde_json::Value>(&t2) {
                     candidate = v2
                         .get("data")
-                        .and_then(|d| d.get("list").and_then(|x| x.as_array()).or_else(|| d.get("abslist").and_then(|x| x.as_array())))
+                        .and_then(|d| {
+                            d.get("list")
+                                .and_then(|x| x.as_array())
+                                .or_else(|| d.get("abslist").and_then(|x| x.as_array()))
+                        })
                         .cloned()
                         .or_else(|| extract_first_array(&v2).cloned())
                         .unwrap_or_default();
@@ -1252,10 +1410,22 @@ fn search_kuwo_playlists(client: &reqwest::blocking::Client, query: &str, page: 
         .filter_map(|item| {
             let playlist_id = pick_str_field(&item, &["id", "listid", "playlistid", "pid"])?;
             let name = pick_str_field(&item, &["name", "title"])?;
-            let author = pick_str_field(&item, &["uname", "nickname", "author", "nickName"]).unwrap_or_default();
+            let author = pick_str_field(&item, &["uname", "nickname", "author", "nickName"])
+                .unwrap_or_default();
             let song_count = pick_song_count(&item);
-            let description = pick_str_field(&item, &["intro", "description", "desc"]).unwrap_or_default();
-            let play_count = pick_usize_field(&item, &["play_count", "playCount", "playcount", "listencount", "listen_count", "listenNum"]);
+            let description =
+                pick_str_field(&item, &["intro", "description", "desc"]).unwrap_or_default();
+            let play_count = pick_usize_field(
+                &item,
+                &[
+                    "play_count",
+                    "playCount",
+                    "playcount",
+                    "listencount",
+                    "listen_count",
+                    "listenNum",
+                ],
+            );
             Some(OnlinePlaylist {
                 name,
                 author,
@@ -1264,16 +1434,28 @@ fn search_kuwo_playlists(client: &reqwest::blocking::Client, query: &str, page: 
                 song_count,
                 description,
                 play_count,
-                date_text: pick_date_field(&item, &["pub", "publishTime", "publish_time", "createTime", "create_time", "ctime"]),
+                date_text: pick_date_field(
+                    &item,
+                    &[
+                        "pub",
+                        "publishTime",
+                        "publish_time",
+                        "createTime",
+                        "create_time",
+                        "ctime",
+                    ],
+                ),
             })
-
         })
         .collect()
 }
 
-
 /// 网易歌单搜索
-fn search_netease_playlists(client: &reqwest::blocking::Client, query: &str, page: usize) -> Vec<OnlinePlaylist> {
+fn search_netease_playlists(
+    client: &reqwest::blocking::Client,
+    query: &str,
+    page: usize,
+) -> Vec<OnlinePlaylist> {
     let offset = (page.max(1) - 1) * 20;
     let url = format!(
         "https://music.163.com/api/search/get?s={}&type=1000&limit=20&offset={}",
@@ -1325,7 +1507,10 @@ fn search_netease_playlists(client: &reqwest::blocking::Client, query: &str, pag
                 .get("playCount")
                 .and_then(|x| x.as_u64())
                 .map(|n| n as usize)
-                .or_else(|| pick_str_field(&item, &["playCount", "play_count", "playcount"]).and_then(|s| s.parse::<usize>().ok()));
+                .or_else(|| {
+                    pick_str_field(&item, &["playCount", "play_count", "playcount"])
+                        .and_then(|s| s.parse::<usize>().ok())
+                });
             Some(OnlinePlaylist {
                 name,
                 author,
@@ -1336,7 +1521,6 @@ fn search_netease_playlists(client: &reqwest::blocking::Client, query: &str, pag
                 play_count,
                 date_text: pick_date_field(&item, &["createTime", "updateTime", "publishTime"]),
             })
-
         })
         .collect()
 }
@@ -1392,12 +1576,20 @@ fn parse_duration_to_ms(raw: &str) -> Option<i64> {
         return Some((mm * 60 + ss) * 1000);
     }
 
-    t.parse::<i64>()
-        .ok()
-        .map(|secs_or_ms| if secs_or_ms > 10_000 { secs_or_ms } else { secs_or_ms * 1000 })
+    t.parse::<i64>().ok().map(|secs_or_ms| {
+        if secs_or_ms > 10_000 {
+            secs_or_ms
+        } else {
+            secs_or_ms * 1000
+        }
+    })
 }
 
-fn parse_playlist_song_item(v: &serde_json::Value, platform: &str, source: PlaylistSource) -> Option<OnlineSong> {
+fn parse_playlist_song_item(
+    v: &serde_json::Value,
+    platform: &str,
+    source: PlaylistSource,
+) -> Option<OnlineSong> {
     let mut name = pick_str_field(v, &["name", "title", "songname"]).unwrap_or_default();
     let mut artist = String::new();
 
@@ -1416,7 +1608,8 @@ fn parse_playlist_song_item(v: &serde_json::Value, platform: &str, source: Playl
             artist = pick_str_field(v, &["singername", "artist", "author"]).unwrap_or_default();
         }
     } else if source == PlaylistSource::NetEase {
-        artist = v.get("ar")
+        artist = v
+            .get("ar")
             .and_then(|a| a.as_array())
             .map(|arr| {
                 arr.iter()
@@ -1425,9 +1618,12 @@ fn parse_playlist_song_item(v: &serde_json::Value, platform: &str, source: Playl
                     .join(", ")
             })
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| pick_str_field(v, &["artist", "singer", "singername", "author"]).unwrap_or_default());
+            .unwrap_or_else(|| {
+                pick_str_field(v, &["artist", "singer", "singername", "author"]).unwrap_or_default()
+            });
     } else {
-        artist = pick_str_field(v, &["artist", "singer", "singername", "author"]).unwrap_or_default();
+        artist =
+            pick_str_field(v, &["artist", "singer", "singername", "author"]).unwrap_or_default();
     }
 
     if name.is_empty() {
@@ -1435,13 +1631,10 @@ fn parse_playlist_song_item(v: &serde_json::Value, platform: &str, source: Playl
     }
 
     let song_id = match source {
-        PlaylistSource::Kugou => {
-            pick_str_field(v, &["hash"])
-                .or_else(|| pick_str_field(v, &["audio_id", "id", "songid", "songId"]))
-        }
-        PlaylistSource::Kuwo => {
-            pick_str_field(v, &["rid", "musicrid", "id"]).map(|s| s.trim_start_matches("MUSIC_").to_string())
-        }
+        PlaylistSource::Kugou => pick_str_field(v, &["hash"])
+            .or_else(|| pick_str_field(v, &["audio_id", "id", "songid", "songId"])),
+        PlaylistSource::Kuwo => pick_str_field(v, &["rid", "musicrid", "id"])
+            .map(|s| s.trim_start_matches("MUSIC_").to_string()),
         PlaylistSource::NetEase => pick_str_field(v, &["id", "songid", "songId"]),
     }?;
 
@@ -1452,9 +1645,18 @@ fn parse_playlist_song_item(v: &serde_json::Value, platform: &str, source: Playl
                 .and_then(parse_duration_to_ms)
         })
     } else {
-        pick_str_field(v, &["duration", "interval", "timeLength", "songTimeMinutes", "songTime"])
-            .as_deref()
-            .and_then(parse_duration_to_ms)
+        pick_str_field(
+            v,
+            &[
+                "duration",
+                "interval",
+                "timeLength",
+                "songTimeMinutes",
+                "songTime",
+            ],
+        )
+        .as_deref()
+        .and_then(parse_duration_to_ms)
     };
 
     Some(OnlineSong {
@@ -1470,7 +1672,10 @@ fn parse_playlist_song_item(v: &serde_json::Value, platform: &str, source: Playl
 }
 
 /// 加载酷狗歌单歌曲
-fn fetch_kugou_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &str) -> Vec<OnlineSong> {
+fn fetch_kugou_playlist_songs(
+    client: &reqwest::blocking::Client,
+    playlist_id: &str,
+) -> Vec<OnlineSong> {
     let url = format!(
         "http://mobilecdnbj.kugou.com/api/v3/special/song?specialid={}&page=1&pagesize=200",
         playlist_id
@@ -1495,7 +1700,11 @@ fn fetch_kugou_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &
 
     let arr = v
         .get("data")
-        .and_then(|d| d.get("info").and_then(|x| x.as_array()).or_else(|| d.get("list").and_then(|x| x.as_array())))
+        .and_then(|d| {
+            d.get("info")
+                .and_then(|x| x.as_array())
+                .or_else(|| d.get("list").and_then(|x| x.as_array()))
+        })
         .cloned()
         .or_else(|| extract_first_array(&v).cloned())
         .unwrap_or_default();
@@ -1515,7 +1724,6 @@ fn fetch_kugou_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &
         .filter_map(|x| parse_playlist_song_item(x, "kg", PlaylistSource::Kugou))
         .collect::<Vec<_>>()
 }
-
 
 fn decode_js_escaped_string(input: &str) -> String {
     let mut out = String::new();
@@ -1607,7 +1815,10 @@ fn pick_js_number_field(src: &str, key: &str) -> Option<i64> {
     buf.parse::<i64>().ok()
 }
 
-fn fetch_kuwo_playlist_songs_legacy_api(client: &reqwest::blocking::Client, playlist_id: &str) -> Vec<OnlineSong> {
+fn fetch_kuwo_playlist_songs_legacy_api(
+    client: &reqwest::blocking::Client,
+    playlist_id: &str,
+) -> Vec<OnlineSong> {
     let rn = 100usize;
     let mut pn = 0usize;
     let mut total: Option<usize> = None;
@@ -1683,7 +1894,10 @@ fn fetch_kuwo_playlist_songs_legacy_api(client: &reqwest::blocking::Client, play
     songs
 }
 
-fn fetch_kuwo_playlist_songs_from_page(client: &reqwest::blocking::Client, playlist_id: &str) -> Vec<OnlineSong> {
+fn fetch_kuwo_playlist_songs_from_page(
+    client: &reqwest::blocking::Client,
+    playlist_id: &str,
+) -> Vec<OnlineSong> {
     let url = format!("https://www.kuwo.cn/playlist_detail/{}", playlist_id);
     log_file!("[Playlist][KW][PageFallback] 页面URL: {}", url);
 
@@ -1753,7 +1967,10 @@ fn fetch_kuwo_playlist_songs_from_page(client: &reqwest::blocking::Client, playl
 }
 
 /// 加载酷我歌单歌曲
-fn fetch_kuwo_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &str) -> Vec<OnlineSong> {
+fn fetch_kuwo_playlist_songs(
+    client: &reqwest::blocking::Client,
+    playlist_id: &str,
+) -> Vec<OnlineSong> {
     let url = format!(
         "https://www.kuwo.cn/api/www/playlist/playListInfo?pid={}&pn=1&rn=200&httpsStatus=1",
         playlist_id
@@ -1770,7 +1987,6 @@ fn fetch_kuwo_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &s
         .send()
         .and_then(|r| r.text())
     {
-
         Ok(t) => t,
         Err(e) => {
             log_file!("[Playlist][KW] 歌单详情请求失败: {}", e);
@@ -1782,7 +1998,10 @@ fn fetch_kuwo_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &s
         }
     };
 
-    log_file!("[Playlist][KW] 歌单详情响应(前200): {}", preview_for_log(&text, 200));
+    log_file!(
+        "[Playlist][KW] 歌单详情响应(前200): {}",
+        preview_for_log(&text, 200)
+    );
 
     let v: serde_json::Value = match serde_json::from_str(&text) {
         Ok(v) => v,
@@ -1792,7 +2011,8 @@ fn fetch_kuwo_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &s
         }
     };
 
-    let songs = v.get("data")
+    let songs = v
+        .get("data")
         .and_then(|d| d.get("musicList"))
         .and_then(|x| x.as_array())
         .map(|arr| {
@@ -1816,9 +2036,11 @@ fn fetch_kuwo_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &s
     songs
 }
 
-
 /// 网易：按 trackIds 批量拉取歌曲详情（避免 playlist.tracks 仅返回 10 首）
-fn fetch_netease_song_detail_batch(client: &reqwest::blocking::Client, ids: &[i64]) -> Vec<OnlineSong> {
+fn fetch_netease_song_detail_batch(
+    client: &reqwest::blocking::Client,
+    ids: &[i64],
+) -> Vec<OnlineSong> {
     if ids.is_empty() {
         return Vec::new();
     }
@@ -1868,7 +2090,10 @@ fn fetch_netease_song_detail_batch(client: &reqwest::blocking::Client, ids: &[i6
 }
 
 /// 加载网易歌单歌曲
-fn fetch_netease_playlist_songs(client: &reqwest::blocking::Client, playlist_id: &str) -> Vec<OnlineSong> {
+fn fetch_netease_playlist_songs(
+    client: &reqwest::blocking::Client,
+    playlist_id: &str,
+) -> Vec<OnlineSong> {
     let url = format!(
         "https://music.163.com/api/v6/playlist/detail?id={}&n=1000",
         playlist_id
@@ -1956,9 +2181,6 @@ fn fetch_netease_playlist_songs(client: &reqwest::blocking::Client, playlist_id:
     }
 }
 
-
-
-
 /// 加载歌单歌曲
 fn fetch_playlist_songs(playlist: &OnlinePlaylist) -> Vec<OnlineSong> {
     let client = match create_search_client() {
@@ -1968,7 +2190,9 @@ fn fetch_playlist_songs(playlist: &OnlinePlaylist) -> Vec<OnlineSong> {
 
     log_file!(
         "[Playlist] 加载歌单歌曲: source={:?}, playlist_id={}, name={}",
-        playlist.source, playlist.playlist_id, playlist.name
+        playlist.source,
+        playlist.playlist_id,
+        playlist.name
     );
 
     let songs = match playlist.source {
@@ -2048,10 +2272,7 @@ fn fetch_song_comments(query: &str, page: usize, page_size: usize) -> SongCommen
         None => return empty,
     };
 
-    let total = value
-        .get("total")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as usize;
+    let total = value.get("total").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
     let comments = value
         .get("comments")
@@ -2122,7 +2343,11 @@ fn fetch_song_comments(query: &str, page: usize, page_size: usize) -> SongCommen
                                             .filter(|s| !s.is_empty())
                                     });
 
-                                SongCommentReply { nickname, content, time_text }
+                                SongCommentReply {
+                                    nickname,
+                                    content,
+                                    time_text,
+                                }
                             })
                         });
 
@@ -2137,7 +2362,6 @@ fn fetch_song_comments(query: &str, page: usize, page_size: usize) -> SongCommen
         })
         .unwrap_or_default();
 
-
     SongCommentsResult {
         page: safe_page,
         total,
@@ -2149,14 +2373,23 @@ fn fetch_song_comments(query: &str, page: usize, page_size: usize) -> SongCommen
 // 下载逻辑
 // ============================================================
 
-
 /// 下载歌曲到本地（带进度回调）
-fn download_song_with_progress<F>(song: &OnlineSong, save_dir: &PathBuf, on_progress: F) -> DownloadResult
+fn download_song_with_progress<F>(
+    song: &OnlineSong,
+    save_dir: &PathBuf,
+    on_progress: F,
+) -> DownloadResult
 where
     F: Fn(u8) + Send + Sync,
 {
-    log_file!("[Download] 开始下载: {} - {}, source={:?}, juhe_platform={}, juhe_song_id={}", 
-        song.artist, song.name, song.source, song.juhe_platform, song.juhe_song_id);
+    log_file!(
+        "[Download] 开始下载: {} - {}, source={:?}, juhe_platform={}, juhe_song_id={}",
+        song.artist,
+        song.name,
+        song.source,
+        song.juhe_platform,
+        song.juhe_song_id
+    );
 
     let client = match create_download_client() {
         Some(c) => c,
@@ -2165,8 +2398,13 @@ where
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some(crate::langs::global_texts().fmt_http_client_failed.replace("{}", "").to_string()),
-            }
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_http_client_failed
+                        .replace("{}", "")
+                        .to_string(),
+                ),
+            };
         }
     };
 
@@ -2185,8 +2423,12 @@ where
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some(crate::langs::global_texts().no_download_link_vip.to_string()),
-            }
+                error: Some(
+                    crate::langs::global_texts()
+                        .no_download_link_vip
+                        .to_string(),
+                ),
+            };
         }
     };
 
@@ -2199,22 +2441,24 @@ where
         MusicSource::NetEase => "https://music.163.com/",
         MusicSource::Juhe => "https://www.kuwo.cn/",
     };
-    let response = match client.get(&mp3_url)
-        .header("Referer", referer)
-        .send()
-    {
+    let response = match client.get(&mp3_url).header("Referer", referer).send() {
         Ok(r) => r,
         Err(e) => {
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some(crate::langs::global_texts().fmt_download_request_failed.replace("{}", &e.to_string())),
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_download_request_failed
+                        .replace("{}", &e.to_string()),
+                ),
             }
         }
     };
 
     // 检查 Content-Type
-    let content_type = response.headers()
+    let content_type = response
+        .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
@@ -2224,12 +2468,17 @@ where
         return DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some(crate::langs::global_texts().download_vip_required.to_string()),
-        }
+            error: Some(
+                crate::langs::global_texts()
+                    .download_vip_required
+                    .to_string(),
+            ),
+        };
     }
 
     // 获取总大小
-    let total_size = response.headers()
+    let total_size = response
+        .headers()
         .get("content-length")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<u64>().ok());
@@ -2268,7 +2517,11 @@ where
                 return DownloadResult {
                     song: song.clone(),
                     local_path: None,
-                    error: Some(crate::langs::global_texts().fmt_read_response_failed.replace("{}", &e.to_string())),
+                    error: Some(
+                        crate::langs::global_texts()
+                            .fmt_read_response_failed
+                            .replace("{}", &e.to_string()),
+                    ),
                 }
             }
         }
@@ -2282,7 +2535,7 @@ where
             song: song.clone(),
             local_path: None,
             error: Some(e),
-        }
+        };
     }
 
     // 确保保存目录存在
@@ -2290,8 +2543,12 @@ where
         return DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some(crate::langs::global_texts().fmt_mkdir_failed.replace("{}", &e.to_string())),
-        }
+            error: Some(
+                crate::langs::global_texts()
+                    .fmt_mkdir_failed
+                    .replace("{}", &e.to_string()),
+            ),
+        };
     }
 
     on_progress(98);
@@ -2300,7 +2557,11 @@ where
     let filename = if song.artist.is_empty() {
         format!("{}.mp3", sanitize_filename(&song.name))
     } else {
-        format!("{} - {}.mp3", sanitize_filename(&song.artist), sanitize_filename(&song.name))
+        format!(
+            "{} - {}.mp3",
+            sanitize_filename(&song.artist),
+            sanitize_filename(&song.name)
+        )
     };
 
     let save_path = save_dir.join(&filename);
@@ -2311,7 +2572,6 @@ where
 
             // 歌词不在下载阶段处理；统一在播放阶段按“常规API优先、聚合兜底”自动下载
 
-
             DownloadResult {
                 song: song.clone(),
                 local_path: Some(save_path),
@@ -2321,8 +2581,12 @@ where
         Err(e) => DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some(crate::langs::global_texts().fmt_write_file_failed.replace("{}", &e.to_string())),
-        }
+            error: Some(
+                crate::langs::global_texts()
+                    .fmt_write_file_failed
+                    .replace("{}", &e.to_string()),
+            ),
+        },
     }
 }
 
@@ -2335,7 +2599,12 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some(crate::langs::global_texts().fmt_http_client_failed.replace("{}", "").to_string()),
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_http_client_failed
+                        .replace("{}", "")
+                        .to_string(),
+                ),
             }
         }
     };
@@ -2354,7 +2623,11 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some(crate::langs::global_texts().no_download_link_vip.to_string()),
+                error: Some(
+                    crate::langs::global_texts()
+                        .no_download_link_vip
+                        .to_string(),
+                ),
             }
         }
     };
@@ -2365,22 +2638,24 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
         MusicSource::NetEase => "https://music.163.com/",
         MusicSource::Juhe => "https://www.kuwo.cn/",
     };
-    let response = match client.get(&mp3_url)
-        .header("Referer", referer)
-        .send()
-    {
+    let response = match client.get(&mp3_url).header("Referer", referer).send() {
         Ok(r) => r,
         Err(e) => {
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some(crate::langs::global_texts().fmt_download_request_failed.replace("{}", &e.to_string())),
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_download_request_failed
+                        .replace("{}", &e.to_string()),
+                ),
             }
         }
     };
 
     // 检查 Content-Type
-    let content_type = response.headers()
+    let content_type = response
+        .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
@@ -2390,7 +2665,11 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
         return DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some(crate::langs::global_texts().download_vip_required.to_string()),
+            error: Some(
+                crate::langs::global_texts()
+                    .download_vip_required
+                    .to_string(),
+            ),
         };
     }
 
@@ -2400,7 +2679,11 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
             return DownloadResult {
                 song: song.clone(),
                 local_path: None,
-                error: Some(crate::langs::global_texts().fmt_read_response_failed.replace("{}", &e.to_string())),
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_read_response_failed
+                        .replace("{}", &e.to_string()),
+                ),
             }
         }
     };
@@ -2419,7 +2702,11 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
         return DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some(crate::langs::global_texts().fmt_mkdir_failed.replace("{}", &e.to_string())),
+            error: Some(
+                crate::langs::global_texts()
+                    .fmt_mkdir_failed
+                    .replace("{}", &e.to_string()),
+            ),
         };
     }
 
@@ -2427,7 +2714,11 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
     let filename = if song.artist.is_empty() {
         format!("{}.mp3", sanitize_filename(&song.name))
     } else {
-        format!("{} - {}.mp3", sanitize_filename(&song.artist), sanitize_filename(&song.name))
+        format!(
+            "{} - {}.mp3",
+            sanitize_filename(&song.artist),
+            sanitize_filename(&song.name)
+        )
     };
 
     let save_path = save_dir.join(&filename);
@@ -2441,7 +2732,11 @@ fn download_song(song: &OnlineSong, save_dir: &PathBuf) -> DownloadResult {
         Err(e) => DownloadResult {
             song: song.clone(),
             local_path: None,
-            error: Some(crate::langs::global_texts().fmt_write_file_failed.replace("{}", &e.to_string())),
+            error: Some(
+                crate::langs::global_texts()
+                    .fmt_write_file_failed
+                    .replace("{}", &e.to_string()),
+            ),
         },
     }
 }
@@ -2541,7 +2836,8 @@ fn get_kugou_download_url(client: &reqwest::blocking::Client, hash: &str) -> Opt
         hash, key
     );
 
-    if let Ok(response) = client.get(&url2)
+    if let Ok(response) = client
+        .get(&url2)
         .header("Referer", "https://m.kugou.com/")
         .send()
     {
@@ -2567,7 +2863,8 @@ fn get_netease_download_url(client: &reqwest::blocking::Client, song_id: i64) ->
         song_id, song_id
     );
 
-    if let Ok(response) = client.get(&url_api)
+    if let Ok(response) = client
+        .get(&url_api)
         .header("Referer", "https://music.163.com/")
         .header("Cookie", "MUSIC_U=; appver=2.0.2;")
         .send()
@@ -2596,7 +2893,8 @@ fn get_netease_download_url(client: &reqwest::blocking::Client, song_id: i64) ->
         song_id
     );
 
-    if let Ok(response) = client.get(&redirect_url)
+    if let Ok(response) = client
+        .get(&redirect_url)
         .header("Referer", "https://music.163.com/")
         .send()
     {
@@ -2604,7 +2902,8 @@ fn get_netease_download_url(client: &reqwest::blocking::Client, song_id: i64) ->
         if final_url.contains("126.net") {
             return Some(final_url);
         }
-        let ct = response.headers()
+        let ct = response
+            .headers()
             .get("content-type")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("")
@@ -2624,7 +2923,9 @@ fn get_netease_download_url(client: &reqwest::blocking::Client, song_id: i64) ->
 /// 验证下载的数据是否为有效音频
 fn validate_audio_data(bytes: &[u8]) -> Result<(), String> {
     if bytes.len() < 4 {
-        return Err(crate::langs::global_texts().download_data_too_small.to_string());
+        return Err(crate::langs::global_texts()
+            .download_data_too_small
+            .to_string());
     }
 
     let header = &bytes[0..4];
@@ -2645,10 +2946,16 @@ fn validate_audio_data(bytes: &[u8]) -> Result<(), String> {
     let check_len = std::cmp::min(200, bytes.len());
     if let Ok(text) = std::str::from_utf8(&bytes[0..check_len]) {
         let lower = text.to_lowercase();
-        if lower.contains("<!doctype") || lower.contains("<html") || lower.contains("<head")
-            || lower.contains("抱歉") || lower.contains("not found") || lower.contains("error")
+        if lower.contains("<!doctype")
+            || lower.contains("<html")
+            || lower.contains("<head")
+            || lower.contains("抱歉")
+            || lower.contains("not found")
+            || lower.contains("error")
         {
-            return Err(crate::langs::global_texts().download_not_audio_vip.to_string());
+            return Err(crate::langs::global_texts()
+                .download_not_audio_vip
+                .to_string());
         }
     }
 
@@ -2657,7 +2964,9 @@ fn validate_audio_data(bytes: &[u8]) -> Result<(), String> {
     if bytes.len() > 10240 {
         Ok(())
     } else {
-        Err(crate::langs::global_texts().download_data_not_audio.to_string())
+        Err(crate::langs::global_texts()
+            .download_data_not_audio
+            .to_string())
     }
 }
 
@@ -2709,7 +3018,11 @@ fn create_github_discussion(
     if github_token.trim().is_empty() {
         return GitHubDiscussionResult {
             url: None,
-            error: Some(crate::langs::global_texts().github_token_not_configured.to_string()),
+            error: Some(
+                crate::langs::global_texts()
+                    .github_token_not_configured
+                    .to_string(),
+            ),
         };
     }
 
@@ -2722,7 +3035,11 @@ fn create_github_discussion(
         Err(e) => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(crate::langs::global_texts().fmt_http_client_failed.replace("{}", &e.to_string())),
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_http_client_failed
+                        .replace("{}", &e.to_string()),
+                ),
             }
         }
     };
@@ -2732,7 +3049,11 @@ fn create_github_discussion(
     if parts.len() != 2 {
         return GitHubDiscussionResult {
             url: None,
-            error: Some(crate::langs::global_texts().fmt_github_repo_format_error.replace("{}", github_repo)),
+            error: Some(
+                crate::langs::global_texts()
+                    .fmt_github_repo_format_error
+                    .replace("{}", github_repo),
+            ),
         };
     }
     let owner = parts[0];
@@ -2820,7 +3141,11 @@ fn create_github_discussion(
         Err(e) => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(crate::langs::global_texts().fmt_github_api_request_failed.replace("{}", &e.to_string())),
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_github_api_request_failed
+                        .replace("{}", &e.to_string()),
+                ),
             }
         }
     };
@@ -2830,7 +3155,12 @@ fn create_github_discussion(
         let text = response.text().unwrap_or_default();
         return GitHubDiscussionResult {
             url: None,
-            error: Some(crate::langs::global_texts().fmt_github_api_http_error.replace("{}", &status.as_u16().to_string()).replace("{}", &text.chars().take(200).collect::<String>())),
+            error: Some(
+                crate::langs::global_texts()
+                    .fmt_github_api_http_error
+                    .replace("{}", &status.as_u16().to_string())
+                    .replace("{}", &text.chars().take(200).collect::<String>()),
+            ),
         };
     }
 
@@ -2839,7 +3169,11 @@ fn create_github_discussion(
         Err(e) => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(crate::langs::global_texts().fmt_github_api_parse_failed.replace("{}", &e.to_string())),
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_github_api_parse_failed
+                        .replace("{}", &e.to_string()),
+                ),
             }
         }
     };
@@ -2854,19 +3188,24 @@ fn create_github_discussion(
             .unwrap_or(crate::langs::global_texts().unknown_graphql_error);
         return GitHubDiscussionResult {
             url: None,
-            error: Some(crate::langs::global_texts().fmt_github_graphql_error.replace("{}", msg)),
+            error: Some(
+                crate::langs::global_texts()
+                    .fmt_github_graphql_error
+                    .replace("{}", msg),
+            ),
         };
     }
 
-    let repository = match resp_json
-        .get("data")
-        .and_then(|d| d.get("repository"))
-    {
+    let repository = match resp_json.get("data").and_then(|d| d.get("repository")) {
         Some(r) => r,
         None => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(crate::langs::global_texts().github_repo_not_found.to_string()),
+                error: Some(
+                    crate::langs::global_texts()
+                        .github_repo_not_found
+                        .to_string(),
+                ),
             }
         }
     };
@@ -2876,7 +3215,11 @@ fn create_github_discussion(
         None => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(crate::langs::global_texts().github_repo_id_failed.to_string()),
+                error: Some(
+                    crate::langs::global_texts()
+                        .github_repo_id_failed
+                        .to_string(),
+                ),
             }
         }
     };
@@ -2890,7 +3233,9 @@ fn create_github_discussion(
             nodes.iter().find_map(|node| {
                 let slug = node.get("slug").and_then(|s| s.as_str()).unwrap_or("");
                 if slug == "show-and-tell" {
-                    node.get("id").and_then(|i| i.as_str()).map(|s| s.to_string())
+                    node.get("id")
+                        .and_then(|i| i.as_str())
+                        .map(|s| s.to_string())
                 } else {
                     None
                 }
@@ -2902,7 +3247,11 @@ fn create_github_discussion(
         None => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(crate::langs::global_texts().github_discussion_category_not_found.to_string()),
+                error: Some(
+                    crate::langs::global_texts()
+                        .github_discussion_category_not_found
+                        .to_string(),
+                ),
             }
         }
     };
@@ -2934,7 +3283,11 @@ fn create_github_discussion(
         Err(e) => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(crate::langs::global_texts().fmt_discussion_request_failed.replace("{}", &e.to_string())),
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_discussion_request_failed
+                        .replace("{}", &e.to_string()),
+                ),
             }
         }
     };
@@ -2944,7 +3297,12 @@ fn create_github_discussion(
         let text = response.text().unwrap_or_default();
         return GitHubDiscussionResult {
             url: None,
-            error: Some(crate::langs::global_texts().fmt_discussion_http_error.replace("{}", &status.as_u16().to_string()).replace("{}", &text.chars().take(200).collect::<String>())),
+            error: Some(
+                crate::langs::global_texts()
+                    .fmt_discussion_http_error
+                    .replace("{}", &status.as_u16().to_string())
+                    .replace("{}", &text.chars().take(200).collect::<String>()),
+            ),
         };
     }
 
@@ -2953,7 +3311,11 @@ fn create_github_discussion(
         Err(e) => {
             return GitHubDiscussionResult {
                 url: None,
-                error: Some(crate::langs::global_texts().fmt_discussion_parse_failed.replace("{}", &e.to_string())),
+                error: Some(
+                    crate::langs::global_texts()
+                        .fmt_discussion_parse_failed
+                        .replace("{}", &e.to_string()),
+                ),
             }
         }
     };
@@ -2968,7 +3330,11 @@ fn create_github_discussion(
             .unwrap_or(crate::langs::global_texts().unknown_graphql_error);
         return GitHubDiscussionResult {
             url: None,
-            error: Some(crate::langs::global_texts().fmt_discussion_graphql_error.replace("{}", msg)),
+            error: Some(
+                crate::langs::global_texts()
+                    .fmt_discussion_graphql_error
+                    .replace("{}", msg),
+            ),
         };
     }
 
@@ -2980,10 +3346,7 @@ fn create_github_discussion(
         .and_then(|u| u.as_str())
         .map(|s| s.to_string());
 
-    GitHubDiscussionResult {
-        url,
-        error: None,
-    }
+    GitHubDiscussionResult { url, error: None }
 }
 
 // ============================================================
@@ -3037,7 +3400,7 @@ fn search_juhe(query: &str, page: usize) -> SearchDownloadResult {
             return SearchDownloadResult {
                 query: query.to_string(),
                 songs: Vec::new(),
-            }
+            };
         }
     };
 
@@ -3149,7 +3512,10 @@ fn extract_juhe_url(value: &serde_json::Value) -> Option<String> {
 }
 
 /// 主域名下载接口：GET /v4/url/{platform}/{songId}/{quality}?key=xxx
-fn get_primary_juhe_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+fn get_primary_juhe_download_url(
+    client: &reqwest::blocking::Client,
+    song: &OnlineSong,
+) -> Option<String> {
     let platform = &song.juhe_platform;
     let song_id = &song.juhe_song_id;
     let qualities = ["128k", "320k", "192kmp3", "128kmp3", "flac"];
@@ -3168,7 +3534,10 @@ fn get_primary_juhe_download_url(client: &reqwest::blocking::Client, song: &Onli
             .send()
         {
             if let Ok(text) = response.text() {
-                log_file!("[JuheURL-main] 响应(前200): {}", preview_for_log(&text, 200));
+                log_file!(
+                    "[JuheURL-main] 响应(前200): {}",
+                    preview_for_log(&text, 200)
+                );
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                     if let Some(url) = extract_juhe_url(&value) {
                         return Some(url);
@@ -3210,7 +3579,10 @@ fn get_lerd_download_url(client: &reqwest::blocking::Client, song: &OnlineSong) 
             .send()
         {
             if let Ok(text) = response.text() {
-                log_file!("[JuheURL-lerd] 响应(post,前200): {}", preview_for_log(&text, 200));
+                log_file!(
+                    "[JuheURL-lerd] 响应(post,前200): {}",
+                    preview_for_log(&text, 200)
+                );
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                     if let Some(url) = extract_juhe_url(&value) {
                         return Some(url);
@@ -3231,7 +3603,10 @@ fn get_huibq_download_url(client: &reqwest::blocking::Client, song: &OnlineSong)
     let qualities = ["128k", "320k"];
 
     for quality in &qualities {
-        let url = format!("{}/url/{}/{}/{}", JUHE_HUIBQ_API_BASE, platform, song_id, quality);
+        let url = format!(
+            "{}/url/{}/{}/{}",
+            JUHE_HUIBQ_API_BASE, platform, song_id, quality
+        );
         log_file!("[JuheURL-huibq] 请求: {}", url);
 
         if let Ok(response) = client
@@ -3242,7 +3617,10 @@ fn get_huibq_download_url(client: &reqwest::blocking::Client, song: &OnlineSong)
             .send()
         {
             if let Ok(text) = response.text() {
-                log_file!("[JuheURL-lerd] 响应(post,前200): {}", preview_for_log(&text, 200));
+                log_file!(
+                    "[JuheURL-lerd] 响应(post,前200): {}",
+                    preview_for_log(&text, 200)
+                );
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                     if let Some(url) = extract_juhe_url(&value) {
                         return Some(url);
@@ -3275,13 +3653,29 @@ fn extract_juhe_lyric(value: &serde_json::Value) -> Option<String> {
     }
 
     let lyric_candidates = [
-        value.get("data").and_then(|d| d.get("lyric")).and_then(|l| l.as_str()),
-        value.get("data").and_then(|d| d.get("lrc")).and_then(|l| l.get("lyric")).and_then(|l| l.as_str()),
-        value.get("data").and_then(|d| d.get("lrc")).and_then(|l| l.as_str()),
+        value
+            .get("data")
+            .and_then(|d| d.get("lyric"))
+            .and_then(|l| l.as_str()),
+        value
+            .get("data")
+            .and_then(|d| d.get("lrc"))
+            .and_then(|l| l.get("lyric"))
+            .and_then(|l| l.as_str()),
+        value
+            .get("data")
+            .and_then(|d| d.get("lrc"))
+            .and_then(|l| l.as_str()),
         value.get("data").and_then(|d| d.as_str()),
         value.get("lyric").and_then(|l| l.as_str()),
-        value.get("data").and_then(|d| d.get("klyric")).and_then(|l| l.as_str()),
-        value.get("data").and_then(|d| d.get("krc")).and_then(|l| l.as_str()),
+        value
+            .get("data")
+            .and_then(|d| d.get("klyric"))
+            .and_then(|l| l.as_str()),
+        value
+            .get("data")
+            .and_then(|d| d.get("krc"))
+            .and_then(|l| l.as_str()),
     ];
 
     for lyric in lyric_candidates.iter().flatten() {
@@ -3294,7 +3688,10 @@ fn extract_juhe_lyric(value: &serde_json::Value) -> Option<String> {
 }
 
 /// 主域名歌词接口（独立方法）
-fn get_primary_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
+fn get_primary_juhe_lyrics(
+    client: &reqwest::blocking::Client,
+    song: &OnlineSong,
+) -> Option<String> {
     let url = format!(
         "{}{}/lyric/{}/{}?key={}",
         JUHE_API_BASE, JUHE_API_PREFIX, song.juhe_platform, song.juhe_song_id, JUHE_API_KEY
@@ -3308,7 +3705,10 @@ fn get_primary_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong
         .send()
     {
         if let Ok(text) = response.text() {
-            log_file!("[JuheLyric-main] 响应(前200): {}", preview_for_log(&text, 200));
+            log_file!(
+                "[JuheLyric-main] 响应(前200): {}",
+                preview_for_log(&text, 200)
+            );
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                 return extract_juhe_lyric(&value);
             }
@@ -3340,8 +3740,6 @@ fn get_huibq_lyrics(_client: &reqwest::blocking::Client, song: &OnlineSong) -> O
     None
 }
 
-
-
 /// 获取聚合搜索歌词（仅主域名；其余域名脚本未暴露歌词 action）
 fn get_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
     get_primary_juhe_lyrics(client, song)
@@ -3351,7 +3749,11 @@ fn get_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong) -> Opt
 
 /// 通过歌名和歌手名搜索并获取聚合歌词（用于本地歌曲回退歌词下载）
 /// 先搜索匹配歌曲，取第一个结果，再通过其 platform/song_id 获取歌词
-pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, music_path: std::path::PathBuf) -> mpsc::Receiver<JuheLyricsResult> {
+pub fn search_and_get_juhe_lyrics_background(
+    artist: String,
+    title: String,
+    music_path: std::path::PathBuf,
+) -> mpsc::Receiver<JuheLyricsResult> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let query = if artist.is_empty() {
@@ -3382,7 +3784,11 @@ pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, musi
                         juhe_song_id: String::new(),
                     },
                     lyrics: None,
-                    error: Some(crate::langs::global_texts().fmt_http_client_failed.replace("{}", &e.to_string())),
+                    error: Some(
+                        crate::langs::global_texts()
+                            .fmt_http_client_failed
+                            .replace("{}", &e.to_string()),
+                    ),
                 });
                 return;
             }
@@ -3481,5 +3887,3 @@ pub fn search_and_get_juhe_lyrics_background(artist: String, title: String, musi
     });
     rx
 }
-
-

@@ -146,6 +146,7 @@
 | `lyrics_alpha` | 桌面歌詞透明度（10-100） |
 | `lyrics_x` | 桌面歌詞視窗 X 座標 |
 | `lyrics_y` | 桌面歌詞視窗 Y 座標 |
+| `recommand` | 今日推薦歌曲開關（預設 `false`） |
 
 **自動儲存觸發條件**：切換曲目、切換主題、切換語言、變更收藏、每 30 秒、退出時（包括 Ctrl+C）
 
@@ -244,6 +245,7 @@ cargo run --release -- -o d:\Music
 | `k` | 設定 API 端點 |
 | `g` | 設定 GitHub Token |
 | `z` | 桌面歌詞開關 |
+| `r` | 推薦歌曲開關 |
 | `q` | 退出 |
 
 ### 搜尋檢視
@@ -565,14 +567,24 @@ registry = "https://mirrors.ustc.edu.cn/crates.io-index"
 src/
 ├── main.rs           # 程式入口（引數解析、初始化、設定恢復/儲存）
 ├── defs.rs           # 共用定義（PlayMode/PlayState 列舉、MusicFile/Playlist 結構體）
+├── langs.rs          # 語言包（11 種語言翻譯文本集中管理、全域語言存取器）
 ├── audio.rs          # 音訊控制（rodio 封裝、播放/暫停/跳轉/音量/進度）
 ├── analyzer.rs       # 音訊分析器（即時 RMS 音量、EMA 平滑、波形渲染）
 ├── playlist.rs       # 播放清單管理（目錄掃描、並行時長載入、資料夾選擇器）
-├── lyrics.rs         # 歌詞解析（LRC、本機搜尋、編碼偵測、背景下載）
+├── lyrics.rs         # 歌詞解析（LRC 格式、本機搜尋、編碼偵測、背景下載）
 ├── search.rs         # 線上搜尋/下載（酷我 + 酷狗 + 網易雲搜尋、下載、評論獲取、歌曲資訊串流查詢）
-├── desktop_lyrics.rs # 桌面歌詞模組（Windows API + Linux子程序、透明度/位置/拖曳/快捷鍵）
-├── config.rs         # 設定管理（JSON 序列化、持久化項目）
-└── ui.rs             # UI（終端機渲染、事件處理、多檢視模式、主題/語言系統）
+├── config.rs         # 設定管理（JSON 序列化、設定項目持久化）
+├── desktop_lyrics.rs # 桌面歌詞浮動窗（Windows API/Linux子程序、透明度/位置/拖曳/快捷鍵）
+├── ui.rs             # 用戶界面（Ratatui 框架、終端機渲染、事件處理、多檢視模式、主題/語言系統）
+└── ui/
+    ├── input.rs      # 輸入處理
+    ├── render.rs     # 渲染邏輯
+    ├── layout.rs     # 佈局管理
+    ├── theme.rs      # 主題系統
+    ├── mouse.rs      # 滑鼠互動
+    ├── terminal.rs   # 終端機管理
+    ├── format.rs     # 格式化工具
+    └── view_model.rs # 檢視模型
 ```
 
 ### 技術棧
@@ -695,13 +707,44 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次建置會下載並編譯所有依賴；這是正常現象。後續建置會快得多。
 
 ### 下載發行版
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605090949394710_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605090950148659_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605090950302081_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605090950383775_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 ## 📝 更新日誌
+
+## 版本 1.9.0 (2026-05-11)
+
+### 🎉 新功能
+
+#### Ratatui UI重構
+- ✨ **UI 框架升級**：將直接使用 crossterm 的 UI 程式碼重構為使用 Ratatui 框架，提供更高級的 TUI 抽象和更好的程式碼組織
+- ✨ **模組化重構**：將 `ui.rs` 拆分為多個子模組：`input.rs`（輸入處理）、`render.rs`（渲染邏輯）、`layout.rs`（佈局管理）、`theme.rs`（主題系統）、`mouse.rs`（滑鼠互動）、`terminal.rs`（終端機管理）、`format.rs`（格式化工具）、`view_model.rs`（檢視模型）
+- ✨ **程式碼結構優化**：UI 程式碼更加模組化、可維護性更好，各個功能職責分離清晰
+
+#### 今日推薦歌曲
+- ✨ **推薦歌曲開關**：按 `r` 鍵開啟/關閉今日推薦歌曲功能
+- ✨ **自動獲取推薦**：開啟後自動從網路獲取推薦歌曲列表，顯示在界面上方
+- ✨ **點擊下載播放**：點擊推薦歌曲名稱可直接下載並播放
+- ✨ **滑鼠滾輪滑動**：推薦歌曲名稱較長時，滑鼠滾輪可水平滑動查看全部歌曲名稱
+- ✨ **設定持久化**：推薦歌曲開關狀態自動儲存和恢復
+
+### 🔧 功能改進
+
+- 🎨 **UI 一致性提升**：Ratatui 提供統一的組件和樣式系統，確保界面元素的一致性和可擴展性
+
+### 💻 技術細節
+
+#### 依賴更新
+- ➕ 添加 `ratatui` 依賴（版本 0.29，啟用 crossterm 特性）
+- ♻️ 保留 `crossterm` 作為底層終端機控制庫
+
+#### 專案結構更新
+- ♻️ `ui/` 目錄：新增多個 UI 子模組，實現功能解耦和程式碼復用
+
+---
 
 ## 版本 1.8.0 (2026-05-08)
 
