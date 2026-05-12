@@ -235,6 +235,7 @@ cargo run --release -- -o d:\Music
 | `j` | Juhe-Songs suchen |
 | `p` | Online-Wiedergabelisten suchen |
 | `i` | Song-Info abfragen |
+| `a` | Song-Empfehlung |
 | `f` | Favorit hinzufügen/entfernen |
 | `v` | Favoriten anzeigen |
 | `m` | Verzeichnisverlauf anzeigen |
@@ -705,10 +706,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 Der erste Build lädt und kompiliert alle Abhängigkeiten herunter; dies ist erwartet. Spätere Builds sind deutlich schneller.
 
 ### Downloads
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
@@ -726,8 +727,11 @@ Der erste Build lädt und kompiliert alle Abhängigkeiten herunter; dies ist erw
 #### Empfohlene Songs des Tages
 - ✨ **Empfohlene Songs-Umschalter**: Drücken Sie `r`, um die Funktion für empfohlene Songs des Tages ein/auszuschalten
 - ✨ **Automatische Empfehlungsabruf**: Bei Aktivierung wird automatisch die Liste der empfohlenen Songs aus dem Netzwerk abgerufen und oben in der Benutzeroberfläche angezeigt
+- ✨ **Empfehlung in natürlicher Sprache**: Drücken Sie `a`, um das Eingabefeld für Empfehlungen zu öffnen. Sie können Anfragen wie „Lernen / Arbeit / Sport / Schlaflosigkeit / Songs für Regentage / chinesische Songs zum nächtlichen Programmieren“ eingeben und mit `Enter` Empfehlungen erzeugen oder die Preset-Chips anklicken, um schneller zu starten
+- ✨ **Tastatursteuerung für Empfehlungen**: Empfehlungen unterstützen `←/→` zum Wechseln des Eintrags und `Enter` zum direkten Herunterladen und Abspielen der aktuellen Empfehlung
 - ✨ **Klick zum Herunterladen und Abspielen**: Klicken Sie auf den Namen des empfohlenen Songs, um direkt herunterzuladen und abzuspielen
 - ✨ **Mausrad-Scrollen**: Wenn der Name des empfohlenen Songs lang ist, ermöglicht das Mausrad horizontales Scrollen, um den vollständigen Namen zu sehen
+- ✨ **Song-Kommentar-Zusammenfassung**: Auf der Song-Kommentarseite drücken Sie `c` noch einmal, damit die KI die Resonanzpunkte, die emotionale Atmosphäre, repräsentative Meinungen, Schlüsselwörter und Unterschiede der Hörer zusammenfasst und das Ergebnis im rechten Bereich anzeigt
 - ✨ **Einstellungs-Persistenz**: Der Zustand des Empfohlene Songs-Umschalters wird automatisch gespeichert und wiederhergestellt
 
 ### 🔧 Funktionsverbesserungen

@@ -238,6 +238,7 @@ cargo run --release -- -o d:\Music
 | `j` | 폴리머 검색 |
 | `p` | 온라인 플레이리스트 검색 |
 | `i` | 곡 정보 조회 |
+| `a` | 추천곡 |
 | `f` | 즐겨찾기/해제 |
 | `v` | 즐겨찾기 목록 |
 | `m` | 디렉터리 기록 |
@@ -708,10 +709,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
@@ -729,8 +730,11 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 #### 오늘의 추천 곡
 - ✨ **추천 곡 토글**: `r` 키로 오늘의 추천 곡 기능 켜기/끄기
 - ✨ **자동 추천 가져오기**: 켜면 네트워크에서 추천 곡 목록을 자동으로 가져와 인터페이스 상단에 표시
+- ✨ **자연어 추천**: `a`를 눌러 추천 입력창을 열고 “공부 / 업무 / 운동 / 불면 / 비 오는 날 듣기 좋은 노래 / 밤샘 코딩에 어울리는 중국어 노래” 같은 요청을 입력한 뒤 `Enter`로 추천을 생성하거나, 프리셋 칩을 눌러 빠르게 추천할 수 있습니다
+- ✨ **키보드 추천 제어**: 추천 결과는 `←/→`로 항목을 전환하고 `Enter`로 현재 추천을 바로 다운로드 및 재생할 수 있습니다
 - ✨ **클릭 다운로드 재생**: 추천 곡 이름을 클릭하면 직접 다운로드하고 재생
 - ✨ **마우스 휠 스크롤**: 추천 곡 이름이 길 때 마우스 휠로 가로 스크롤하여 전체 곡명 확인
+- ✨ **곡 댓글 요약**: 곡 댓글 페이지에서 `c`를 한 번 더 누르면 AI가 청취자 공감 포인트, 감정 분위기, 대표 의견, 키워드, 차이점을 요약하여 오른쪽 패널에 표시합니다
 - ✨ **설정 지속화**: 추천 곡 토글 상태가 자동 저장 및 복원
 
 ### 🔧 기능 개선

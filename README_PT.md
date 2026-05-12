@@ -235,6 +235,7 @@ cargo run --release -- -o d:\Music
 | `j` | Pesquisar músicas Juhe |
 | `p` | Pesquisar listas de reprodução online |
 | `i` | Consultar informações da música |
+| `a` | Recomendar músicas |
 | `f` | Favoritar/Desfavoritar |
 | `v` | Visualizar favoritos |
 | `m` | Visualizar histórico de diretórios |
@@ -705,10 +706,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 A primeira compilação baixa e compila todas as dependências; isso é esperado. Compilações subsequentes são muito mais rápidas.
 
 ### Baixar releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
@@ -726,8 +727,11 @@ A primeira compilação baixa e compila todas as dependências; isso é esperado
 #### Músicas recomendadas do dia
 - ✨ **Alternador de músicas recomendadas**: Pressione `r` para ativar/desativar a função de músicas recomendadas do dia
 - ✨ **Recuperação automática de recomendações**: Quando ativado, recupera automaticamente a lista de músicas recomendadas da rede e a mostra na parte superior da interface
+- ✨ **Recomendação em linguagem natural**: Pressione `a` para abrir a caixa de entrada de recomendações. Você pode inserir pedidos como “estudo / trabalho / exercício / insônia / músicas para dias chuvosos / músicas chinesas para programar até tarde” e pressionar `Enter` para gerar recomendações, ou clicar nos presets para iniciar rapidamente
+- ✨ **Controle por teclado das recomendações**: os resultados das recomendações suportam `←/→` para trocar de item e `Enter` para baixar e reproduzir diretamente a música atual
 - ✨ **Clique para baixar e reproduzir**: Clique no nome da música recomendada para baixar diretamente e reproduzir
 - ✨ **Rolagem com roda do mouse**: Se o nome da música recomendada for longo, a roda do mouse permite rolagem horizontal para ver o nome completo
+- ✨ **Resumo dos comentários da música**: Na página de comentários da música, pressione `c` novamente para que a IA resuma os pontos de identificação dos ouvintes, o clima emocional, as opiniões representativas, as palavras-chave e as divergências, e exiba o resultado no painel direito
 - ✨ **Persistência de configurações**: O estado do alternador de músicas recomendadas é salvo e restaurado automaticamente
 
 ### 🔧 Melhorias funcionais

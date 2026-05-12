@@ -106,7 +106,7 @@
 |------|------|
 | Neon | 霓虹灯色调 |
 | Sunset | 落日金色调 |
-| Ocean | 深海蓝色调 |
+| Ocean | 深海蓝色调 | 
 | GrayWhite | 控制台色调 |
 
 ### 🖱️ 鼠标交互
@@ -234,6 +234,7 @@ cargo run --release -- -o d:\Music
 | `j` | 搜索聚合歌曲 |
 | `p` | 搜索在线歌单 |
 | `i` | 查看歌曲信息 |
+| `a` | 推荐歌曲点歌 |
 | `f` | 收藏/取消收藏 |
 | `v` | 查看收藏列表 |
 | `m` | 查看目录历史 |
@@ -703,10 +704,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
@@ -724,8 +725,11 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 #### 今日推荐歌曲
 - ✨ **推荐歌曲开关**：按 `r` 键开启/关闭今日推荐歌曲功能
 - ✨ **自动获取推荐**：开启后自动从网络获取推荐歌曲列表，显示在界面上方
-- ✨ **点击下载播放**：点击推荐歌曲名称可直接下载并播放
-- ✨ **鼠标滚轮滑动**：推荐歌曲名称较长时，鼠标滚轮可水平滑动查看全部歌曲名称
+- ✨ **自然语言推荐**：按 `a` 打开推荐歌曲输入框，可输入“学习 / 工作 / 运动 / 失眠 / 适合下雨天听的歌 / 适合深夜写代码的中文歌”等需求并按 `Enter` 生成推荐，也可直接点击预设词条快速推荐
+- ✨ **键盘选择推荐**：今日推荐歌曲支持 `←/→` 切换推荐项，`Enter` 直接下载并播放当前推荐歌曲
+- ✨ **点击直接播放**：鼠标左键点击推荐歌曲名可直接下载并播放，效果与 `Enter` 一致
+- ✨ **鼠标滚轮滑动**：推荐歌曲名较长时，鼠标滚轮可水平滚动查看完整名称
+- ✨ **歌曲评论总结**：在歌曲评论页再次按 `c`，可调用 AI 总结听众共鸣点、情绪氛围、代表观点、关键词与分歧，并在右侧面板直接显示
 - ✨ **配置持久化**：推荐歌曲开关状态自动保存和恢复
 
 ### 🔧 功能改进

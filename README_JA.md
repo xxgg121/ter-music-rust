@@ -235,6 +235,7 @@ cargo run --release -- -o d:\Music
 | `j` | アグリゲート検索 |
 | `p` | オンラインプレイリスト検索 |
 | `i` | 楽曲情報検索 |
+| `a` | おすすめ曲 |
 | `f` | お気に入り/解除 |
 | `v` | お気に入り一覧 |
 | `m` | ディレクトリ履歴 |
@@ -705,10 +706,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 初回は依存関係のダウンロードとコンパイルが発生するため時間がかかります。2 回目以降は大幅に高速化されます。
 
 ### Release のダウンロード
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
@@ -726,8 +727,11 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 #### 今日のおすすめ曲
 - ✨ **おすすめ曲の切替**: `r` キーで今日のおすすめ曲機能をオン/オフ
 - ✨ **自動おすすめ取得**: オンにするとネットワークからおすすめ曲リストを自動取得し、インターフェースの上部に表示
+- ✨ **自然言語おすすめ**: `a` を押しておすすめ入力欄を開き、「勉強 / 仕事 / 運動 / 不眠 / 雨の日に合う曲 / 深夜コーディング向け中国語曲」などを入力して `Enter` で推薦生成、またはプリセットをクリックして素早く推薦できます
+- ✨ **キーボード操作**: おすすめ結果は `←/→` で選択切替、`Enter` で現在のおすすめを直接ダウンロードして再生できます
 - ✨ **クリックダウンロード再生**: おすすめ曲名をクリックすると直接ダウンロードして再生
 - ✨ **マウスホイールスクロール**: おすすめ曲名が長い場合、マウスホイールで水平スクロールして曲名全体を確認
+- ✨ **楽曲コメント要約**: 曲コメント画面で `c` をもう一度押すと、AI がリスナーの共感ポイント、感情の雰囲気、代表的な意見、キーワード、相違点を要約し、右側パネルに表示します
 - ✨ **設定の永続化**: おすすめ曲切替状態が自動保存および復元
 
 ### 🔧 機能改善

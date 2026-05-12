@@ -235,6 +235,7 @@ cargo run --release -- -o d:\Music
 | `j` | Cerca brani Juhe |
 | `p` | Cerca playlist online |
 | `i` | Interroga informazioni brano |
+| `a` | Consiglia brani |
 | `f` | Aggiungi/Rimuovi preferito |
 | `v` | Visualizza preferiti |
 | `m` | Visualizza cronologia directory |
@@ -706,10 +707,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La prima compilazione scarica e compila tutte le dipendenze; questo è normale. Le compilazioni successive sono molto più veloci.
 
 ### Scarica Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
@@ -727,8 +728,11 @@ La prima compilazione scarica e compila tutte le dipendenze; questo è normale. 
 #### Canzoni raccomandate del giorno
 - ✨ **Attivatore canzoni raccomandate**: Premi `r` per attivare/disattivare la funzione di canzoni raccomandate del giorno
 - ✨ **Recupero automatico raccomandazioni**: Quando attivato, recupera automaticamente la lista di canzoni raccomandate dalla rete e la mostra nella parte superiore dell'interfaccia
+- ✨ **Raccomandazione in linguaggio naturale**: Premi `a` per aprire la casella di input delle raccomandazioni. Puoi inserire richieste come “studio / lavoro / sport / insonnia / canzoni per i giorni di pioggia / canzoni cinesi per programmare fino a tardi” e premere `Enter` per generare raccomandazioni, oppure fare clic sui preset per avviare rapidamente
+- ✨ **Controllo da tastiera delle raccomandazioni**: i risultati delle raccomandazioni supportano `←/→` per cambiare elemento e `Enter` per scaricare e riprodurre direttamente il brano corrente
 - ✨ **Clic per scaricare e riprodurre**: Clicca sul nome della canzone raccomandata per scaricare direttamente e riprodurre
 - ✨ **Scorrimento rotella mouse**: Se il nome della canzone raccomandata è lungo, la rotella del mouse permette scorrimento orizzontale per vedere il nome completo
+- ✨ **Riepilogo commenti del brano**: Nella pagina dei commenti del brano, premi di nuovo `c` per far riassumere all'IA i punti di risonanza degli ascoltatori, l'atmosfera emotiva, le opinioni rappresentative, le parole chiave e le divergenze, e mostrare il risultato nel pannello destro
 - ✨ **Persistenza impostazioni**: Lo stato dell'attivatore di canzoni raccomandate viene salvato e ripristinato automaticamente
 
 ### 🔧 Miglioramenti funzionali

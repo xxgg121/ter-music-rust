@@ -235,6 +235,7 @@ cargo run --release -- -o d:\Music
 | `j` | Search Juhe songs |
 | `p` | Search online playlists |
 | `i` | song info query |
+| `a` | Recommend songs |
 | `f` | Favorite/Unfavorite |
 | `v` | View favorites |
 | `m` | View directory history |
@@ -705,12 +706,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
-
----
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
@@ -728,8 +727,11 @@ The first build downloads and compiles all dependencies; this is expected. Later
 #### Today's Recommended Songs
 - ✨ **Recommended Songs Toggle**: Press `r` to enable/disable today's recommended songs feature
 - ✨ **Auto Fetch Recommendations**: When enabled, automatically fetch recommended song list from network, display at the top of interface
+- ✨ **Natural Language Recommendation**: Press `a` to open the recommendation input box. You can type requests like “study / work / workout / insomnia / songs for rainy days / Chinese songs for late-night coding” and press `Enter` to generate recommendations, or click the preset chips to generate them quickly
+- ✨ **Keyboard Recommendation Control**: Recommended songs support `←/→` to switch items and `Enter` to directly download and play the current recommendation
 - ✨ **Click to Download Play**: Click recommended song name to directly download and play
 - ✨ **Mouse Wheel Scroll**: When recommended song name is long, mouse wheel can scroll horizontally to view full name
+- ✨ **Song Comment Summary**: In the song comments page, press `c` again to let AI summarize listener resonance points, emotional atmosphere, representative views, keywords, and disagreements, and display the result in the right panel
 - ✨ **Config Persistence**: Recommended songs toggle state is auto-saved and restored
 
 ### 🔧 Improvements

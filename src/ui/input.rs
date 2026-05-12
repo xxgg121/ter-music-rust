@@ -110,6 +110,31 @@ impl super::UserInterface {
         true
     }
 
+    pub(super) fn handle_ai_recommend_input(&mut self, code: KeyCode) -> bool {
+        if !self.ai_recommend_input_mode {
+            return false;
+        }
+
+        match code {
+            KeyCode::Esc => {
+                self.ai_recommend_input_mode = false;
+                self.ai_recommend_input_value.clear();
+            }
+            KeyCode::Enter => {
+                self.start_ai_recommend_query();
+            }
+            KeyCode::Backspace => {
+                self.ai_recommend_input_value.pop();
+            }
+            KeyCode::Char(c) => {
+                self.ai_recommend_input_value.push(c);
+            }
+            _ => {}
+        }
+
+        true
+    }
+
     pub(super) fn handle_search_input(&mut self, code: KeyCode) -> bool {
         if !self.search_mode {
             return false;
@@ -127,6 +152,10 @@ impl super::UserInterface {
                     self.comments_mode = false;
                     self.comments_detail_mode = false;
                 } else if self.song_info_mode {
+                    if self.song_info_kind == super::SongInfoKind::CommentSummary {
+                        self.comments_mode = true;
+                        self.comments_detail_mode = false;
+                    }
                     self.song_info_mode = false;
                 } else if self.help_mode {
                     self.help_mode = false;

@@ -15,7 +15,7 @@ mod theme;
 mod ui_format;
 mod view_model;
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -72,12 +72,37 @@ struct PlayHistoryRecord {
 #[derive(Debug, Clone)]
 struct RecommendationItem {
     name: String,
+    search_query: String,
+    start_col: usize,
+    end_col: usize,
+}
+
+#[derive(Debug, Clone)]
+struct AiRecommendPresetItem {
+    query: String,
     start_col: usize,
     end_col: usize,
 }
 
 const DEFAULT_GITHUB_TOKEN: &str =
     "github_xxxxxx";
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct AiRecommendCacheKey {
+    language: UiLanguage,
+    query: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MainFocus {
+    Playlist,
+    Recommendation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SongInfoKind {
+    SongInfo,
+    CommentSummary,
+}
 
 /// 用户界面
 pub struct UserInterface {
@@ -169,6 +194,8 @@ pub struct UserInterface {
     song_info_scroll_offset: usize,
     /// 是否正在查询 AI 歌曲信息
     song_info_loading: bool,
+    /// 右侧 AI 信息面板类型
+    song_info_kind: SongInfoKind,
     /// AI 歌曲信息对应的歌曲名称（用于 GitHub Discussion 标题）
     song_info_name: String,
     /// GitHub Discussion 创建结果接收器
@@ -294,6 +321,10 @@ pub struct UserInterface {
     recommendations: Vec<String>,
     /// 推荐歌曲点击区域
     recommendation_items: Vec<RecommendationItem>,
+    /// 推荐歌曲当前选中项
+    recommendation_selected_index: Option<usize>,
+    /// 普通播放界面的焦点
+    main_focus: MainFocus,
     /// 推荐歌曲生成中
     recommendations_loading: bool,
     /// 推荐歌曲流式返回临时内容
@@ -310,6 +341,16 @@ pub struct UserInterface {
     recommendation_downloading_name: Option<String>,
     /// 推荐歌曲水平滚动偏移
     recommendation_scroll_offset: usize,
+    /// 是否处于 AI 自然语言推荐输入模式
+    ai_recommend_input_mode: bool,
+    /// AI 自然语言推荐输入内容
+    ai_recommend_input_value: String,
+    /// AI 自然语言推荐当前请求需求
+    ai_recommend_current_query: Option<String>,
+    /// AI 自然语言推荐预设点击区域
+    ai_recommend_preset_items: Vec<AiRecommendPresetItem>,
+    /// AI 自然语言推荐缓存
+    ai_recommend_cache: HashMap<AiRecommendCacheKey, Vec<String>>,
 }
 
 impl UserInterface {
@@ -360,6 +401,7 @@ impl UserInterface {
             song_info_rx: None,
             song_info_scroll_offset: 0,
             song_info_loading: false,
+            song_info_kind: SongInfoKind::SongInfo,
             song_info_name: String::new(),
             github_discussion_rx: None,
             github_discussion_status: String::new(),
@@ -424,6 +466,8 @@ impl UserInterface {
             recommand: false,
             recommendations: Vec::new(),
             recommendation_items: Vec::new(),
+            recommendation_selected_index: None,
+            main_focus: MainFocus::Playlist,
             recommendations_loading: false,
             recommendations_content: String::new(),
             recommendations_rx: None,
@@ -432,6 +476,11 @@ impl UserInterface {
             recommendation_download_percent: 0,
             recommendation_downloading_name: None,
             recommendation_scroll_offset: 0,
+            ai_recommend_input_mode: false,
+            ai_recommend_input_value: String::new(),
+            ai_recommend_current_query: None,
+            ai_recommend_preset_items: Vec::new(),
+            ai_recommend_cache: HashMap::new(),
         }
     }
 
@@ -681,6 +730,7 @@ impl UserInterface {
         self.recommendations_content.clear();
         self.recommendations_loading = true;
         self.recommendations_rx = Some(crate::search::fetch_song_info_streaming(prompt, config));
+        self.main_focus = MainFocus::Recommendation;
     }
 
     fn parse_recommendations(text: &str) -> Vec<String> {
@@ -689,7 +739,7 @@ impl UserInterface {
             let name = line
                 .trim()
                 .trim_start_matches(|ch: char| {
-                    ch.is_ascii_digit() || ch == '.' || ch == '-' || ch == '、'
+                    ch.is_ascii_digit() || ch == '.' || ch == '-' || ch == '、' || ch == '•' || ch == '*'
                 })
                 .trim()
                 .trim_matches('"')
@@ -704,6 +754,23 @@ impl UserInterface {
             }
         }
         out
+    }
+
+    fn recommendation_search_query(text: &str) -> String {
+        let cleaned = Self::sanitize_single_line_text(text).trim().to_string();
+        let separators = [" - ", " — ", " – ", " | ", " ｜ ", " / ", "：", ":"];
+
+        for separator in separators {
+            if let Some(index) = cleaned.find(separator) {
+                let title = cleaned[..index].trim();
+                let artist = cleaned[index + separator.len()..].trim();
+                if !title.is_empty() && !artist.is_empty() {
+                    return format!("{} {}", title, artist);
+                }
+            }
+        }
+
+        cleaned
     }
 
     fn check_recommendation_result(&mut self) {
@@ -722,6 +789,20 @@ impl UserInterface {
                             self.recommendations_rx = None;
                             self.recommendations =
                                 Self::parse_recommendations(&self.recommendations_content);
+                            self.recommendation_selected_index = None;
+                            self.main_focus = MainFocus::Recommendation;
+                            if !self.recommendations_content.trim().is_empty() {
+                                let key = AiRecommendCacheKey {
+                                    language: self.language,
+                                    query: self
+                                        .ai_recommend_current_query
+                                        .clone()
+                                        .unwrap_or_default(),
+                                };
+                                self.ai_recommend_cache
+                                    .insert(key, self.recommendations.clone());
+                            }
+                            self.ai_recommend_current_query = None;
                             break;
                         }
                     }
@@ -752,12 +833,152 @@ impl UserInterface {
         }
     }
 
-    fn start_recommendation_download(&mut self, name: &str) {
+    fn start_recommendation_download(&mut self, display_name: &str, search_query: &str) {
         self.recommendation_downloading = true;
         self.recommendation_download_percent = 0;
-        self.recommendation_downloading_name = Some(name.to_string());
-        self.recommendation_search_rx =
-            Some(crate::search::search_juhe_background(name.to_string(), 1));
+        self.recommendation_downloading_name = Some(display_name.to_string());
+        self.recommendation_search_rx = Some(crate::search::search_juhe_background(
+            search_query.to_string(),
+            1,
+        ));
+    }
+
+    fn has_selectable_recommendations(&self) -> bool {
+        self.recommand && !self.recommendations_loading && !self.recommendations.is_empty()
+    }
+
+    fn move_recommendation_selection(&mut self, delta: isize) {
+        if !self.has_selectable_recommendations() {
+            return;
+        }
+        self.main_focus = MainFocus::Recommendation;
+        let len = self.recommendations.len();
+        let Some(current) = self.recommendation_selected_index else {
+            self.recommendation_selected_index = Some(0);
+            self.ensure_selected_recommendation_visible();
+            return;
+        };
+        if delta < 0 {
+            self.recommendation_selected_index = Some(
+                current
+                    .saturating_sub(delta.unsigned_abs())
+                    .min(len.saturating_sub(1)),
+            );
+        } else {
+            self.recommendation_selected_index = Some(
+                (current + delta as usize).min(len.saturating_sub(1)),
+            );
+        }
+        self.ensure_selected_recommendation_visible();
+    }
+
+    fn ensure_selected_recommendation_visible(&mut self) {
+        if !self.has_selectable_recommendations() {
+            return;
+        }
+        let Some(selected_index) = self.recommendation_selected_index else {
+            self.recommendation_scroll_offset = 0;
+            return;
+        };
+
+        if selected_index == 0 {
+            self.recommendation_scroll_offset = 0;
+            return;
+        }
+
+        if let Some(item) = self.recommendation_items.get(selected_index) {
+            let visible_width = self.terminal_width.saturating_sub(2) as usize;
+            if item.start_col <= visible_width / 2 {
+                self.recommendation_scroll_offset = 0;
+                return;
+            }
+            if item.start_col < self.recommendation_scroll_offset {
+                self.recommendation_scroll_offset = item.start_col.saturating_sub(1);
+            } else if item.end_col > self.recommendation_scroll_offset + visible_width {
+                self.recommendation_scroll_offset = item
+                    .end_col
+                    .saturating_sub(visible_width)
+                    .saturating_sub(1);
+            }
+        }
+    }
+
+    fn activate_selected_recommendation(&mut self) {
+        if !self.has_selectable_recommendations() {
+            return;
+        }
+        if self.recommendation_selected_index.is_none() {
+            self.recommendation_selected_index = Some(0);
+        };
+        let Some(selected_index) = self.recommendation_selected_index else {
+            return;
+        };
+        let selected = self.recommendations.get(selected_index).cloned();
+        if let Some(display_name) = selected {
+            let search_query = Self::recommendation_search_query(&display_name);
+            if !self.recommendation_downloading
+                || self.recommendation_downloading_name.as_ref() != Some(&display_name)
+            {
+                self.start_recommendation_download(&display_name, &search_query);
+            }
+        }
+    }
+
+    fn open_ai_recommend_input_mode(&mut self) {
+        self.recommand = true;
+        self.ai_recommend_input_mode = true;
+        self.ai_recommend_input_value.clear();
+        self.ai_recommend_current_query = None;
+        self.cached_lyrics_title = None;
+    }
+
+    fn start_ai_recommend_query_with(&mut self, query: String) {
+        let query = query.trim().to_string();
+        if query.is_empty() {
+            return;
+        }
+        let cache_key = AiRecommendCacheKey {
+            language: self.language,
+            query: query.clone(),
+        };
+        if let Some(cached) = self.ai_recommend_cache.get(&cache_key).cloned() {
+            self.recommand = true;
+            self.recommendations = cached;
+            self.recommendation_items.clear();
+            self.recommendation_selected_index = None;
+            self.recommendations_content.clear();
+            self.recommendations_loading = false;
+            self.recommendation_scroll_offset = 0;
+            self.ai_recommend_input_mode = false;
+            self.ai_recommend_input_value.clear();
+            self.ai_recommend_current_query = None;
+            self.main_focus = MainFocus::Recommendation;
+            return;
+        }
+        let prompt = self.t().ai_recommend_prompt_template.replace("{}", &query);
+        let config = crate::search::AiQueryConfig {
+            api_base_url: self.api_base_url.clone(),
+            api_key: self.resolved_api_key().unwrap_or_default(),
+            api_model: self.api_model.clone(),
+        };
+        self.recommand = true;
+        self.recommendations.clear();
+        self.recommendation_items.clear();
+        self.recommendation_selected_index = None;
+        self.recommendations_content.clear();
+        self.recommendations_loading = true;
+        self.recommendation_scroll_offset = 0;
+        self.ai_recommend_current_query = Some(query.clone());
+        self.recommendations_rx = Some(crate::search::fetch_song_info_streaming(prompt, config));
+        self.ai_recommend_input_mode = false;
+        self.ai_recommend_input_value.clear();
+        self.main_focus = MainFocus::Recommendation;
+        self.save_config_now();
+    }
+
+    fn start_ai_recommend_query(&mut self) {
+        let query = self.ai_recommend_input_value.clone();
+        self.start_ai_recommend_query_with(query);
     }
 
     fn song_info_lines(&self, width: u16) -> Vec<String> {
@@ -887,6 +1108,7 @@ impl UserInterface {
         self.comments_detail_mode = false;
         self.help_mode = false;
         self.song_info_mode = true;
+        self.song_info_kind = SongInfoKind::SongInfo;
         self.song_info_scroll_offset = 0;
 
         let current_file = {
@@ -910,6 +1132,66 @@ impl UserInterface {
         } else {
             self.song_info_content = self.t().please_select_song_query.to_string();
         }
+    }
+
+    fn build_comment_summary_prompt(&self, song_name: &str) -> String {
+        let mut comments = String::new();
+        for (idx, comment) in self.current_comments.iter().take(30).enumerate() {
+            comments.push_str(&format!(
+                "{}. {}: {}\n",
+                idx + 1,
+                Self::sanitize_single_line_text(&comment.nickname),
+                Self::sanitize_single_line_text(&comment.content)
+            ));
+            if let Some(reply) = &comment.reply {
+                comments.push_str(&format!(
+                    "   回复 {}: {}\n",
+                    Self::sanitize_single_line_text(&reply.nickname),
+                    Self::sanitize_single_line_text(&reply.content)
+                ));
+            }
+        }
+
+        self.t()
+            .comment_summary_prompt_template
+            .replacen("{}", song_name.trim(), 1)
+            .replacen("{}", comments.trim(), 1)
+    }
+
+    fn start_comment_summary_mode(&mut self) {
+        if !self.comments_mode {
+            return;
+        }
+
+        self.song_info_mode = true;
+        self.comments_mode = false;
+        self.comments_detail_mode = false;
+        self.help_mode = false;
+        self.song_info_kind = SongInfoKind::CommentSummary;
+        self.song_info_scroll_offset = 0;
+        self.song_info_rx = None;
+        self.song_info_loading = false;
+        self.song_info_content.clear();
+        self.song_info_name = self.comments_song_name.trim().to_string();
+        self.song_info_file_path = self.comments_file_path.clone();
+        self.github_discussion_rx = None;
+        self.github_discussion_status.clear();
+        self.github_discussion_loading = false;
+        self.song_info_force_scroll = false;
+
+        if self.current_comments.is_empty() {
+            self.song_info_content = self.t().no_comments.to_string();
+            return;
+        }
+
+        let prompt = self.build_comment_summary_prompt(&self.comments_song_name);
+        let config = crate::search::AiQueryConfig {
+            api_base_url: self.api_base_url.clone(),
+            api_key: self.resolved_api_key().unwrap_or_default(),
+            api_model: self.api_model.clone(),
+        };
+        self.song_info_loading = true;
+        self.song_info_rx = Some(crate::search::fetch_song_info_streaming(prompt, config));
     }
 
     fn now_playing_prefix(&self) -> &'static str {
@@ -969,7 +1251,9 @@ impl UserInterface {
 
     /// 获取快捷键提示文本（根据当前模式和终端宽度动态选择）
     fn get_help_tip_text(&self) -> String {
-        if self.search_mode {
+        if self.ai_recommend_input_mode {
+            self.t().ai_recommend_input_hint.to_string()
+        } else if self.search_mode {
             if self.online_search_mode {
                 let search_label = if self.playlist_search_mode {
                     self.t().search_playlist.to_string()
@@ -1272,7 +1556,9 @@ impl UserInterface {
                             self.song_info_rx = None;
                             self.song_info_force_scroll = true;
                             // 流式输出完成后，自动创建 GitHub Discussion
-                            self.start_github_discussion_for_song_info();
+                            if self.song_info_kind == SongInfoKind::SongInfo {
+                                self.start_github_discussion_for_song_info();
+                            }
                             break;
                         }
                     }
@@ -1385,6 +1671,7 @@ impl UserInterface {
 
     fn render_header(&mut self, frame: &mut Frame<'_>, area: Rect) {
         self.recommendation_items.clear();
+        self.ai_recommend_preset_items.clear();
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(self.tui_style(self.theme_colors.header_title))
@@ -1396,7 +1683,35 @@ impl UserInterface {
             .title_alignment(Alignment::Center);
         frame.render_widget(block, area);
 
-        if self.recommand {
+        if self.ai_recommend_input_mode {
+            let prompt = self.t().recommendation_title.trim_end_matches(':').trim_end_matches("：");
+            let input_line = format!("{}> {}", prompt, self.ai_recommend_input_value);
+            let input_style = self.tui_style(self.theme_colors.song_playing)
+                .add_modifier(Modifier::BOLD);
+            let max_width = area.width.saturating_sub(2) as usize;
+            let mut text = input_line;
+            if self.ai_recommend_input_value.is_empty() {
+                let mut col = area.x as usize + 1 + term_display_width(&text);
+                for preset in self.t().ai_recommend_presets {
+                    let chip = format!(" [{}]", preset);
+                    let chip_width = term_display_width(&chip);
+                    let start_col = col + 2;
+                    let end_col = start_col + term_display_width(preset);
+                    text.push_str(&chip);
+                    self.ai_recommend_preset_items.push(AiRecommendPresetItem {
+                        query: (*preset).to_string(),
+                        start_col,
+                        end_col,
+                    });
+                    col += chip_width;
+                }
+            }
+            let line = slice_at_display_offset(&text, 0, max_width);
+            frame.render_widget(
+                Paragraph::new(line).style(input_style),
+                Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), 1),
+            );
+        } else if self.recommand {
             let mut text = if self.recommendations_loading {
                 format!(
                     "{}{}",
@@ -1412,40 +1727,72 @@ impl UserInterface {
             } else {
                 self.t().recommendation_title.to_string()
             };
+            if let Some(selected_index) = self.recommendation_selected_index {
+                if selected_index >= self.recommendations.len() {
+                    self.recommendation_selected_index = None;
+                }
+            }
+            let mut spans = Vec::new();
+            spans.push(Span::styled(
+                text.clone(),
+                self.tui_style(self.theme_colors.info_text),
+            ));
             let mut col = area.x as usize + 1 + term_display_width(&text);
-            for name in &self.recommendations {
+            for (idx, name) in self.recommendations.iter().enumerate() {
                 if !text.ends_with('：') {
-                    text.push('、');
+                    text.push(' ');
+                    spans.push(Span::raw(" "));
+                    col += 1;
+                }
+                let selected = self.recommendation_selected_index == Some(idx);
+                let display_name = if selected {
+                    format!("[{}]", name)
+                } else {
+                    name.clone()
+                };
+                if selected {
+                    text.push('[');
                     col += 1;
                 }
                 let start_col = col;
                 text.push_str(name);
-                col += term_display_width(name);
+                let name_end_col = col + term_display_width(name);
+                col = name_end_col;
+                if selected {
+                    text.push(']');
+                    col += 1;
+                }
+                let mut span_style = self.tui_style(self.theme_colors.info_text);
+                if selected {
+                    span_style = self
+                        .tui_style(self.theme_colors.song_playing)
+                        .add_modifier(Modifier::BOLD);
+                }
+                spans.push(Span::styled(display_name, span_style));
                 if self.recommendation_downloading
                     && self.recommendation_downloading_name.as_ref() == Some(name)
                 {
                     let progress_text = format!(" [{}%]", self.recommendation_download_percent);
                     text.push_str(&progress_text);
+                    spans.push(Span::styled(
+                        progress_text.clone(),
+                        self.tui_style(self.theme_colors.info_text),
+                    ));
                     col += term_display_width(&progress_text);
                 }
                 self.recommendation_items.push(RecommendationItem {
                     name: name.clone(),
+                    search_query: Self::recommendation_search_query(name),
                     start_col,
-                    end_col: col,
+                    end_col: name_end_col,
                 });
             }
             let max_width = area.width.saturating_sub(2) as usize;
             let full_width = term_display_width(&text);
             let max_offset = full_width.saturating_sub(max_width);
             self.recommendation_scroll_offset = self.recommendation_scroll_offset.min(max_offset);
-            let scroll = self.recommendation_scroll_offset;
-            for item in &mut self.recommendation_items {
-                item.start_col = item.start_col.saturating_sub(scroll);
-                item.end_col = item.end_col.saturating_sub(scroll);
-            }
-            let line = slice_at_display_offset(&text, scroll, max_width);
             frame.render_widget(
-                Paragraph::new(line).style(self.tui_style(self.theme_colors.info_text)),
+                Paragraph::new(Line::from(spans)).scroll((0, self.recommendation_scroll_offset as u16)),
                 Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), 1),
             );
         }
@@ -1538,7 +1885,7 @@ impl UserInterface {
                 let star = if favorite { "*" } else { " " };
                 PlaylistRowView {
                     text: format!(
-                        "{}{} {:02}. {}  [{}]",
+                        "{}{} {:02}. {} [{}]",
                         prefix,
                         star,
                         idx + 1,
@@ -1740,7 +2087,7 @@ impl UserInterface {
                             .unwrap_or_else(|| "--".to_string());
                         let plays = self.format_playlist_play_count(playlist.play_count);
                         let text = format!(
-                            "{} {}  [🎵 {} 🎧 {}]",
+                            "{} {} [🎵{} 🎧{}]",
                             if selected { ">" } else { " " },
                             playlist.name,
                             count,
@@ -1770,7 +2117,7 @@ impl UserInterface {
                         let download = if self.online_downloading
                             && self.online_downloading_index == Some(idx)
                         {
-                            format!("  [{}%]", self.online_download_percent)
+                            format!(" [{}%]", self.online_download_percent)
                         } else {
                             String::new()
                         };
@@ -1956,7 +2303,11 @@ impl UserInterface {
             .take(visible_count)
             .collect();
         TextPanelView {
-            title: self.t().song_info_label.to_string(),
+            title: match self.song_info_kind {
+                SongInfoKind::SongInfo => self.t().song_info_label,
+                SongInfoKind::CommentSummary => self.t().comment_summary_label,
+            }
+            .to_string(),
             lines: wrapped,
         }
     }
@@ -2302,7 +2653,11 @@ impl UserInterface {
     }
 
     fn render_cursor(&self, frame: &mut Frame<'_>, left: Rect, right: Rect) {
-        if self.api_key_input_mode {
+        if self.ai_recommend_input_mode {
+            let header_x = 1 + term_display_width(self.t().recommendation_title) as u16 + term_display_width(&self.ai_recommend_input_value) as u16;
+            let x = header_x.min(self.terminal_width.saturating_sub(2));
+            frame.set_cursor_position((x, 1));
+        } else if self.api_key_input_mode {
             let prompt = match self.api_input_step {
                 0 => self.t().input_api_url,
                 1 => self.t().input_api_key,
@@ -2463,6 +2818,10 @@ impl UserInterface {
             return Ok(());
         }
 
+        if self.handle_ai_recommend_input(code) {
+            return Ok(());
+        }
+
         // 音乐目录模式下的键盘处理
         if self.dir_history_mode {
             match code {
@@ -2597,6 +2956,7 @@ impl UserInterface {
                         visible_count.max(1),
                     );
                 } else {
+                    self.main_focus = MainFocus::Playlist;
                     // 上移选择
                     let playlist = self.playlist.lock().unwrap();
                     if self.selected_index > 0 {
@@ -2639,6 +2999,7 @@ impl UserInterface {
                         );
                     }
                 } else {
+                    self.main_focus = MainFocus::Playlist;
                     // 下移选择
                     let playlist = self.playlist.lock().unwrap();
                     if self.selected_index < playlist.len() - 1 {
@@ -2655,6 +3016,10 @@ impl UserInterface {
                     }
                 } else if self.help_mode {
                     // 帮助视图下 Enter 不执行操作
+                } else if self.main_focus == MainFocus::Recommendation
+                    && self.has_selectable_recommendations()
+                {
+                    self.activate_selected_recommendation();
                 } else {
                     // 播放选中的歌曲
                     self.play_song_by_index(self.selected_index);
@@ -2689,7 +3054,11 @@ impl UserInterface {
                         self.comments_detail_mode = false;
                     }
                 } else if self.song_info_mode {
-                    // AI 信息视图下返回歌词视图
+                    // 评论总结从评论列表进入，Esc 返回评论列表；普通歌曲信息返回歌词视图
+                    if self.song_info_kind == SongInfoKind::CommentSummary {
+                        self.comments_mode = true;
+                        self.comments_detail_mode = false;
+                    }
                     self.song_info_mode = false;
                 } else if self.help_mode {
                     // 帮助视图下返回歌词视图
@@ -2701,12 +3070,22 @@ impl UserInterface {
                 }
             }
             KeyCode::Left => {
-                // 上一曲
-                self.play_prev();
+                if self.main_focus == MainFocus::Recommendation && self.has_selectable_recommendations()
+                {
+                    self.move_recommendation_selection(-1);
+                } else {
+                    // 上一曲
+                    self.play_prev();
+                }
             }
             KeyCode::Right => {
-                // 下一曲
-                self.play_next();
+                if self.main_focus == MainFocus::Recommendation && self.has_selectable_recommendations()
+                {
+                    self.move_recommendation_selection(1);
+                } else {
+                    // 下一曲
+                    self.play_next();
+                }
             }
             KeyCode::Char('[') | KeyCode::Char('【') | KeyCode::Char('［') => {
                 // 快退 5 秒
@@ -2860,6 +3239,10 @@ impl UserInterface {
                 self.playlist_songs_rx = None;
             }
             KeyCode::Char('c') | KeyCode::Char('C') => {
+                if self.comments_mode {
+                    self.start_comment_summary_mode();
+                    return Ok(());
+                }
                 // 切换到评论视图，并从第1页开始加载
                 self.comments_mode = true;
                 self.song_info_mode = false;
@@ -2891,6 +3274,9 @@ impl UserInterface {
                 self.recommand = true;
                 self.start_recommendations_if_enabled();
                 self.save_config_now();
+            }
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                self.open_ai_recommend_input_mode();
             }
             KeyCode::Char('k') | KeyCode::Char('K') => {
                 // k：进入 API 配置输入模式（接口地址 → API Key → 模型名称）
@@ -3643,20 +4029,41 @@ impl UserInterface {
                 self.lyrics_dragging = false;
                 self.lyrics_drag_target_time = None;
 
-                if self.recommand && row == 1 {
-                    if let Some(name) = self
-                        .recommendation_items
+                if self.ai_recommend_input_mode && row == 1 {
+                    let click_offset = col;
+                    if let Some(query) = self
+                        .ai_recommend_preset_items
                         .iter()
-                        .find(|item| col >= item.start_col && col < item.end_col)
-                        .map(|item| item.name.clone())
+                        .find(|item| click_offset >= item.start_col && click_offset < item.end_col)
+                        .map(|item| item.query.clone())
                     {
-                        if !self.recommendation_downloading
-                            || self.recommendation_downloading_name.as_ref() != Some(&name)
-                        {
-                            self.start_recommendation_download(&name);
-                        }
-                        return Ok(());
+                        self.start_ai_recommend_query_with(query);
                     }
+                    return Ok(());
+                }
+
+                if self.recommand && row <= 2 {
+                    // 计算点击位置相对于显示文本的列偏移
+                    // Header 区域从第0列开始，文本从第1列开始显示
+                    let text_start_col = 1;
+                    if col >= text_start_col {
+                        let click_offset = (col as usize - text_start_col) + self.recommendation_scroll_offset;
+                        if let Some((idx, _name)) = self
+                            .recommendation_items
+                            .iter()
+                            .enumerate()
+                            .find(|(_, item)| click_offset >= item.start_col && click_offset < item.end_col)
+                            .map(|(idx, item)| (idx, (item.name.clone(), item.search_query.clone())))
+                        {
+                            self.recommendation_selected_index = Some(idx);
+                            self.main_focus = MainFocus::Recommendation;
+                            self.activate_selected_recommendation();
+                            return Ok(());
+                        }
+                    }
+                    // 点击推荐区域空白处，打开 AI 自然语言推荐输入框
+                    self.open_ai_recommend_input_mode();
+                    return Ok(());
                 }
 
                 // 所有模式：检查是否点击了音量条区域
@@ -3733,6 +4140,7 @@ impl UserInterface {
                                                 self.online_selected_index == clicked_index;
                                             self.online_selected_index = clicked_index;
                                             self.playlist_list_selected_index = clicked_index;
+                                            self.main_focus = MainFocus::Playlist;
                                             if !already_selected {
                                                 return Ok(());
                                             }
@@ -3760,6 +4168,7 @@ impl UserInterface {
                                             let already_selected =
                                                 self.online_selected_index == clicked_index;
                                             self.online_selected_index = clicked_index;
+                                            self.main_focus = MainFocus::Playlist;
                                             if !already_selected {
                                                 return Ok(());
                                             }
@@ -3781,6 +4190,7 @@ impl UserInterface {
                                         let already_selected =
                                             self.search_selected_index == clicked_index;
                                         self.search_selected_index = clicked_index;
+                                        self.main_focus = MainFocus::Playlist;
                                         if !already_selected {
                                             return Ok(());
                                         }
@@ -3808,7 +4218,7 @@ impl UserInterface {
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize && row >= layout.start_row {
                             let click_row = (row - layout.start_row) as usize;
-                            if click_row < layout.visible_count {
+                                if click_row < layout.visible_count {
                                 let clicked_index = self.dir_history_scroll_offset + click_row;
                                 if clicked_index < self.dir_history.len() {
                                     let dir_path = self.dir_history[clicked_index].clone();

@@ -1,7 +1,7 @@
 // 语言包模块 — 集中管理所有界面翻译文本
 
 /// 界面语言枚举
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UiLanguage {
     Sc,
     Tc,
@@ -220,6 +220,7 @@ pub struct LangTexts {
     // ── 标题 ──
     pub app_title: &'static str,
     pub song_info_label: &'static str,
+    pub comment_summary_label: &'static str,
     pub help_label: &'static str,
     pub lyrics_label_with_song: &'static str,
     pub lyrics_label_no_song: &'static str,
@@ -243,6 +244,11 @@ pub struct LangTexts {
     pub recommendation_title: &'static str,
     pub recommendation_loading: &'static str,
     pub recommendation_no_data: &'static str,
+
+    // ── AI 自然语言推荐 ──
+    pub ai_recommend_input_hint: &'static str,
+    pub ai_recommend_prompt_template: &'static str,
+    pub ai_recommend_presets: &'static [&'static str],
 
     // ── 控制栏标签 ──
     pub play_status_label: &'static str,
@@ -290,6 +296,7 @@ pub struct LangTexts {
 
     // ── AI 提示词模板（含 {} 占位符） ──
     pub ai_prompt_template: &'static str,
+    pub comment_summary_prompt_template: &'static str,
     pub recommendation_prompt_template: &'static str,
 
     // ── 帮助信息 ──
@@ -397,8 +404,8 @@ static SC: LangTexts = LangTexts {
     tip_help_narrow: "帮助: ↑↓滚动|Esc返回",
     tip_song_info_wide: "歌曲信息: ↑/↓ 上下移动 | Up/Down 上下滚动 | Esc返回",
     tip_song_info_narrow: "歌曲信息: ↑↓移动|Scroll滚动|Esc返回",
-    tip_comments_wide: "歌曲评论: ↑↓选择 | PgUp/PgDn翻页 | Enter详情 | Esc返回",
-    tip_comments_narrow: "歌曲评论: ↑↓选择|PgUp/PgDn翻页|Enter详情|Esc返回",
+    tip_comments_wide: "歌曲评论: ↑↓选择 | PgUp/PgDn翻页 | Enter详情 | c评论总结 | Esc返回",
+    tip_comments_narrow: "歌曲评论: ↑↓|PgUp/PgDn|Enter|c总结|Esc",
     tip_keys_wide: "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | Esc停止 | ←→上下曲 | [,/].快退快进 | +-音量 | 1-5模式 | h帮助 | o打开 | q退出",
     tip_keys_medium: "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | ←→上下曲 | [,/].快退快进 | +-音量 | h帮助 | o打开 | q退出",
     tip_keys_narrow: "快捷按键: ↑↓选择 | Enter播放 | Space暂停 | h帮助 |q退出",
@@ -430,6 +437,7 @@ static SC: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - 终端音乐播放器 🎵",
     song_info_label: "歌曲信息",
+    comment_summary_label: "评论总结",
     help_label: "帮助信息",
     lyrics_label_with_song: "歌曲歌词 ",
     lyrics_label_no_song: "歌曲歌词",
@@ -450,6 +458,20 @@ static SC: LangTexts = LangTexts {
     recommendation_title: "今日推荐歌曲：",
     recommendation_loading: "正在获取推荐歌曲...",
     recommendation_no_data: "播放几首歌曲后才能推荐",
+
+    ai_recommend_input_hint: "推荐歌曲: 输入描述后Enter推荐 | 点击预设直接推荐 | Esc返回",
+    ai_recommend_prompt_template: "请根据以下描述，推荐10首符合条件的歌曲。只返回可直接搜索的歌曲列表，每行一首，格式必须为「歌曲名 - 歌手」，不要编号，不要解释。\n描述：{}",
+    ai_recommend_presets: &[
+        "学习",
+        "工作",
+        "运动",
+        "恋爱",
+        "高兴",
+        "伤感",
+        "失眠",
+        "适合下雨天听的歌",
+        "适合深夜写代码的中文歌",
+    ],
 
     play_status_label: "播放状态",
     volume_label: "播放音量",
@@ -481,8 +503,9 @@ static SC: LangTexts = LangTexts {
     tip_online_narrow: "网络搜索: Enter|↑↓|DL|PgUp/Dn|Esc",
 
     ai_prompt_template: "请根据歌曲名称整理该歌曲的详细信息。禁止输出任何开场白、问候语或自我介绍，直接输出歌曲信息。\n\n歌曲名称：{}\n\n按以下结构详细输出，每项尽量展开，无法确认的标注「暂无公开资料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手详情：（包括国籍、出生地、出生日期、星座、血型、身高、体重、职业、毕业院校、代表作品、主要成就等）\n词曲创作：（作词、作曲、编曲、制作人等完整创作团队）\n发行时间：（具体日期，若有不同版本请分别列出）\n所属专辑：（专辑名称、第几首曲目、专辑曲目列表）\n创作背景：（详细描述创作灵感来源、幕后故事、创作过程中的趣闻等）\n歌词大意：（深入解读歌词含义、表达的情感与主题思想）\n音乐风格：（流派、BPM、调性、节奏特点、特殊编曲或乐器使用等）\n商业成绩：（榜单排名、销量、播放量、认证等）\n获奖记录：（音乐奖项、提名等）\n影响评价：（乐评人评价、文化影响、历史地位等）\n翻唱引用：（知名翻唱版本、影视/广告/游戏等中的使用）\n趣闻轶事：（与歌曲相关的冷知识、轶事、趣闻等）\n\n要求：\n- 信息尽量准确详实，避免杜撰，不确定的标注「据传」或「待考证」。\n- 如有多个歌手或版本，以原唱或最知名版本为主，必要时补充其他版本。\n- 每项内容尽量详细展开，不要过于简略。\n- 绝对禁止输出开场白、问候语、自我介绍，禁止使用序号编号。\n- 必须使用简体中文回答。",
+    comment_summary_prompt_template: "请根据以下歌曲评论，总结听众的主要共鸣点。禁止输出开场白、问候语或自我介绍，直接输出总结。\n\n歌曲名称：{}\n\n评论：\n{}\n\n请按以下结构输出：\n共鸣点：（总结大家最常提到的感受和原因）\n情绪氛围：（总结评论里的主要情绪）\n代表观点：（提炼3-5条有代表性的听众观点）\n关键词：（列出5-10个关键词）\n争议或分歧：（如果没有明显分歧，写「暂无明显分歧」）\n\n要求：\n- 只基于给出的评论总结，不要编造评论中没有的信息。\n- 不要逐条复述评论。\n- 必须使用简体中文回答。",
 
-    recommendation_prompt_template: "请根据以下用户的歌曲播放历史，推荐10首用户可能喜欢的歌曲。只返回歌曲名列表，每行一首，不要编号，不要解释。\n{}",
+    recommendation_prompt_template: "请根据以下用户的歌曲播放历史，推荐10首用户可能喜欢的歌曲。只返回可直接搜索的歌曲列表，每行一首，格式必须为「歌曲名 - 歌手」，不要编号，不要解释。\n{}",
 
     help_lines: &[
         "快捷按键",
@@ -503,6 +526,7 @@ static SC: LangTexts = LangTexts {
         "→ j           搜索聚合歌曲",
         "→ p           搜索在线歌单",
         "→ i           查看歌曲信息",
+        "→ a           推荐歌曲点歌",
         "→ f           添加到收藏夹",
         "→ v           查看收藏列表",
         "→ m           音乐目录历史",
@@ -565,6 +589,7 @@ static SC: LangTexts = LangTexts {
         " j 搜索聚合歌曲",
         " p 搜索在线歌单",
         " i 查看歌曲信息",
+        " a 推荐歌曲点歌",
         " f 添加到收藏夹",
         " v 查看收藏列表",
         " m 音乐目录历史",
@@ -720,6 +745,7 @@ static TC: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - 終端音樂播放器 🎵",
     song_info_label: "歌曲資訊",
+    comment_summary_label: "評論總結",
     help_label: "幫助資訊",
     lyrics_label_with_song: "歌曲歌詞 ",
     lyrics_label_no_song: "歌曲歌詞",
@@ -740,6 +766,20 @@ static TC: LangTexts = LangTexts {
     recommendation_title: "今日推薦歌曲：",
     recommendation_loading: "正在獲取推薦歌曲...",
     recommendation_no_data: "播放幾首歌曲後才能推薦",
+
+    ai_recommend_input_hint: "推薦歌曲: 輸入描述後Enter推薦 | 點擊預設直接推薦 | Esc返回",
+    ai_recommend_prompt_template: "請根據以下描述，推薦10首符合條件的歌曲。只返回可直接搜尋的歌曲列表，每行一首，格式必須為「歌曲名 - 歌手」，不要編號，不要解釋。\n描述：{}",
+    ai_recommend_presets: &[
+        "學習",
+        "工作",
+        "運動",
+        "戀愛",
+        "高興",
+        "傷感",
+        "失眠",
+        "適合下雨天聽的歌",
+        "適合深夜寫程式的中文歌",
+    ],
 
     play_status_label: "播放狀態",
     volume_label: "播放音量",
@@ -772,7 +812,8 @@ static TC: LangTexts = LangTexts {
 
     ai_prompt_template: "請根據歌曲名稱整理該歌曲的詳細資訊。禁止輸出任何開場白、問候語或自我介紹，直接輸出歌曲資訊。\n\n歌曲名稱：{}\n\n依照以下結構詳細輸出，每項盡量展開，無法確認的標註「暫無公開資料」：\n\n演唱歌手：（包括主唱、伴唱、合作歌手等）\n歌手詳情：（包括國籍、出生地、出生日期、星座、血型、身高、體重、職業、畢業院校、代表作、主要成就等）\n詞曲創作：（作詞、作曲、編曲、製作人等完整創作團隊）\n發行時間：（具體日期，若有不同版本請分別列出）\n所屬專輯：（專輯名稱、第幾首曲目、專輯曲目列表）\n創作背景：（詳細描述創作靈感來源、幕後故事、創作過程中的趣聞等）\n歌詞大意：（深入解讀歌詞含義、表達的情感與主題思想）\n音樂風格：（流派、BPM、調性、節奏特點、特殊編曲或樂器使用等）\n商業成績：（榜單排名、銷量、播放量、認證等）\n得獎紀錄：（音樂獎項、提名等）\n影響評價：（樂評人評價、文化影響、歷史地位等）\n翻唱引用：（知名翻唱版本、影視/廣告/遊戲等中的使用）\n趣聞軼事：（與歌曲相關的冷知識、軼事、趣聞等）\n\n要求：\n- 資訊盡量準確詳實，避免杜撰，不確定的標註「據傳」或「待考證」。\n- 若有多位歌手或多個版本，以原唱或最知名版本為主，必要時補充其他版本。\n- 每項內容盡量詳細展開，不要過於簡略。\n- 絕對禁止輸出開場白、問候語、自我介紹，禁止使用序號編號。\n- 必須使用繁體中文回答。",
 
-    recommendation_prompt_template: "請根據以下用戶的歌曲播放歷史，推薦10首用戶可能喜歡的歌曲。只返回歌曲名列表，每行一首，不要編號，不要解釋。\n{}",
+    comment_summary_prompt_template: "請根據以下歌曲評論，總結聽眾的主要共鳴點。禁止輸出開場白、問候語或自我介紹，直接輸出總結。\n\n歌曲名稱：{}\n\n評論：\n{}\n\n請輸出：共鳴點、情緒氛圍、代表觀點、關鍵詞、爭議或分歧。只基於給出的評論，不要編造資訊。必須使用繁體中文回答。",
+    recommendation_prompt_template: "請根據以下用戶的歌曲播放歷史，推薦10首用戶可能喜歡的歌曲。只返回可直接搜尋的歌曲列表，每行一首，格式盡量為「歌曲名 - 歌手」，不要編號，不要解釋。\n{}",
 
     help_lines: &[
         "快捷按鍵",
@@ -792,7 +833,8 @@ static TC: LangTexts = LangTexts {
         "→ n           搜尋網路歌曲",
         "→ j           搜尋聚合歌曲",
         "→ p           搜索在線歌單",
-        "→ i           查看歌曲資訊",
+        "→ i           查看歌曲資訊",  
+        "→ a           推薦歌曲點歌",
         "→ f           新增到收藏夾",
         "→ v           查看收藏列表",
         "→ m           音樂目錄歷史",
@@ -855,6 +897,7 @@ static TC: LangTexts = LangTexts {
         " j 搜尋聚合歌曲",
         " p 搜索在線歌單",
         " i 查看歌曲資訊",
+        " a 推薦歌曲點歌",
         " f 新增到收藏夾",
         " v 查看收藏列表",
         " m 音樂目錄歷史",
@@ -1010,6 +1053,7 @@ static EN: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - Terminal Music Player 🎵",
     song_info_label: "Song Info",
+    comment_summary_label: "Comment Summary",
     help_label: "Help",
     lyrics_label_with_song: "Song Lyrics ",
     lyrics_label_no_song: "Song Lyrics",
@@ -1030,6 +1074,20 @@ static EN: LangTexts = LangTexts {
     recommendation_title: "Today's Recommendations: ",
     recommendation_loading: "Fetching recommendations...",
     recommendation_no_data: "Play some songs first to get recommendations",
+
+    ai_recommend_input_hint: "Recommend songs: type a description then Enter | click a preset to recommend | Esc to return",
+    ai_recommend_prompt_template: "Based on the following description, recommend 10 matching songs. Return only a list of directly searchable songs, one per line, and format them as \"Song Name - Artist\" whenever possible. Do not number them or add explanations.\nDescription: {}",
+    ai_recommend_presets: &[
+        "Study",
+        "Work",
+        "Workout",
+        "Romance",
+        "Happy",
+        "Sad",
+        "Insomnia",
+        "Songs for rainy days",
+        "Chinese songs for late-night coding",
+    ],
 
     play_status_label: "State",
     volume_label: "Volume",
@@ -1062,7 +1120,8 @@ static EN: LangTexts = LangTexts {
 
     ai_prompt_template: "Compile detailed information about the song based on its title. Do NOT output any preamble, greeting, or self-introduction. Output the song information directly.\n\nSong Title: {}\n\nOutput in the following structure with detailed descriptions. If any item cannot be verified, write \"No public information available\":\n\nPerformers: (including lead vocals, backing vocals, featured artists, etc.)\nArtist Details: (including nationality, birthplace, date of birth, zodiac sign, blood type, height, weight, occupation, alma mater, notable works, major achievements, etc.)\nSongwriting & Production: (lyricist, composer, arranger, producer, full creative team)\nRelease Date: (specific date; list different versions separately if applicable)\nAlbum: (album name, track number, album track listing)\nCreative Background: (detailed description of inspiration, behind-the-scenes stories, interesting anecdotes during creation)\nLyrics Meaning: (in-depth interpretation of lyrics, emotions and themes expressed)\nMusical Style: (genre, BPM, key, rhythm characteristics, special arrangements or instruments)\nCommercial Performance: (chart positions, sales, streaming numbers, certifications)\nAwards & Nominations: (music awards, nominations)\nImpact & Reviews: (critic reviews, cultural impact, historical significance)\nCovers & Usage: (notable cover versions, usage in films/ads/games/etc.)\nAnecdotes: (trivia, anecdotes related to the song)\n\nRequirements:\n- Keep information as accurate and detailed as possible; avoid fabrication. Mark uncertain info as \"Reportedly\" or \"Unverified\".\n- If multiple singers or versions exist, prioritize the original or most well-known version, and supplement with others.\n- Elaborate on each item in detail rather than being too brief.\n- Absolutely NO preamble, greeting, or self-introduction. Do NOT use numbered lists.\n- You MUST respond in English.",
 
-    recommendation_prompt_template: "Based on the following user's song play history, recommend 10 songs that the user might like. Return only a list of song names, one per line, without numbering, without explanation.\n{}",
+    comment_summary_prompt_template: "Based on the following song comments, summarize the main points of listener resonance. Do not output any preamble, greeting, or self-introduction; output the summary directly.\n\nSong title: {}\n\nComments:\n{}\n\nOutput: resonance points, emotional atmosphere, representative views, keywords, and disagreements. Summarize only from the provided comments; do not invent information. You MUST answer in English.",
+    recommendation_prompt_template: "Based on the following user's song play history, recommend 10 songs that the user might like. Return only a list of directly searchable songs, one per line, preferably in the format \"Song Name - Artist\", without numbering and without explanation.\n{}",
 
     help_lines: &[
         "Keyboard Shortcuts",
@@ -1083,6 +1142,7 @@ static EN: LangTexts = LangTexts {
         "→ j           Search Juhe songs",
         "→ p           Search online playlists",
         "→ i           Song info",
+        "→ a           Recommend songs",
         "→ f           Add to favorites",
         "→ v           View favorites",
         "→ m           Music folder history",
@@ -1145,6 +1205,7 @@ static EN: LangTexts = LangTexts {
         " j           Search Juhe songs",
         " p           Search online playlists",
         " i           Song info",
+        " a           Recommend songs",
         " f           Add to favorites",
         " v           View favorites",
         " m           Music folder history",
@@ -1300,6 +1361,7 @@ static JA: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - ターミナル音楽プレーヤー 🎵",
     song_info_label: "楽曲情報",
+    comment_summary_label: "コメント要約",
     help_label: "ヘルプ",
     lyrics_label_with_song: "楽曲歌詞 ",
     lyrics_label_no_song: "楽曲歌詞",
@@ -1320,6 +1382,20 @@ static JA: LangTexts = LangTexts {
     recommendation_title: "今日のおすすめ: ",
     recommendation_loading: "おすすめを取得中...",
     recommendation_no_data: "曲を再生してからおすすめを表示します",
+
+    ai_recommend_input_hint: "おすすめ曲: 説明を入力後Enterで推薦 | プリセットをクリックして推薦 | Escで戻る",
+    ai_recommend_prompt_template: "以下の説明に基づいて、条件に合う10曲を推薦してください。直接検索できる曲の一覧のみを返し、1行に1曲、できるだけ「曲名 - アーティスト」の形式で、番号付けせず、説明なし。\n説明：{}",
+    ai_recommend_presets: &[
+        "勉強",
+        "仕事",
+        "運動",
+        "恋愛",
+        "嬉しい",
+        "切ない",
+        "不眠",
+        "雨の日に合う曲",
+        "深夜にコードを書くための中国語曲",
+    ],
 
     play_status_label: "再生状態",
     volume_label: "音量",
@@ -1352,6 +1428,7 @@ static JA: LangTexts = LangTexts {
 
     ai_prompt_template: "楽曲名に基づいて楽曲の詳細情報を整理してください。冒頭の挨拶や自己紹介は一切出力せず、直接楽曲情報を出力してください。\n\n楽曲名：{}\n\n以下の構成で各項目を詳しく記述してください。取得できない項目は「公開情報なし」と記載してください。\n\n歌手：（メインボーカル、コーラス、フィーチャリングアーティストなど）\n歌手詳細：（国籍、出身地、生年月日、星座、血液型、身長、体重、職業、卒業校、代表作、主な受賞歴など）\n作詞・作曲・制作：（作詞、作曲、編曲、プロデューサーなど完全な制作チーム）\nリリース日：（具体的な日付、異なるバージョンがあればそれぞれ記載）\n収録アルバム：（アルバム名、トラック番号、アルバム収録曲一覧）\n制作背景：（インスピレーションの源泉、舞台裏のエピソード、制作中の逸話などを詳しく）\n歌詞の大意：（歌詞の解釈、表現されている感情とテーマを深く考察）\n音楽スタイル：（ジャンル、BPM、キー、リズムの特徴、特殊なアレンジや楽器使用など）\n商業成績：（チャート順位、売上、再生回数、認定など）\n受賞・ノミネート：（音楽賞、ノミネーションなど）\n影響と評価：（評論家の評価、文化的影響、歴史的意義など）\nカバーと使用例：（有名なカバーバージョン、映画/CM/ゲームなどでの使用）\n興味深い逸話：（楽曲にまつわるトリビア、逸話など）\n\n要求：\n- 情報はできるだけ正確かつ詳細にし、捏造を避けてください。不確かな情報は「伝聞」や「未確認」と記載してください。\n- 複数の歌手やバージョンがある場合は、原曲または最も有名な版を優先し、必要に応じて補足してください。\n- 各項目を簡略にせず、できるだけ詳しく記述してください。\n- 冒頭の挨拶や自己紹介は絶対に出力せず、番号付きリストの使用も禁止します。\n- 必ず日本語で回答してください。",
 
+    comment_summary_prompt_template: "以下の曲コメントに基づいて、リスナーの主な共感ポイントを要約してください。前置き、挨拶、自己紹介は不要で、要約だけを直接出力してください。\n\n曲名：{}\n\nコメント：\n{}\n\n出力項目：共感ポイント、感情の雰囲気、代表的な意見、キーワード、対立や相違点。与えられたコメントだけに基づき、情報を創作しないでください。必ず日本語で回答してください。",
     recommendation_prompt_template: "以下のユーザーの楽曲再生履歴に基づいて、ユーザーが気に入りそうな10曲を推薦してください。曲名リストのみを返し、1行に1曲、番号付けせず、説明なし。\n{}",
 
     help_lines: &[
@@ -1373,6 +1450,7 @@ static JA: LangTexts = LangTexts {
         "→ j           アグリゲート検索",
         "→ p           プレイリスト検索",
         "→ i           楽曲情報",
+        "→ a           推薦曲を探す",
         "→ f           お気に入りに追加",
         "→ v           お気に入り一覧",
         "→ m           音楽フォルダ履歴",
@@ -1435,6 +1513,7 @@ static JA: LangTexts = LangTexts {
         " j アグリゲート検索",
         " p プレイリスト検索",
         " i 楽曲情報",
+        " a 推薦曲を探す",
         " f お気に入りに追加",
         " v お気に入り一覧",
         " m 音楽フォルダ履歴",
@@ -1590,6 +1669,7 @@ static KO: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - 터미널 음악 플레이어 🎵",
     song_info_label: "곡 정보",
+    comment_summary_label: "댓글 요약",
     help_label: "도움말",
     lyrics_label_with_song: "곡 가사 ",
     lyrics_label_no_song: "곡 가사",
@@ -1610,6 +1690,20 @@ static KO: LangTexts = LangTexts {
     recommendation_title: "오늘의 추천: ",
     recommendation_loading: "추천곡을 가져오는 중...",
     recommendation_no_data: "몇 곡 재생 후 추천 표시",
+
+    ai_recommend_input_hint: "추천 곡: 설명 입력 후 Enter 추천 | 프리셋 클릭으로 바로 추천 | Esc 돌아가기",
+    ai_recommend_prompt_template: "아래 설명을 바탕으로 조건에 맞는 10곡을 추천해 주세요. 바로 검색할 수 있는 곡 목록만 반환하고, 한 줄에 한 곡씩, 가능하면 \"곡명 - 아티스트\" 형식으로, 번호 매기기 없이, 설명 없이。\n설명：{}",
+    ai_recommend_presets: &[
+        "공부",
+        "업무",
+        "운동",
+        "연애",
+        "신남",
+        "슬픔",
+        "불면",
+        "비 오는 날 듣기 좋은 노래",
+        "밤샘 코딩에 어울리는 중국어 노래",
+    ],
 
     play_status_label: "재생 상태",
     volume_label: "볼륨",
@@ -1642,6 +1736,7 @@ static KO: LangTexts = LangTexts {
 
     ai_prompt_template: "곡명을 바탕으로 해당 곡의 상세 정보를 정리해 주세요. 서론, 인사말, 자기소개를 절대 출력하지 말고 곡 정보를 직접 출력해 주세요.\n\n곡명: {}\n\n아래 구조로 각 항목을 자세히 서술해 주세요. 확인할 수 없는 항목은 \"공개 자료 없음\"으로 표시해 주세요.\n\n가수：（메인 보컬, 백보컬, 피처링 아티스트 등）\n가수 상세：（국적, 출생지, 생년월일, 별자리, 혈액형, 키, 몸무게, 직업, 졸업 학교, 대표작, 주요 수상 경력 등）\n작사·작곡·제작：（작사, 작곡, 편곡, 프로듀서 등 전체 크리에이티브 팀）\n발매일：（구체적인 날짜, 다른 버전이 있으면 각각 표기）\n수록 앨범：（앨범명, 트랙 번호, 앨범 트랙 목록）\n창작 배경：（영감의 원천, 비하인드 스토리, 제작 중 에피소드 등 상세히）\n가사 개요：（가사 해석, 표현된 감정과 주제를 깊이 있게 분석）\n음악 스타일：（장르, BPM, 조성, 리듬 특징, 특수 편곡이나 악기 사용 등）\n상업 성적：（차트 순위, 판매량, 스트리밍 수, 인증 등）\n수상 및 후보：（음악상, 후보 지명 등）\n영향과 평가：（평론가 평가, 문화적 영향, 역사적 의의 등）\n커버 및 사용：（유명한 커버 버전, 영화/광고/게임 등에서의 사용）\n흥미로운 이야기：（곡과 관련된 트리비아, 일화 등）\n\n요구사항：\n- 정보는 최대한 정확하고 상세하게 작성하며, 지어내지 마세요. 불확실한 정보는 \"전해짐\" 또는 \"미확인\"으로 표시하세요.\n- 여러 가수나 버전이 있으면 원곡 또는 가장 널리 알려진 버전을 우선하고, 필요하면 보충하세요.\n- 각 항목을 너무 간단히 하지 말고 최대한 자세히 서술해 주세요.\n- 서론, 인사말, 자기소개는 절대 출력하지 말고, 번호 매기기 목록 사용도 금지합니다。\n- 반드시 한국어로 답변해 주세요。",
 
+    comment_summary_prompt_template: "아래 노래 댓글을 바탕으로 청중의 주요 공감 포인트를 요약해 주세요. 서문, 인사, 자기소개 없이 바로 요약만 출력하세요.\n\n곡명：{}\n\n댓글：\n{}\n\n출력 항목: 공감 포인트, 감정 분위기, 대표 의견, 키워드, 논쟁 또는 차이점. 주어진 댓글만 기반으로 요약하고 정보를 지어내지 마세요. 반드시 한국어로 답하세요.",
     recommendation_prompt_template: "아래 사용자의 노래 재생 기록을 바탕으로 사용자가 좋아할 만한 10곡을 추천해 주세요. 노래 이름 목록만 반환하고, 한 줄에 한 곡씩, 번호 매기기 없이, 설명 없이。\n{}",
 
     help_lines: &[
@@ -1663,6 +1758,7 @@ static KO: LangTexts = LangTexts {
         "→ j           폴리머 검색",
         "→ p           플레이리스트 검색",
         "→ i           곡 정보",
+        "→ a           추천곡 찾기",
         "→ f           즐겨찾기 추가",
         "→ v           즐겨찾기 목록",
         "→ m           음악 폴더 기록",
@@ -1725,6 +1821,7 @@ static KO: LangTexts = LangTexts {
         " j 폴리머 검색",
         " p 플레이리스트 검색",
         " i 곡 정보",
+        " a 추천곡 찾기",
         " f 즐겨찾기 추가",
         " v 즐겨찾기 목록",
         " m 음악 폴더 기록",
@@ -1880,6 +1977,7 @@ static RU: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - Терминальный плеер 🎵",
     song_info_label: "Информация",
+    comment_summary_label: "Сводка комментариев",
     help_label: "Справка",
     lyrics_label_with_song: "Текст песни ",
     lyrics_label_no_song: "Текст песни",
@@ -1900,6 +1998,20 @@ static RU: LangTexts = LangTexts {
     recommendation_title: "Рекомендации: ",
     recommendation_loading: "Получение рекомендаций...",
     recommendation_no_data: "Воспроизведите песни для рекомендаций",
+
+    ai_recommend_input_hint: "Рекомендации: введите описание и Enter | нажмите пресет для рекомендации | Esc назад",
+    ai_recommend_prompt_template: "На основе следующего описания порекомендуйте 10 подходящих песен. Верните только список песен, которые можно сразу искать, по одной на строке, по возможности в формате \"Название - Исполнитель\", без нумерации и без объяснений.\nОписание：{}",
+    ai_recommend_presets: &[
+        "Учёба",
+        "Работа",
+        "Спорт",
+        "Любовь",
+        "Радость",
+        "Грусть",
+        "Бессонница",
+        "Песни для дождливого дня",
+        "Китайские песни для ночного кодинга",
+    ],
 
     play_status_label: "Статус",
     volume_label: "Громкость",
@@ -1930,6 +2042,7 @@ static RU: LangTexts = LangTexts {
 
     ai_prompt_template: "Составьте подробную информацию о песне по её названию. НЕ выводите вступление, приветствие или представление. Выводите информацию напрямую.\n\nНазвание песни: {}\n\nВыведите в следующей структуре с подробным описанием. Если пункт невозможно проверить, укажите «Нет публичных данных»:\n\nИсполнители: (основной вокал, бэк-вокал, приглашённые артисты и т.д.)\nПодробности об исполнителе: (национальность, место рождения, дата рождения, знак зодиака, группа крови, рост, вес, профессия, образование, известные работы, главные достижения и т.д.)\nАвторство и продакшен: (автор слов, композитор, аранжировщик, продюсер, полная творческая команда)\nДата выпуска: (конкретная дата; разные версии укажите отдельно)\nАльбом: (название альбома, номер трека, список треков альбома)\nИстория создания: (подробное описание вдохновения, закулисных историй, интересных случаев)\nСмысл текста: (глубокая интерпретация текста, выраженные эмоции и темы)\nМузыкальный стиль: (жанр, BPM, тональность, ритм, особые аранжировки или инструменты)\nКоммерческий успех: (позиции в чартах, продажи, стриминг, сертификации)\nНаграды: (музыкальные награды, номинации)\nВлияние и отзывы: (рецензии критиков, культурное влияние, историческое значение)\nКаверы и использование: (известные кавер-версии, использование в кино/рекламе/играх)\nИнтересные факты: (любопытные детали, анекдоты, связанные с песней)\n\nТребования:\n- Информация должна быть максимально точной и подробной; избегайте выдумок. Ненадёжные данные помечайте как «По слухам» или «Не подтверждено».\n- При наличии нескольких исполнителей или версий приоритет отдаётся оригиналу или самой известной версии.\n- Раскрывайте каждый пункт подробно, не слишком кратко.\n- Абсолютно БЕЗ вступления, приветствия или представления. НЕ используйте нумерованные списки.\n- Обязательно отвечайте на русском языке.",
 
+    comment_summary_prompt_template: "На основе следующих комментариев к песне кратко обобщите главные точки отклика слушателей. Не выводите вступление, приветствие или самопрезентацию; сразу выводите сводку.\n\nНазвание песни: {}\n\nКомментарии:\n{}\n\nВыведите: точки отклика, эмоциональную атмосферу, representative мнения слушателей, ключевые слова, споры или расхождения. Используйте только данные комментарии, не выдумывайте информацию. Ответьте на русском языке.",
     recommendation_prompt_template: "На основе истории прослушивания песен пользователя, порекомендуйте 10 песен, которые могут ему понравиться. Верните только список названий песен, по одной на строке, без нумерации, без объяснений.\n{}",
     now_playing_prefixes: &["Сейчас играет: ", "Сейчас играет："],
     tip_online_narrow: "Онлайн: Enter|↑↓|DL|PgUp/Dn|Esc",
@@ -1953,6 +2066,7 @@ static RU: LangTexts = LangTexts {
         "→ j           Поиск Juhe песен",
         "→ p           Поиск плейлистов",
         "→ i           Информация о песне",
+        "→ a           Рекомендации песен",
         "→ f           Добавить в избранное",
         "→ v           Просмотр избранного",
         "→ m           История папок",
@@ -2015,6 +2129,7 @@ static RU: LangTexts = LangTexts {
         " j           Поиск Juhe",
         " p           Поиск плейлистов",
         " i           Информация о песне",
+        " a           Рекомендации песен",
         " f           Добавить в избранное",
         " v           Просмотр избранного",
         " m           История папок музыки",
@@ -2170,6 +2285,7 @@ static FR: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - Lecteur terminal 🎵",
     song_info_label: "Infos chanson",
+    comment_summary_label: "Résumé des commentaires",
     help_label: "Aide",
     lyrics_label_with_song: "Paroles ",
     lyrics_label_no_song: "Paroles",
@@ -2190,6 +2306,20 @@ static FR: LangTexts = LangTexts {
     recommendation_title: "Recommandations : ",
     recommendation_loading: "Obtention recommandations...",
     recommendation_no_data: "Écoutez d'abord pour recommandations",
+
+    ai_recommend_input_hint: "Recommandations: saisissez une description puis Entrée | cliquez un préréglage | Esc retour",
+    ai_recommend_prompt_template: "Sur la base de la description suivante, recommandez 10 chansons correspondantes. Retournez uniquement une liste de chansons directement recherchables, une par ligne, de préférence au format \"Titre - Artiste\", sans numérotation et sans explication.\nDescription : {}",
+    ai_recommend_presets: &[
+        "Études",
+        "Travail",
+        "Sport",
+        "Amour",
+        "Heureux",
+        "Triste",
+        "Insomnie",
+        "Chansons pour la pluie",
+        "Chansons chinoises pour coder tard",
+    ],
 
     play_status_label: "État",
     volume_label: "Volume",
@@ -2220,6 +2350,7 @@ static FR: LangTexts = LangTexts {
 
     ai_prompt_template: "Compilez des informations détaillées sur la chanson à partir de son titre. Ne PAS afficher de préambule, salutation ou auto-présentation. Affichez directement les informations.\n\nTitre : {}\n\nStructure de sortie avec descriptions détaillées. Si un élément ne peut être vérifié, indiquez « Aucune donnée publique » :\n\nInterprètes : (voix principale, chœurs, artistes invités, etc.)\nDétails sur l'artiste : (nationalité, lieu de naissance, date de naissance, signe astrologique, groupe sanguin, taille, poids, profession, formation, œuvres notables, réalisations principales, etc.)\nParoles et production : (parolier, compositeur, arrangeur, producteur, équipe créative complète)\nDate de sortie : (date précise ; listez les différentes versions séparément)\nAlbum : (nom de l'album, numéro de piste, liste complète des pistes)\nContexte créatif : (description détaillée de l'inspiration, anecdotes de coulisses, histoires de création)\nSignification des paroles : (interprétation approfondie, émotions et thèmes exprimés)\nStyle musical : (genre, BPM, tonalité, caractéristiques rythmiques, arrangements spéciaux ou instruments)\nPerformance commerciale : (classements, ventes, streaming, certifications)\nPrix et nominations : (récompenses musicales, nominations)\nImpact et critiques : (critiques, influence culturelle, importance historique)\nReprises et utilisations : (reprises notables, utilisations au cinéma/publicité/jeux)\nAnecdotes : (anecdotes, faits divers liés à la chanson)\n\nExigences :\n- Informations aussi précises et détaillées que possible ; évitez les inventions. Indiquez « Selon des rumeurs » ou « Non vérifié » pour les données incertaines.\n- En cas de multiples interprètes ou versions, privilégiez l'original ou la version la plus connue.\n- Développez chaque point en détail plutôt que trop brièvement.\n- Absolument SANS préambule, salutation ou auto-présentation. N'utilisez PAS de listes numérotées.\n- Vous DEVEZ répondre en français.",
 
+    comment_summary_prompt_template: "À partir des commentaires suivants sur la chanson, résumez les principaux points de résonance des auditeurs. Ne donnez ni préambule, ni salutation, ni présentation; affichez directement le résumé.\n\nTitre : {}\n\nCommentaires :\n{}\n\nIncluez : points de résonance, atmosphère émotionnelle, avis représentatifs, mots-clés, controverses ou divergences. Basez-vous uniquement sur les commentaires fournis et n'inventez rien. Répondez en français.",
     recommendation_prompt_template: "Basé sur l'historique d'écoute de musique de l'utilisateur, recommandez 10 chansons qui pourraient lui plaire. Retournez seulement une liste de noms de chansons, une par ligne, sans numérotation, sans explication.\n{}",
     now_playing_prefixes: &["En cours : ", "En cours ："],
     tip_online_narrow: "En ligne: Enter|↑↓|DL|PgUp/Dn|Esc",
@@ -2243,6 +2374,7 @@ static FR: LangTexts = LangTexts {
         "→ j           Recherche Juhe",
         "→ p           Recherche playlists",
         "→ i           Infos chanson",
+        "→ a           Recommandations de chansons",
         "→ f           Ajouter aux favoris",
         "→ v           Voir les favoris",
         "→ m           Historique des dossiers",
@@ -2305,6 +2437,7 @@ static FR: LangTexts = LangTexts {
         " j           Recherche Juhe",
         " p           Rechercher des playlists",
         " i           Infos sur la chanson",
+        " a           Recommandations de chansons",
         " f           Ajouter aux favoris",
         " v           Voir les favoris",
         " m           Historique des dossiers",
@@ -2460,6 +2593,7 @@ static DE: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - Terminal-Player 🎵",
     song_info_label: "Song-Info",
+    comment_summary_label: "Kommentar-Zusammenfassung",
     help_label: "Hilfe",
     lyrics_label_with_song: "Liedtext ",
     lyrics_label_no_song: "Liedtext",
@@ -2480,6 +2614,20 @@ static DE: LangTexts = LangTexts {
     recommendation_title: "Tägliche Empfehlungen: ",
     recommendation_loading: "Empfehlungen laden...",
     recommendation_no_data: "Spielen Sie Lieder für Empfehlungen",
+
+    ai_recommend_input_hint: "Empfehlungen: Beschreibung eingeben und Enter | Preset anklicken | Esc zurück",
+    ai_recommend_prompt_template: "Basierend auf der folgenden Beschreibung, empfehlen Sie 10 passende Lieder. Geben Sie nur eine Liste direkt suchbarer Songs zurück, einen pro Zeile, möglichst im Format \"Titel - Künstler\", ohne Nummerierung und ohne Erklärung.\nBeschreibung：{}",
+    ai_recommend_presets: &[
+        "Lernen",
+        "Arbeit",
+        "Sport",
+        "Liebe",
+        "Fröhlich",
+        "Traurig",
+        "Schlaflosigkeit",
+        "Lieder für Regentage",
+        "Chinesische Lieder fürs nächtliche Coden",
+    ],
 
     play_status_label: "Status",
     volume_label: "Lautstärke",
@@ -2510,6 +2658,7 @@ static DE: LangTexts = LangTexts {
 
     ai_prompt_template: "Erstellen Sie detaillierte Informationen zum Song basierend auf dem Titel. Geben Sie KEIN Vorwort, keine Begrüßung oder Selbstvorstellung aus. Geben Sie die Song-Infos direkt aus.\n\nSongtitel: {}\n\nAusgabe in folgender Struktur mit detaillierten Beschreibungen. Wenn ein Punkt nicht überprüft werden kann, schreiben Sie \"Keine öffentlichen Daten verfügbar\":\n\nInterpreten: (Hauptgesang, Hintergrundgesang, Gastkünstler usw.)\nKünstlerdetails: (Nationalität, Geburtsort, Geburtsdatum, Sternzeichen, Blutgruppe, Größe, Gewicht, Beruf, Ausbildung, bekannte Werke, Haupterfolge usw.)\nSongwriting & Produktion: (Texter, Komponist, Arrangeur, Produzent, vollständiges Kreativteam)\nVeröffentlichungsdatum: (konkretes Datum; verschiedene Versionen separat auflisten)\nAlbum: (Albumname, Tracknummer, Album-Trackliste)\nKreativer Hintergrund: (detaillierte Beschreibung der Inspiration, Hintergründengeschichten, Anekdoten bei der Entstehung)\nLiedtextbedeutung: (tiefgehende Interpretation, ausgedrückte Emotionen und Themen)\nMusikalischer Stil: (Genre, BPM, Tonart, Rhythmusmerkmale, besondere Arrangements oder Instrumente)\nKommerzieller Erfolg: (Chartplatzierungen, Verkäufe, Streaming, Zertifizierungen)\nAuszeichnungen & Nominierungen: (Musikpreise, Nominierungen)\nEinfluss & Kritiken: (Kritikerbewertungen, kultureller Einfluss, historische Bedeutung)\nCover & Nutzung: (bekannte Coverversionen, Nutzung in Film/Werbung/Spielen)\nAnekdoten: (Kuriositäten, Anekdoten zum Song)\n\nAnforderungen:\n- Informationen so genau und detailliert wie möglich; keine Erfindungen. Unsicheres als \"Laut Gerüchten\" oder \"Unbestätigt\" markieren.\n- Bei mehreren Interpreten oder Versionen priorisieren Sie das Original oder die bekannteste Version.\n- Jeden Punkt ausführlich darlegen, nicht zu knapp.\n- Absolut KEIN Vorwort, keine Begrüßung oder Selbstvorstellung. KEINE nummerierten Listen.\n- Sie MÜSSEN auf Deutsch antworten.",
 
+    comment_summary_prompt_template: "Fassen Sie anhand der folgenden Song-Kommentare die wichtigsten Resonanzpunkte der Hörer zusammen. Keine Einleitung, Begrüßung oder Selbstvorstellung; geben Sie direkt die Zusammenfassung aus.\n\nSongtitel: {}\n\nKommentare:\n{}\n\nAusgabe: Resonanzpunkte, emotionale Atmosphäre, repräsentative Meinungen, Schlüsselwörter, Kontroversen oder Unterschiede. Nur auf Basis der Kommentare zusammenfassen, nichts erfinden. Antworten Sie auf Deutsch.",
     recommendation_prompt_template: "Basierend auf dem Musikwiedergabe-Verlauf des Benutzers, empfehlen Sie 10 Lieder, die dem Benutzer gefallen könnten. Geben Sie nur eine Liste von Liednamen zurück, einen pro Zeile, ohne Nummerierung, ohne Erklärung.\n{}",
     now_playing_prefixes: &["Aktuell: ", "Aktuell："],
     tip_online_narrow: "Online: Enter|↑↓|DL|PgUp/Dn|Esc",
@@ -2533,6 +2682,7 @@ static DE: LangTexts = LangTexts {
         "→ j           Juhe-Suche",
         "→ p           Playlist-Suche",
         "→ i           Song-Info",
+        "→ a           Song-Empfehlungen",
         "→ f           Zu Favoriten hinzufügen",
         "→ v           Favoriten anzeigen",
         "→ m           Ordnerverlauf",
@@ -2595,6 +2745,7 @@ static DE: LangTexts = LangTexts {
         " j           Juhe-Suche",
         " p           Playlists suchen",
         " i           Song-Info",
+        " a           Song-Empfehlungen",
         " f           Zu Favoriten hinzufügen",
         " v           Favoriten anzeigen",
         " m           Ordnerverlauf",
@@ -2750,6 +2901,7 @@ static ES: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - Reproductor terminal 🎵",
     song_info_label: "Info canción",
+    comment_summary_label: "Resumen de comentarios",
     help_label: "Ayuda",
     lyrics_label_with_song: "Letras ",
     lyrics_label_no_song: "Letras",
@@ -2770,6 +2922,20 @@ static ES: LangTexts = LangTexts {
     recommendation_title: "Recomendaciones: ",
     recommendation_loading: "Obteniendo recomendaciones...",
     recommendation_no_data: "Reproduce canciones para recomendaciones",
+
+    ai_recommend_input_hint: "Recomendar canciones: escribe una descripción y Enter | clic en preajuste | Esc volver",
+    ai_recommend_prompt_template: "Basándote en la siguiente descripción, recomienda 10 canciones que coincidan. Devuelve solo una lista de canciones que se puedan buscar directamente, una por línea, preferiblemente en el formato \"Título - Artista\", sin numerar y sin explicaciones.\nDescripción：{}",
+    ai_recommend_presets: &[
+        "Estudio",
+        "Trabajo",
+        "Ejercicio",
+        "Amor",
+        "Feliz",
+        "Triste",
+        "Insomnio",
+        "Canciones para días lluviosos",
+        "Canciones chinas para programar de noche",
+    ],
 
     play_status_label: "Estado",
     volume_label: "Volumen",
@@ -2800,6 +2966,7 @@ static ES: LangTexts = LangTexts {
 
     ai_prompt_template: "Compile información detallada sobre la canción basándose en su título. NO muestre ningún preámbulo, saludo ni autopresentación. Muestre la información directamente.\n\nTítulo: {}\n\nEstructura de salida con descripciones detalladas. Si algún punto no se puede verificar, escriba «Sin datos públicos»:\n\nIntérpretes: (voz principal, coros, artistas invitados, etc.)\nDetalles del artista: (nacionalidad, lugar de nacimiento, fecha de nacimiento, signo zodiacal, grupo sanguíneo, altura, peso, profesión, formación, obras notables, logros principales, etc.)\nComposición y producción: (letrista, compositor, arreglista, productor, equipo creativo completo)\nFecha de lanzamiento: (fecha concreta; liste versiones diferentes por separado)\nÁlbum: (nombre del álbum, número de pista, lista de pistas del álbum)\nContexto creativo: (descripción detallada de la inspiración, anécdotas, historias de la creación)\nSignificado de la letra: (interpretación profunda, emociones y temas expresados)\nEstilo musical: (género, BPM, tonalidad, características rítmicas, arreglos especiales o instrumentos)\nRendimiento comercial: (posiciones en listas, ventas, streaming, certificaciones)\nPremios y nominaciones: (premios musicales, nominaciones)\nImpacto y críticas: (reseñas de críticos, influencia cultural, importancia histórica)\nVersiones y usos: (versiones cover notables, usos en cine/publicidad/juegos)\nAnécdotas: (curiosidades, anécdotas relacionadas con la canción)\n\nRequisitos:\n- Información lo más precisa y detallada posible; evite invenciones. Marque lo incierto como «Supuestamente» o «Sin confirmar».\n- Si hay varios intérpretes o versiones, priorice el original o la versión más conocida.\n- Desarrolle cada punto en detalle, no sea demasiado breve.\n- Absolutamente SIN preámbulo, saludo ni autopresentación. NO use listas numeradas.\n- DEBE responder en español.",
 
+    comment_summary_prompt_template: "A partir de los siguientes comentarios de la canción, resume los principales puntos de conexión de los oyentes. No incluyas introducción, saludo ni autopresentación; muestra directamente el resumen.\n\nCanción: {}\n\nComentarios:\n{}\n\nIncluye: puntos de conexión, atmósfera emocional, opiniones representativas, palabras clave, controversias o diferencias. Resume solo con base en los comentarios dados, sin inventar información. Responde en español.",
     recommendation_prompt_template: "Basado en el historial de reproducción de música del usuario, recomienda 10 canciones que podrían gustarle al usuario. Devuelve solo una lista de nombres de canciones, una por línea, sin numeración, sin explicación.\n{}",
     now_playing_prefixes: &["Reproduciendo: ", "Reproduciendo："],
     tip_online_narrow: "En línea: Enter|↑↓|DL|PgUp/Dn|Esc",
@@ -2823,6 +2990,7 @@ static ES: LangTexts = LangTexts {
         "→ j           Búsqueda Juhe",
         "→ p           Búsqueda de listas",
         "→ i           Info de canción",
+        "→ a           Recomendaciones de canciones",
         "→ f           Añadir a favoritos",
         "→ v           Ver favoritos",
         "→ m           Historial de carpetas",
@@ -2885,6 +3053,7 @@ static ES: LangTexts = LangTexts {
         " j           Búsqueda Juhe",
         " p           Buscar playlists",
         " i           Info de canción",
+        " a           Recomendaciones de canciones",
         " f           Añadir a favoritos",
         " v           Ver favoritos",
         " m           Historial de carpetas",
@@ -3040,6 +3209,7 @@ static IT: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - Riproduttore terminale 🎵",
     song_info_label: "Info brano",
+    comment_summary_label: "Riepilogo commenti",
     help_label: "Aiuto",
     lyrics_label_with_song: "Testo ",
     lyrics_label_no_song: "Testo",
@@ -3060,6 +3230,20 @@ static IT: LangTexts = LangTexts {
     recommendation_title: "Raccomandazioni: ",
     recommendation_loading: "Ottenendo raccomandazioni...",
     recommendation_no_data: "Riproduci brani per raccomandazioni",
+
+    ai_recommend_input_hint: "Consiglia brani: inserisci descrizione e Invio | clic preset | Esc indietro",
+    ai_recommend_prompt_template: "In base alla seguente descrizione, raccomanda 10 brani corrispondenti. Restituisci solo un elenco di brani direttamente cercabili, uno per riga, preferibilmente nel formato \"Titolo - Artista\", senza numerazione e senza spiegazioni.\nDescrizione：{}",
+    ai_recommend_presets: &[
+        "Studio",
+        "Lavoro",
+        "Allenamento",
+        "Amore",
+        "Felice",
+        "Triste",
+        "Insonnia",
+        "Brani per giorni di pioggia",
+        "Brani cinesi per programmare di notte",
+    ],
 
     play_status_label: "Stato",
     volume_label: "Volume",
@@ -3090,6 +3274,7 @@ static IT: LangTexts = LangTexts {
 
     ai_prompt_template: "Compila informazioni dettagliate sulla canzone basandoti sul titolo. NON mostrare alcun preambolo, saluto o autopresentazione. Mostra le informazioni direttamente.\n\nTitolo: {}\n\nStruttura di output con descrizioni dettagliate. Se un elemento non può essere verificato, scrivi «Nessun dato pubblico»:\n\nInterpreti: (voce principale, cori, artisti ospiti, ecc.)\nDettagli sull'artista: (nazionalità, luogo di nascita, data di nascita, segno zodiacale, gruppo sanguigno, altezza, peso, professione, formazione, opere notevoli, principali traguardi, ecc.)\nComposizione e produzione: (paroliere, compositore, arrangiatore, produttore, team creativo completo)\nData di uscita: (data specifica; elenca separatamente le diverse versioni)\nAlbum: (nome dell'album, numero traccia, lista tracce dell'album)\nContesto creativo: (descrizione dettagliata dell'ispirazione, storie dietro le quinte, aneddoti)\nSignificato del testo: (interpretazione approfondita, emozioni e temi espressi)\nStile musicale: (genere, BPM, tonalità, caratteristiche ritmiche, arrangiamenti speciali o strumenti)\nPerformance commerciale: (classifiche, vendite, streaming, certificazioni)\nPremi e nomination: (premi musicali, nomination)\nImpatto e recensioni: (recensioni della critica, influenza culturale, importanza storica)\nCover e utilizzi: (cover notevoli, utilizzi in cinema/pubblicità/videogiochi)\nAneddoti: (curiosità, aneddoti legati alla canzone)\n\nRequisiti:\n- Informazioni il più possibile accurate e dettagliate; evitate invenzioni. Segnala come «Secondo voci» o «Non confermato» ciò che è incerto.\n- Se ci sono più interpreti o versioni, priorità all'originale o alla versione più nota.\n- Sviluppa ogni punto in dettaglio, non essere troppo breve.\n- Assolutamente SENZA preambolo, saluto o autopresentazione. NON usare elenchi numerati.\n- Devi rispondere in italiano.",
 
+    comment_summary_prompt_template: "In base ai seguenti commenti sul brano, riassumi i principali punti di risonanza degli ascoltatori. Non includere preamboli, saluti o autopresentazioni; mostra direttamente il riepilogo.\n\nBrano: {}\n\nCommenti:\n{}\n\nIncludi: punti di risonanza, atmosfera emotiva, opinioni rappresentative, parole chiave, controversie o differenze. Riassumi solo in base ai commenti forniti, senza inventare informazioni. Rispondi in italiano.",
     recommendation_prompt_template: "Basato sulla cronologia di riproduzione musicale dell'utente, consiglia 10 canzoni che potrebbero piacergli. Restituisci solo un elenco di nomi di canzoni, uno per riga, senza numerazione, senza spiegazione.\n{}",
     now_playing_prefixes: &["In riproduzione: ", "In riproduzione："],
     tip_online_narrow: "Online: Enter|↑↓|DL|PgUp/Dn|Esc",
@@ -3113,6 +3298,7 @@ static IT: LangTexts = LangTexts {
         "→ j           Ricerca Juhe",
         "→ p           Ricerca playlist",
         "→ i           Info brano",
+        "→ a           Brani consigliati",
         "→ f           Aggiungi ai preferiti",
         "→ v           Visualizza preferiti",
         "→ m           Cronologia cartelle",
@@ -3175,6 +3361,7 @@ static IT: LangTexts = LangTexts {
         " j           Ricerca Juhe",
         " p           Cerca playlist",
         " i           Info canzone",
+        " a           Brani consigliati",
         " f           Aggiungi ai preferiti",
         " v           Vedi preferiti",
         " m           Cronologia cartelle",
@@ -3330,6 +3517,7 @@ static PT: LangTexts = LangTexts {
 
     app_title: "🎵 Ter-Music-Rust - Reprodutor terminal 🎵",
     song_info_label: "Info música",
+    comment_summary_label: "Resumo dos comentários",
     help_label: "Ajuda",
     lyrics_label_with_song: "Letras ",
     lyrics_label_no_song: "Letras",
@@ -3350,6 +3538,20 @@ static PT: LangTexts = LangTexts {
     recommendation_title: "Recomendações: ",
     recommendation_loading: "Obtendo recomendações...",
     recommendation_no_data: "Reproduza músicas para recomendações",
+
+    ai_recommend_input_hint: "Recomendar músicas: digite uma descrição e Enter | clique em predefinição | Esc voltar",
+    ai_recommend_prompt_template: "Com base na seguinte descrição, recomende 10 músicas que correspondam. Retorne apenas uma lista de músicas pesquisáveis diretamente, uma por linha, de preferência no formato \"Título - Artista\", sem numeração e sem explicação.\nDescrição：{}",
+    ai_recommend_presets: &[
+        "Estudo",
+        "Trabalho",
+        "Exercício",
+        "Amor",
+        "Feliz",
+        "Triste",
+        "Insônia",
+        "Músicas para dias chuvosos",
+        "Músicas chinesas para programar de madrugada",
+    ],
 
     play_status_label: "Estado",
     volume_label: "Volume",
@@ -3380,6 +3582,7 @@ static PT: LangTexts = LangTexts {
 
     ai_prompt_template: "Compile informações detalhadas sobre a música com base no título. NÃO exiba nenhum preâmbulo, saudação ou autopresentação. Exiba as informações diretamente.\n\nTítulo: {}\n\nEstrutura de saída com descrições detalhadas. Se algum item não puder ser verificado, escreva «Sem dados públicos»:\n\nIntérpretes: (voz principal, backing vocals, artistas convidados, etc.)\nDetalhes do artista: (nacionalidade, local de nascimento, data de nascimento, signo, tipo sanguíneo, altura, peso, profissão, formação, obras notáveis, principais conquistas, etc.)\nComposição e produção: (letrista, compositor, arranjador, produtor, equipe criativa completa)\nData de lançamento: (data específica; liste versões diferentes separadamente)\nÁlbum: (nome do álbum, número da faixa, lista de faixas do álbum)\nContexto criativo: (descrição detalhada da inspiração, histórias nos bastidores, anedotas da criação)\nSignificado da letra: (interpretação aprofundada, emoções e temas expressos)\nEstilo musical: (gênero, BPM, tonalidade, características rítmicas, arranjos especiais ou instrumentos)\nDesempenho comercial: (posições nas paradas, vendas, streaming, certificações)\nPrêmios e indicações: (prêmios musicais, indicações)\nImpacto e críticas: (avaliações da crítica, influência cultural, importância histórica)\nCovers e usos: (covers notáveis, usos em cinema/publicidade/jogos)\nAnedotas: (curiosidades, anedotas relacionadas à música)\n\nRequisitos:\n- Informações o mais precisas e detalhadas possível; evite invenções. Marque o incerto como «Supostamente» ou «Não confirmado».\n- Se houver vários intérpretes ou versões, priorize o original ou a versão mais conhecida.\n- Desenvolva cada ponto em detalhes, não seja muito breve.\n- Absolutamente SEM preâmbulo, saudação ou autopresentação. NÃO use listas numeradas.\n- Você DEVE responder em português.",
 
+    comment_summary_prompt_template: "Com base nos seguintes comentários da música, resuma os principais pontos de identificação dos ouvintes. Não inclua preâmbulo, saudação ou autopresentação; mostre diretamente o resumo.\n\nMúsica: {}\n\nComentários:\n{}\n\nInclua: pontos de identificação, atmosfera emocional, opiniões representativas, palavras-chave, controvérsias ou divergências. Resuma apenas com base nos comentários fornecidos, sem inventar informações. Responda em português.",
     recommendation_prompt_template: "Com base no histórico de reprodução de música do usuário, recomenda 10 músicas que poderiam agradar ao usuário. Retorne apenas uma lista de nomes de músicas, uma por linha, sem numeração, sem explicação.\n{}",
     now_playing_prefixes: &["Reproduzindo: ", "Reproduzindo："],
     tip_online_narrow: "Online: Enter|↑↓|DL|PgUp/Dn|Esc",
@@ -3403,6 +3606,7 @@ static PT: LangTexts = LangTexts {
         "→ j           Pesquisa Juhe",
         "→ p           Pesquisa de playlists",
         "→ i           Info da música",
+        "→ a           Músicas recomendadas",
         "→ f           Adicionar aos favoritos",
         "→ v           Ver favoritos",
         "→ m           Histórico de pastas",
@@ -3465,6 +3669,7 @@ static PT: LangTexts = LangTexts {
         " j           Busca Juhe",
         " p           Buscar playlists",
         " i           Info da música",
+        " a           Músicas recomendadas",
         " f           Adicionar aos favoritos",
         " v           Ver favoritos",
         " m           Histórico de pastas",

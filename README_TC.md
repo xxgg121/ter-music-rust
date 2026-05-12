@@ -235,6 +235,7 @@ cargo run --release -- -o d:\Music
 | `j` | 搜尋聚合歌曲 |
 | `p` | 搜尋線上播放清單 |
 | `i` | 歌曲資訊查詢 |
+| `a` | 推薦歌曲點歌 |
 | `f` | 收藏/取消收藏 |
 | `v` | 檢視收藏 |
 | `m` | 檢視目錄歷史 |
@@ -707,10 +708,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次建置會下載並編譯所有依賴；這是正常現象。後續建置會快得多。
 
 ### 下載發行版
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 ## 📝 更新日誌
@@ -727,8 +728,11 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 #### 今日推薦歌曲
 - ✨ **推薦歌曲開關**：按 `r` 鍵開啟/關閉今日推薦歌曲功能
 - ✨ **自動獲取推薦**：開啟後自動從網路獲取推薦歌曲列表，顯示在界面上方
+- ✨ **自然語言推薦**：按 `a` 開啟推薦輸入框，可輸入「學習 / 工作 / 運動 / 失眠 / 適合下雨天聽的歌 / 適合深夜寫程式的中文歌」等需求後按 `Enter` 生成推薦，也可直接點擊預設詞條快速推薦
+- ✨ **鍵盤操作推薦**：推薦結果支援 `←/→` 切換項目，`Enter` 直接下載並播放目前推薦歌曲
 - ✨ **點擊下載播放**：點擊推薦歌曲名稱可直接下載並播放
 - ✨ **滑鼠滾輪滑動**：推薦歌曲名稱較長時，滑鼠滾輪可水平滑動查看全部歌曲名稱
+- ✨ **歌曲評論總結**：在歌曲評論頁再次按 `c`，可由 AI 總結聽眾共鳴點、情緒氛圍、代表觀點、關鍵詞與分歧，並在右側面板直接顯示
 - ✨ **設定持久化**：推薦歌曲開關狀態自動儲存和恢復
 
 ### 🔧 功能改進

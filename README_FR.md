@@ -235,6 +235,7 @@ cargo run --release -- -o d:\Music
 | `j` | Recherche Juhe |
 | `p` | Rechercher des listes de lecture en ligne |
 | `i` | Requête d'informations sur la chanson |
+| `a` | Recommandations de chansons |
 | `f` | Ajouter/Retirer des favoris |
 | `v` | Voir les favoris |
 | `m` | Voir l'historique des répertoires |
@@ -705,10 +706,10 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La première compilation télécharge et compile toutes les dépendances ; c'est normal. Les compilations suivantes sont beaucoup plus rapides.
 
 ### Télécharger les versions
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605110409002445_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605110409113726_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605110409197036_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605110409248478_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
@@ -726,8 +727,11 @@ La première compilation télécharge et compile toutes les dépendances ; c'est
 #### Chansons recommandées du jour
 - ✨ **Bascule des chansons recommandées**: Appuyez sur `r` pour activer/désactiver la fonction de chansons recommandées du jour
 - ✨ **Récupération automatique des recommandations**: Lorsqu'activé, récupère automatiquement la liste des chansons recommandées depuis le réseau et l'affiche en haut de l'interface
+- ✨ **Recommandation en langage naturel**: Appuyez sur `a` pour ouvrir la zone de saisie des recommandations. Vous pouvez taper des demandes comme « étude / travail / sport / insomnie / chansons pour les jours de pluie / chansons chinoises pour coder tard la nuit », puis appuyer sur `Enter` pour générer des recommandations, ou cliquer sur les présélections pour aller plus vite
+- ✨ **Contrôle clavier des recommandations**: Les résultats de recommandations prennent en charge `←/→` pour changer d'élément et `Enter` pour télécharger et lire directement la recommandation actuelle
 - ✨ **Clic pour télécharger et lire**: Cliquez sur le nom de la chanson recommandée pour télécharger directement et lire
 - ✨ **Défilement à la molette**: Si le nom de la chanson recommandée est long, la molette de la souris permet un défilement horizontal pour voir le nom complet
+- ✨ **Résumé des commentaires de la chanson**: Dans la page des commentaires, appuyez encore sur `c` pour que l'IA résume les points de résonance des auditeurs, l'atmosphère émotionnelle, les avis représentatifs, les mots-clés et les divergences, puis affiche le résultat dans le panneau de droite
 - ✨ **Persistance des paramètres**: L'état de la bascule des chansons recommandées est automatiquement sauvegardé et restauré
 
 ### 🔧 Améliorations fonctionnelles
