@@ -30,6 +30,12 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 - **Seeking**: fast seek by 5s / 10s
 - **Progress bar seeking**: click the progress bar to jump precisely
 - **Volume control**: real-time adjustment from 0-100, click volume bar to set
+- **Recommended songs**: press `r` to enable today's recommendations, press `a` to generate recommendations from natural-language requests
+- **Recently played**: press `b` to view recently played songs with title, playback time, and play count
+- **M3U import/export**: press `x` to import an M3U playlist and `e` to export the current playlist
+- **Search history**: shows history when the search input is empty, keeps up to 20 entries, and saves automatically
+- **Playback speed**: supports 50%-200% playback speed, adjust with `{`/`}` in 25% steps
+- **A-B loop**: press `;` to set point A, `'` to set point B or toggle the loop, and `、` to clear it
 
 ### 🔄 Playback Modes
 | Key | Mode | Description |
@@ -46,6 +52,10 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 - **Automatic online download**: async background download when local lyrics are missing
 - **Scrolling highlight**: current line is highlighted with `>`, auto-centered scrolling
 - **Lyric position jump**: drag lyric area or use mouse wheel to jump by lyric timestamp
+- **Lyrics translation**: press `y` to show lyrics translation, with streaming translation and translation cache
+- **Bilingual lyrics**: show original lyrics and translations together in the main view and desktop lyrics
+- **Desktop lyrics**: press `z` to toggle floating lyrics, with vertical, horizontal, and Karaoke modes
+- **Lyric calibration**: press `u` to enter lyric timing calibration and save the lyric time offset
 
 ### 🔍 Search
 - **Local search**: press `s` to search songs in current music directory
@@ -71,6 +81,7 @@ A simple and practical terminal-based music player, implemented in Rust, featuri
 
 ### 💬 Comments
 - **Song comments**: press `c` to view comments of current song
+- **Comment summary**: press `c` again in the comments page to let AI summarize resonance points, emotional tone, representative opinions, keywords, and disagreements
 - **Comment details**: press `Enter` to toggle list/detail view (full text in detail)
 - **Reply display**: shows original replied comment text, nickname, and time
 - **Comment paging**: `PgUp` / `PgDn`, 20 comments per page
@@ -124,7 +135,7 @@ Supports 4 themes (cycle with `t`):
 - Waveform freezes when paused
 
 ### ⚙️ Persistent Configuration
-Configuration is stored in `USERPROFILE/ter-music-rust/config.json` in the program directory and is auto-saved/restored:
+On Windows, configuration is stored in `%USERPROFILE%/AppData/Roaming/ter-music-rust/config.json`. On Linux and macOS, it is stored in `XDG_CONFIG_HOME/ter-music-rust/config.json` or `~/.config/ter-music-rust/config.json`. The following settings are auto-saved and restored:
 
 | Config Item | Description |
 |--------|------|
@@ -134,21 +145,23 @@ Configuration is stored in `USERPROFILE/ter-music-rust/config.json` in the progr
 | `volume` | Volume (0-100) |
 | `favorites` | Favorites list |
 | `dir_history` | Directory history |
+| `search_history` | Search history (keeps up to 20 entries) |
 | `api_key` | API Key (for song info query, backward compatible with `deepseek_api_key`) |
 | `api_base_url` | API base URL (default: `https://api.deepseek.com/`) |
 | `api_model` | AI model name (default: `deepseek-v4-flash`) |
 | `github_token` | GitHub Token (used for submitting song info discussions; leave empty to use default Token) |
+| `recommand` | Today's recommended songs toggle (default `false`) |
 | `theme` | Theme name |
 | `language` | UI language (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
-| `lyrics_enabled` | Desktop lyrics visibility (show/hide) |
-| `lyrics_position` | Desktop lyrics position (bottom/top) |
+| `lyrics_visible` | Whether desktop lyrics are shown (default `false`) |
+| `lyrics_position` | Desktop lyrics position (`bottom` / `top`, default `bottom`) |
 | `lyrics_scroll` | Desktop lyrics scroll mode (`vertical` / `horizontal` / `karaoke`, default `vertical`) |
-| `lyrics_alpha` | Desktop lyrics background transparency (10-100) |
-| `lyrics_x` | Desktop lyrics window x coordinate |
-| `lyrics_y` | Desktop lyrics window y coordinate |
-| `recommand` | Today's recommended songs toggle (default `false`) |
+| `lyrics_alpha` | Desktop lyrics background transparency 10-100 (default 70) |
+| `lyrics_x` | Desktop lyrics window X coordinate (`-1` means auto-calculated) |
+| `lyrics_y` | Desktop lyrics window Y coordinate (`-1` means auto-calculated) |
+| `lyrics_offset` | Lyric time offset in seconds (used for lyric calibration) |
 
-**Auto-save triggers**: track change, theme change, language change, favorite change, every 30 seconds, and on exit (including Ctrl+C)
+**Auto-save triggers**: track change, theme change, language change, favorite change, search history update, desktop lyrics control change, every 30 seconds, and on exit (including Ctrl+C)
 
 ---
 
@@ -228,13 +241,17 @@ cargo run --release -- -o d:\Music
 | `,` | Seek backward 10s |
 | `.` | Seek forward 10s |
 | `+/-` | Volume up/down (step 5) |
+| `{/}` | Increase/Decrease playback speed (step 25%) |
+| `;` | Set A-B loop start point A |
+| `'` | Set A-B loop end point B or toggle loop |
+| `、` | Clear A-B loop |
 | `1-5` | Switch playback mode |
 | `o` | Open music directory |
 | `s` | Search local songs |
 | `n` | Search online songs |
 | `j` | Search Juhe songs |
 | `p` | Search online playlists |
-| `i` | song info query |
+| `i` | Song info query |
 | `a` | Recommend songs |
 | `f` | Favorite/Unfavorite |
 | `v` | View favorites |
@@ -247,6 +264,11 @@ cargo run --release -- -o d:\Music
 | `g` | Configure GitHub Token |
 | `z` | Toggle desktop lyrics |
 | `r` | Toggle recommended songs |
+| `y` | Lyrics translation / Toggle bilingual display |
+| `b` | Open recently played list |
+| `x` | Import M3U playlist |
+| `e` | Export M3U playlist |
+| `u` | Enter lyric time calibration mode |
 | `q` | Quit |
 
 ### Search View
@@ -259,7 +281,6 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | Select result |
 | `PgUp/PgDn` | Page up/down (online search) |
 | `s/n/j` | Switch local/online/juhe search |
-
 | `Esc` | Exit search |
 
 ### Favorites View
@@ -706,16 +727,38 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Changelog
 
+## Version 2.0.0 (2026-05-14)
+
+### 🎉 New Feature 1
+- ✨ **Lyrics translation**: Press `y` to show lyrics translation, supports streaming translation and translation caching, supports switching to translated text or bilingual display.
+- ✨ **Bilingual lyrics**: Support displaying original and translated lyrics simultaneously in main view and desktop lyrics; desktop bilingual layout optimized.
+- ✨ **Recently played**: Record play history (history.json), press `b` to open recently played list showing song name, time, play count.
+- ✨ **Playback speed**: Support playback speed 50%-200%, press `{` to increase and `}` to decrease (step 25%), UI shows current speed percent.
+- ✨ **Search history**: Show search history when search input is empty, keep up to 20 items, auto-save to config.
+
+### 🎉 New Feature 2
+- ✨ **A-B loop**: Support setting A (press `;`) and B (press `'`) points and loop the interval, press `、` to clear A-B loop.
+- ✨ **M3U import/export**: Press `x` to import M3U, press `e` to export current playlist to M3U.
+- ✨ **Lyric calibration**: Press `u` to enter lyric time calibration mode to tweak and save `lyrics_offset`.
+- ✨ **Download retry**: Network downloads support retry mechanism to improve success and stability.
+- ✨ **Incremental scan**: Background incremental scan of music directory to reduce blocking and show added/removed statistics.
+
+### 🔧 Improvements
+- Implemented UI and persistent configuration support for the above features and improved synchronization logic between desktop lyrics and bilingual display.
+
+---
+
 ## Version 1.9.0 (2026-05-11)
+
 
 ### 🎉 New Features
 
@@ -781,7 +824,7 @@ The first build downloads and compiles all dependencies; this is expected. Later
 
 ### 🔧 Improvements
 
-- 🔍 **New config items**: `lyrics_enabled` (show/hide), `lyrics_position` (bottom/top), `lyrics_scroll` (scroll mode: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (window coordinates)
+- 🔍 **New config items**: `lyrics_visible` (show/hide), `lyrics_position` (bottom/top), `lyrics_scroll` (scroll mode: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (window coordinates)
 - 🎨 **Desktop lyrics visual optimization**: Unified Linux desktop lyrics text alpha composition, optimized rounded-corner radius and anti-aliasing, and kept transparent backgrounds, lyric highlights, and window edges visually consistent
 
 ### 💻 Technical Details

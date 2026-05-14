@@ -39,8 +39,16 @@ pub struct AudioPlayer {
     accumulated_time: Duration,
     /// 歌曲总时长
     total_duration: Option<Duration>,
+    /// 播放速度 (0.5-2.0)
+    speed: Arc<std::sync::atomic::AtomicU32>,
+
+    /// A-B 循环起点
+    loop_start: Option<Duration>,
+    /// A-B 循环终点
+    loop_end: Option<Duration>,
 }
 
+#[allow(dead_code)]
 impl AudioPlayer {
     /// 创建新的音频播放器
     pub fn new() -> Self {
@@ -57,6 +65,9 @@ impl AudioPlayer {
             play_start_time: None,
             accumulated_time: Duration::ZERO,
             total_duration: None,
+            speed: Arc::new(std::sync::atomic::AtomicU32::new(100)),
+            loop_start: None,
+            loop_end: None,
         }
     }
 
@@ -107,6 +118,10 @@ impl AudioPlayer {
         // 设置音量
         let vol = self.volume.load(Ordering::SeqCst) as f32 / 100.0;
         sink.set_volume(vol);
+
+        // 设置播放速度
+        let spd = self.speed.load(Ordering::SeqCst) as f32 / 100.0;
+        sink.set_speed(spd);
 
         // 开始播放（使用分析器包装的源）
         sink.append(analyzed_source);
@@ -171,6 +186,8 @@ impl AudioPlayer {
         self.play_start_time = None;
         self.accumulated_time = Duration::ZERO;
         self.total_duration = None;
+        self.loop_start = None;
+        self.loop_end = None;
     }
 
     /// 获取当前播放进度 (已播放时间, 总时长)
@@ -311,6 +328,89 @@ impl AudioPlayer {
     pub fn get_realtime_volume(&self) -> f32 {
         let level = self.volume_level.load(Ordering::Relaxed);
         level as f32 / 1000.0
+    }
+
+    /// 设置播放速度 (50-200，代表 0.5x-2.0x)
+    pub fn set_speed(&mut self, speed: u32) {
+        let spd = speed.clamp(50, 200);
+        self.speed.store(spd, Ordering::SeqCst);
+
+        if let Some(sink) = &self.sink {
+            sink.set_speed(spd as f32 / 100.0);
+        }
+    }
+
+    /// 获取播放速度
+    pub fn get_speed(&self) -> u32 {
+        self.speed.load(Ordering::SeqCst)
+    }
+
+    /// 速度增加 (+25%)
+    pub fn speed_up(&mut self) {
+        let spd = self.speed.load(Ordering::SeqCst);
+        if spd < 200 {
+            self.set_speed(spd + 25);
+        }
+    }
+
+    /// 速度减少 (-25%)
+    pub fn speed_down(&mut self) {
+        let spd = self.speed.load(Ordering::SeqCst);
+        if spd > 50 {
+            self.set_speed(spd - 25);
+        }
+    }
+
+    /// 设置 A-B 循环起点
+    pub fn set_loop_start(&mut self) {
+        let (current, _) = self.get_progress();
+        self.loop_start = Some(current);
+        // 如果终点已设置且在起点之前，清除终点
+        if let Some(end) = self.loop_end {
+            if current >= end {
+                self.loop_end = None;
+            }
+        }
+    }
+
+    /// 设置 A-B 循环终点
+    pub fn set_loop_end(&mut self) {
+        let (current, _) = self.get_progress();
+        if let Some(start) = self.loop_start {
+            if current > start {
+                self.loop_end = Some(current);
+            }
+        } else {
+            // 如果没有设置起点，先设置起点
+            self.loop_start = Some(current);
+        }
+    }
+
+    /// 清除 A-B 循环
+    pub fn clear_loop(&mut self) {
+        self.loop_start = None;
+        self.loop_end = None;
+    }
+
+    /// 检查是否需要循环，返回 Some(Duration) 表示需要跳转到该位置
+    pub fn check_loop(&self) -> Option<Duration> {
+        if let (Some(start), Some(end)) = (self.loop_start, self.loop_end) {
+            let (current, _) = self.get_progress();
+            if current >= end {
+                return Some(start);
+            }
+        }
+        None
+    }
+
+    /// 是否启用了 A-B 循环
+    pub fn is_loop_active(&self) -> bool {
+        self.loop_start.is_some() && self.loop_end.is_some()
+    }
+
+    /// 获取 A-B 循环信息
+    pub fn get_loop_info(&self) -> (Option<Duration>, Option<Duration>) {
+        (self.loop_start, self.loop_end)
     }
 }
 

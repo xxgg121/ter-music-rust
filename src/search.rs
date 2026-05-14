@@ -530,14 +530,13 @@ pub fn fetch_song_info_streaming(
             (
                 "https://openrouter.ai/api/v1/chat/completions".to_string(),
                 "minimax/minimax-m2.5:free".to_string(),
-                "Bearer sk-xxxxxx"
-                    .to_string(),
+                "Bearer sk-xxxxxx".to_string(),
             )
         };
 
         let client = match reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(60))
-            .user_agent("TerMusicRust/1.6.0")
+            .user_agent("TerMusicRust/2.0.0")
             .build()
         {
             Ok(c) => c,
@@ -3028,7 +3027,7 @@ fn create_github_discussion(
 
     let client = match reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
-        .user_agent("TerMusicRust/1.6.0")
+        .user_agent("TerMusicRust/2.0.0")
         .build()
     {
         Ok(c) => c,
@@ -3886,4 +3885,19 @@ pub fn search_and_get_juhe_lyrics_background(
         }
     });
     rx
+}
+
+/// 在后台线程中流式翻译歌词
+pub fn fetch_lyrics_translation_streaming(
+    original_lyrics: String,
+    target_language: String,
+    config: AiQueryConfig,
+) -> mpsc::Receiver<SongInfoChunk> {
+    let prompt = format!(
+        "Detect the primary language of the lyrics below. If the lyrics are already in {}, return each line unchanged. Otherwise, translate each line into {}. Return only the resulting lyrics, with no explanations, notes, greetings, or extra text.\nThe output must preserve a strict one-to-one line mapping with the input: every input line must produce exactly one output line, in the same order.\n\nOriginal lyrics:\n{}",
+        target_language,
+        target_language, original_lyrics
+    );
+
+    fetch_song_info_streaming(prompt, config)
 }

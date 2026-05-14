@@ -2,6 +2,7 @@
 
 use rayon::prelude::*;
 use rodio::{Decoder, Source};
+use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -72,6 +73,88 @@ pub fn scan_music_directory(dir: &Path) -> Result<Playlist, String> {
     playlist.directory = Some(dir.to_string_lossy().to_string());
 
     Ok(playlist)
+}
+
+/// 增量刷新目录中的音乐文件。
+///
+/// 该函数只重新解析新增文件的时长，保留未变化文件的已有元数据，删除已不存在或不再支持的文件。
+/// 返回值中的 `(added, removed)` 可用于 UI 状态提示。
+pub fn scan_music_directory_incremental(
+    current: &Playlist,
+    dir: &Path,
+) -> Result<(Playlist, usize, usize), String> {
+    if !dir.exists() {
+        return Err(crate::langs::global_texts()
+            .fmt_dir_not_exist
+            .replace("{}", &format!("{:?}", dir)));
+    }
+
+    if !dir.is_dir() {
+        return Err(crate::langs::global_texts()
+            .fmt_not_a_dir
+            .replace("{}", &format!("{:?}", dir)));
+    }
+
+    let scanned_paths: Vec<PathBuf> = WalkDir::new(dir)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_file() && is_supported_audio(e.path()))
+        .map(|e| e.path().to_path_buf())
+        .collect();
+
+    if scanned_paths.is_empty() {
+        return Err(crate::langs::global_texts()
+            .no_music_files_found
+            .to_string());
+    }
+
+    let old_by_path: HashMap<PathBuf, MusicFile> = current
+        .files
+        .iter()
+        .cloned()
+        .map(|file| (file.path.clone(), file))
+        .collect();
+    let scanned_set: HashSet<PathBuf> = scanned_paths.iter().cloned().collect();
+
+    let added_paths: Vec<PathBuf> = scanned_paths
+        .iter()
+        .filter(|path| !old_by_path.contains_key(*path))
+        .cloned()
+        .collect();
+    let added_files: HashMap<PathBuf, MusicFile> = added_paths
+        .par_iter()
+        .map(|path| {
+            let duration = get_audio_duration(path);
+            (
+                path.clone(),
+                MusicFile::with_duration(path.clone(), duration),
+            )
+        })
+        .collect();
+
+    let mut files = Vec::with_capacity(scanned_paths.len());
+    for path in scanned_paths {
+        if let Some(existing) = old_by_path.get(&path) {
+            files.push(existing.clone());
+        } else if let Some(new_file) = added_files.get(&path) {
+            files.push(new_file.clone());
+        }
+    }
+
+    files.sort_by(|a, b| a.name.cmp(&b.name));
+
+    let removed = current
+        .files
+        .iter()
+        .filter(|file| !scanned_set.contains(&file.path) || !is_supported_audio(&file.path))
+        .count();
+
+    let mut playlist = Playlist::new();
+    playlist.files = files;
+    playlist.directory = Some(dir.to_string_lossy().to_string());
+
+    Ok((playlist, added_paths.len(), removed))
 }
 
 /// 在 Windows 上打开文件夹选择对话框

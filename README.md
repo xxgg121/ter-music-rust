@@ -30,6 +30,12 @@
 - **快进快退**：5 秒 / 10 秒 快速跳转
 - **进度条跳转**：鼠标点击进度条精确定位
 - **音量控制**：0-100 实时调节，鼠标点击音量条调整
+- **推荐歌曲**：按 `r` 开启今日推荐，按 `a` 输入自然语言需求生成推荐歌曲
+- **最近播放**：按 `b` 查看最近播放列表，记录歌曲名称、播放时间与次数
+- **M3U 导入/导出**：按 `x` 导入 M3U 播放列表，按 `e` 导出当前播放列表
+- **搜索历史**：搜索输入为空时显示历史记录，最多保留 20 条并自动保存
+- **倍速播放**：支持 50%-200% 播放速度，按 `{`/`}` 以 25% 步长调整
+- **A-B 循环**：按 `;` 设置起点 A、按 `'` 设置终点 B 或切换循环，按 `、` 清除循环
 
 ### 🔄 播放模式
 | 按键 | 模式 | 说明 |
@@ -46,6 +52,10 @@
 - **自动网络下载**：本地无歌词时后台异步下载
 - **歌词滚动高亮**：当前歌词行 `>` 前缀高亮，自动居中滚动
 - **歌词位置跳转**：鼠标拖动歌词区域 / 滚轮跳转到对应时间
+- **歌词翻译**：按 `y` 显示歌词翻译，支持流式翻译与翻译缓存
+- **双语歌词**：主界面与桌面歌词可同时显示原文和译文
+- **桌面歌词**：按 `z` 开关悬浮歌词，支持垂直、横向、卡拉 OK 三种模式
+- **歌词校准**：按 `u` 进入歌词时间校准模式，微调并保存歌词时间偏移
 
 ### 🔍 搜索功能
 - **本地搜索**：按 `s` 进入，根据关键字匹配音乐目录歌曲
@@ -71,6 +81,7 @@
 
 ### 💬 评论功能
 - **歌曲评论**：按 `c` 查看当前歌曲的评论
+- **评论总结**：在歌曲评论页再次按 `c`，由 AI 总结评论共鸣点、情绪氛围、代表观点、关键词与分歧
 - **评论详情**：按 `Enter` 切换列表/详情视图，详情显示完整内容
 - **回复展示**：显示被回复的原评论内容、昵称和时间
 - **评论翻页**：`PgUp`/`PgDn` 翻页，每页 20 条
@@ -124,7 +135,7 @@
 - 暂停时波形冻结
 
 ### ⚙️ 配置持久化
-配置保存在 `USERPROFILE/ter-music-rust/config.json`，自动保存和恢复：
+Windows 系统配置保存在 `%USERPROFILE%/AppData/Roaming/ter-music-rust/config.json`（Linux、MacOS 系统配置保存在 `XDG_CONFIG_HOME/ter-music-rust/config.json` 或 `~/.config/ter-music-rust/config.json`），自动保存和恢复：
 
 | 配置项 | 说明 |
 |--------|------|
@@ -134,10 +145,12 @@
 | `volume` | 音量大小 (0-100) |
 | `favorites` | 收藏列表 |
 | `dir_history` | 目录历史记录 |
+| `search_history` | 搜索历史（最多保留 20 条） |
 | `api_key` | API Key（歌曲信息查询用，兼容旧字段 `deepseek_api_key`） |
 | `api_base_url` | API 接口地址（默认 `https://api.deepseek.com/`） |
 | `api_model` | AI 模型名称（默认 `deepseek-v4-flash`） |
 | `github_token` | GitHub Token（用于提交歌曲信息 Discussion，留空使用默认 Token） |
+| `recommand` | 今日推荐歌曲开关（默认 `false`） |
 | `theme` | 界面主题名称 |
 | `language` | 界面语言（`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`） |
 | `lyrics_visible` | 桌面歌词是否显示（默认 `false`） |
@@ -146,9 +159,10 @@
 | `lyrics_alpha` | 桌面歌词背景透明度 10-100（默认 70） |
 | `lyrics_x` | 桌面歌词窗口 X 坐标（-1 为自动计算） |
 | `lyrics_y` | 桌面歌词窗口 Y 坐标（-1 为自动计算） |
-| `recommand` | 今日推荐歌曲开关（默认 `false`） |
+| `lyrics_offset` | 歌词时间偏移（秒，供歌词校准功能使用） |
 
-**自动保存时机**：切歌、切换主题、切换语言、收藏变更、每 30 秒、退出时（含 Ctrl+C）
+
+**自动保存时机**：切歌、切换主题、切换语言、收藏变更、搜索历史更新、桌面歌词控制变更、每 30 秒、退出时（含 Ctrl+C）
 
 ---
 
@@ -227,6 +241,10 @@ cargo run --release -- -o d:\Music
 | `,` | 快退 10 秒 |
 | `.` | 快进 10 秒 |
 | `+/-` | 音量加减 (步长 5) |
+| `{/}` | 加快减慢播放速度 (步长 25%) |
+| `;` | 设置 A-B 循环起点 A |
+| `'` | 设置 A-B 循环终点 B 或切换循环 |
+| `、` | 清除 A-B 循环 |
 | `1-5` | 切换播放模式 |
 | `o` | 打开音乐目录 |
 | `s` | 搜索本地歌曲 |
@@ -246,7 +264,13 @@ cargo run --release -- -o d:\Music
 | `g` | 配置Github Token |
 | `z` | 桌面歌词开关 |
 | `r` | 推荐歌曲开关 |
+| `y` | 歌词翻译 / 切换双语显示 |
+| `b` | 打开最近播放列表 |
+| `x` | 导入 M3U 播放列表 |
+| `e` | 导出 M3U 播放列表 |
+| `u` | 进入歌词时间校准模式 |
 | `q` | 退出音乐程序 |
+
 
 ### 歌曲搜索按键
 
@@ -258,7 +282,6 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | 选择搜索结果 |
 | `PgUp/PgDn` | 翻页（网络搜索） |
 | `s/n/j` | 切换本地/网络/聚合搜索 |
-
 | `Esc` | 退出搜索 |
 
 ### 收藏列表按键
@@ -704,14 +727,35 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新日志
+
+## 版本 2.0.0 (2026-05-14)
+
+### 🎉 新功能1
+- ✨ **歌词翻译**：按 `y` 显示歌词翻译，支持流式翻译和翻译缓存，支持切换显示译文或双语显示。
+- ✨ **双语歌词**：支持在主界面与桌面歌词同时显示原文与译文，桌面歌词双语显示优化了句间间隔与布局。
+- ✨ **最近播放**：记录播放历史（history.json），按 `b` 打开最近播放列表显示最近播放歌曲名称、时间、次数。
+- ✨ **倍速播放**：播放速度支持 50%-200%，按 `{` 加速、`}` 减速（步长 25%），界面显示当前播放速度的百分比。
+- ✨ **搜索历史**：在搜索输入为空时显示历史记录，最多保留 20 条，自动保存至配置文件。
+
+### 🎉 新功能2
+- ✨ **A-B 循环**：支持设置 A（按 `;`）和 B（按 `'`）点并循环播放区间，按 `、` 清除 A-B 循环。
+- ✨ **M3U 导入/导出**：按 `x` 导入 M3U，按 `e` 导出当前播放列表为 M3U 文件。
+- ✨ **歌词校准**：按 `u` 进入歌词时间校准模式，可微调歌词时间偏移并保存（配置项 `lyrics_offset`）。
+- ✨ **下载重试**：网络下载任务支持重试机制，提高下载成功率与稳定性。
+- ✨ **增量扫描**：支持后台增量扫描音乐目录，更新播放列表时减少阻塞并显示新增/删除统计。
+
+### 🔧 功能改进
+- 配合上述功能完成相应的界面与配置持久化支持，优化了桌面歌词与双语显示的同步逻辑。
+
+---
 
 ## 版本 1.9.0 (2026-05-11)
 
@@ -779,7 +823,7 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 
 ### 🔧 功能改进
 
-- 🔍 **新增配置项**：`lyrics_enabled`（是否显示桌面歌词）、`lyrics_position`（位置：bottom/top）、`lyrics_scroll`（滚动模式：vertical/horizontal/karaoke）、`lyrics_alpha`（透明度 10-100）、`lyrics_x`/`lyrics_y`（窗口坐标）
+- 🔍 **新增配置项**：`lyrics_visible`（是否显示桌面歌词）、`lyrics_position`（位置：bottom/top）、`lyrics_scroll`（滚动模式：vertical/horizontal/karaoke）、`lyrics_alpha`（透明度 10-100）、`lyrics_x`/`lyrics_y`（窗口坐标）
 - 🎨 **桌面歌词视觉优化**：统一 Linux 桌面歌词文字透明度合成逻辑，优化圆角半径与抗锯齿效果，保证透明背景、歌词高亮和窗口边缘显示一致
 
 ### 💻 技术细节

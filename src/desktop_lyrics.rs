@@ -83,6 +83,8 @@ pub struct DesktopLyricsCommand {
     pub all_lyrics_json: String,
     /// 当前播放时间（秒）
     pub current_time_sec: f64,
+    /// 是否在桌面歌词中只显示当前一句
+    pub single_line_mode: bool,
 }
 
 impl DesktopLyricsCommand {
@@ -99,6 +101,7 @@ impl DesktopLyricsCommand {
             scroll_mode: DesktopLyricsScrollMode::Vertical,
             all_lyrics_json: String::new(),
             current_time_sec: 0.0,
+            single_line_mode: false,
         }
     }
 }
@@ -321,12 +324,23 @@ impl DesktopLyricsHandle {
         current_time_sec: f64,
         theme_name: &str,
     ) {
+        self.update_all_lyrics_with_mode(all_lyrics, current_time_sec, theme_name, false);
+    }
+
+    pub fn update_all_lyrics_with_mode(
+        &self,
+        all_lyrics: &[(String, f64)],
+        current_time_sec: f64,
+        theme_name: &str,
+        single_line_mode: bool,
+    ) {
         let mut cmd = DesktopLyricsCommand::basic();
         cmd.all_lyrics_json = serde_json::to_string(all_lyrics).unwrap_or_default();
         cmd.current_time_sec = current_time_sec;
         cmd.theme_name = theme_name.to_string();
         cmd.position = self.position;
         cmd.scroll_mode = self.scroll_mode;
+        cmd.single_line_mode = single_line_mode;
         self.send_cmd(cmd);
     }
 
@@ -581,6 +595,7 @@ mod windows_impl {
         old_karaoke_line_group: usize,
         karaoke_transition_progress: f32,
         horizontal_target_offset: f32,
+        single_line_mode: bool,
     }
 
     fn theme_colors(name: &str) -> ((u8, u8, u8), (u8, u8, u8), (u8, u8, u8)) {
@@ -625,7 +640,47 @@ mod windows_impl {
             .to_string()
     }
 
-    fn karaoke_group_start(all_lyrics: &[(String, f64)], current_idx: usize) -> usize {
+    fn split_bilingual_text(text: &str) -> (&str, &str) {
+        text.split_once('\n').unwrap_or((text, ""))
+    }
+
+    fn karaoke_display_text(text: &str) -> String {
+        text.lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    fn karaoke_line_gap_i32(width: i32) -> i32 {
+        (width as f32 * 0.025).max(24.0) as i32
+    }
+
+    unsafe fn measure_gdi_text(mem_dc: HDC, text: &str) -> i32 {
+        let clean = clean_text(text);
+        let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut calc_rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        DrawTextW(
+            mem_dc,
+            wide.as_ptr(),
+            -1,
+            &mut calc_rect,
+            DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT,
+        );
+        calc_rect.right - calc_rect.left
+    }
+
+    fn karaoke_group_start(
+        all_lyrics: &[(String, f64)],
+        current_idx: usize,
+        group_size: usize,
+    ) -> usize {
+        let group_size = group_size.max(1);
         let visible_count = all_lyrics
             .iter()
             .take(current_idx.saturating_add(1))
@@ -635,7 +690,7 @@ mod windows_impl {
             return 0;
         }
 
-        let target_visible_idx = ((visible_count - 1) / 4) * 4;
+        let target_visible_idx = ((visible_count - 1) / group_size) * group_size;
         let mut visible_idx = 0usize;
         for (idx, (text, _)) in all_lyrics.iter().enumerate() {
             if clean_text(text).is_empty() {
@@ -654,18 +709,23 @@ mod windows_impl {
         all_lyrics: &[(String, f64)],
         group_start: usize,
         current_idx: usize,
+        single_line_mode: bool,
     ) -> (Vec<(String, bool)>, bool) {
         let mut lines = Vec::new();
         let mut current_visible = false;
         let mut idx = group_start;
-        while lines.len() < 4 && idx < all_lyrics.len() {
-            let cleaned = clean_text(&all_lyrics[idx].0);
+        let max_lines = if single_line_mode { 2 } else { 4 };
+        while lines.len() < max_lines && idx < all_lyrics.len() {
+            let cleaned = karaoke_display_text(&clean_text(&all_lyrics[idx].0));
             if !cleaned.is_empty() {
                 let is_current = idx == current_idx;
                 current_visible |= is_current;
                 lines.push((cleaned, is_current));
             }
             idx += 1;
+        }
+        if single_line_mode && lines.len() > 1 {
+            lines.insert(1, (String::new(), false));
         }
         (lines, current_visible)
     }
@@ -1042,6 +1102,7 @@ mod windows_impl {
             let current_idx = if current_idx == 0 { 0 } else { current_idx - 1 };
 
             let gap = 40i32;
+            let bilingual_line_gap = (h as f32 * 0.04).max(4.0) as i32;
             let mut widths = vec![0i32; data.all_lyrics.len()];
             for (i, (text, _)) in data.all_lyrics.iter().enumerate() {
                 if text.is_empty() {
@@ -1052,23 +1113,14 @@ mod windows_impl {
                 } else {
                     create_font(fs, false)
                 };
-                let clean = clean_text(text);
-                let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
                 let old_f = SelectObject(mem_dc, font as _);
-                let mut calc_rect = RECT {
-                    left: 0,
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                };
-                DrawTextW(
-                    mem_dc,
-                    wide.as_ptr(),
-                    -1,
-                    &mut calc_rect,
-                    DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT,
-                );
-                widths[i] = calc_rect.right - calc_rect.left;
+                if data.single_line_mode {
+                    let (original, translation) = split_bilingual_text(text);
+                    widths[i] = measure_gdi_text(mem_dc, original)
+                        .max(measure_gdi_text(mem_dc, translation));
+                } else {
+                    widths[i] = measure_gdi_text(mem_dc, text);
+                }
                 SelectObject(mem_dc, old_f);
                 DeleteObject(font as _);
             }
@@ -1114,27 +1166,62 @@ mod windows_impl {
                 } else {
                     create_font(fs, false)
                 };
-                let clean = clean_text(text);
-                let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
                 let old_f = SelectObject(mem_dc, font as _);
                 SetTextColor(
                     mem_dc,
                     RGB(blended_color.0, blended_color.1, blended_color.2),
                 );
                 let x = (positions[i] as f32 - final_offset) as i32;
-                let mut r = RECT {
-                    left: x,
-                    top: y,
-                    right: x + widths[i],
-                    bottom: y + text_h,
-                };
-                DrawTextW(
-                    mem_dc,
-                    wide.as_ptr(),
-                    -1,
-                    &mut r,
-                    DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
-                );
+                if data.single_line_mode {
+                    let (original, translation) = split_bilingual_text(text);
+                    let row_h = text_h;
+                    let total_h = if translation.is_empty() {
+                        row_h
+                    } else {
+                        row_h * 2 + bilingual_line_gap
+                    };
+                    let top = (h - total_h) / 2;
+                    for (line_idx, line_text) in [original, translation].iter().enumerate() {
+                        if line_text.is_empty() {
+                            continue;
+                        }
+                        let clean = clean_text(line_text);
+                        let wide: Vec<u16> =
+                            clean.encode_utf16().chain(std::iter::once(0)).collect();
+                        let line_w = measure_gdi_text(mem_dc, line_text);
+                        let line_x = x + ((widths[i] - line_w) / 2).max(0);
+                        let line_top = top + line_idx as i32 * (row_h + bilingual_line_gap);
+                        let mut r = RECT {
+                            left: line_x,
+                            top: line_top,
+                            right: line_x + line_w,
+                            bottom: line_top + row_h,
+                        };
+                        DrawTextW(
+                            mem_dc,
+                            wide.as_ptr(),
+                            -1,
+                            &mut r,
+                            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
+                        );
+                    }
+                } else {
+                    let clean = clean_text(text);
+                    let wide: Vec<u16> = clean.encode_utf16().chain(std::iter::once(0)).collect();
+                    let mut r = RECT {
+                        left: x,
+                        top: y,
+                        right: x + widths[i],
+                        bottom: y + text_h,
+                    };
+                    DrawTextW(
+                        mem_dc,
+                        wide.as_ptr(),
+                        -1,
+                        &mut r,
+                        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
+                    );
+                }
                 SelectObject(mem_dc, old_f);
                 DeleteObject(font as _);
             }
@@ -1236,13 +1323,19 @@ mod windows_impl {
             let current_idx = if current_idx == 0 { 0 } else { current_idx - 1 };
 
             if data.karaoke_line_group == usize::MAX {
-                data.karaoke_line_group = karaoke_group_start(&data.all_lyrics, current_idx);
+                let group_size = if data.single_line_mode { 2 } else { 4 };
+                data.karaoke_line_group =
+                    karaoke_group_start(&data.all_lyrics, current_idx, group_size);
             }
             let group_start = data.karaoke_line_group;
 
             let current_visible;
-            (lines, current_visible) =
-                karaoke_lines_for_group(&data.all_lyrics, group_start, current_idx);
+            (lines, current_visible) = karaoke_lines_for_group(
+                &data.all_lyrics,
+                group_start,
+                current_idx,
+                data.single_line_mode,
+            );
             if data.karaoke_transition_progress < 1.0
                 && data.old_karaoke_line_group != usize::MAX
                 && data.old_karaoke_line_group != group_start
@@ -1251,6 +1344,7 @@ mod windows_impl {
                     &data.all_lyrics,
                     data.old_karaoke_line_group,
                     current_idx,
+                    data.single_line_mode,
                 )
                 .0;
             }
@@ -1343,7 +1437,7 @@ mod windows_impl {
 
         let text_h = fs + 6;
         let char_spacing = 0i32; // 字间距
-        let gap = (w as f32 * 0.01) as i32; // 句间间隔，逗号大小
+        let gap = karaoke_line_gap_i32(w); // 句间间隔，避免双语歌词连接在一起
         let top_y = (h as f32 * 0.18) as i32;
         let bottom_y = (h as f32 * 0.55) as i32;
         let left_margin = (w as f32 * 0.04) as i32;
@@ -1699,8 +1793,9 @@ mod windows_impl {
                                     .partition_point(|&(_, t)| t <= data.current_time_sec);
                                 let current_idx =
                                     if current_idx == 0 { 0 } else { current_idx - 1 };
+                                let group_size = if data.single_line_mode { 2 } else { 4 };
                                 let target_group =
-                                    karaoke_group_start(&data.all_lyrics, current_idx);
+                                    karaoke_group_start(&data.all_lyrics, current_idx, group_size);
                                 if data.karaoke_line_group != target_group
                                     && !data.all_lyrics.is_empty()
                                 {
@@ -1785,16 +1880,25 @@ mod windows_impl {
                                                     &cmd.all_lyrics_json,
                                                 )
                                             {
+                                                let mode_changed =
+                                                    cmd.single_line_mode != data.single_line_mode;
                                                 if new_lyrics != data.all_lyrics
                                                     || (cmd.current_time_sec
                                                         - data.current_time_sec)
                                                         .abs()
                                                         > 0.1
+                                                    || mode_changed
                                                 {
                                                     data.old_all_lyrics = data.all_lyrics.clone();
                                                     data.old_scroll_offset = data.scroll_offset;
                                                     data.all_lyrics = new_lyrics;
                                                     data.current_time_sec = cmd.current_time_sec;
+                                                    data.single_line_mode = cmd.single_line_mode;
+                                                    if mode_changed {
+                                                        data.karaoke_line_group = usize::MAX;
+                                                        data.old_karaoke_line_group = usize::MAX;
+                                                        data.karaoke_transition_progress = 1.0;
+                                                    }
                                                     data.horizontal_progress = 0.0;
                                                     data.transitioning = true;
                                                     changed = true;
@@ -1984,6 +2088,7 @@ mod windows_impl {
                 old_karaoke_line_group: usize::MAX,
                 karaoke_transition_progress: 1.0,
                 horizontal_target_offset: 0.0,
+                single_line_mode: false,
             });
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, Box::into_raw(data) as _);
             SetTimer(hwnd, TIMER_ID, TIMER_INTERVAL_MS, None);
@@ -2043,7 +2148,24 @@ pub mod unix_impl {
             .to_string()
     }
 
-    fn karaoke_group_start(all_lyrics: &[(String, f64)], current_idx: usize) -> usize {
+    fn split_bilingual_text(text: &str) -> (&str, &str) {
+        text.split_once('\n').unwrap_or((text, ""))
+    }
+
+    fn karaoke_display_text(text: &str) -> String {
+        text.lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    fn karaoke_group_start(
+        all_lyrics: &[(String, f64)],
+        current_idx: usize,
+        group_size: usize,
+    ) -> usize {
+        let group_size = group_size.max(1);
         let visible_count = all_lyrics
             .iter()
             .take(current_idx.saturating_add(1))
@@ -2053,7 +2175,7 @@ pub mod unix_impl {
             return 0;
         }
 
-        let target_visible_idx = ((visible_count - 1) / 4) * 4;
+        let target_visible_idx = ((visible_count - 1) / group_size) * group_size;
         let mut visible_idx = 0usize;
         for (idx, (text, _)) in all_lyrics.iter().enumerate() {
             if clean_text(text).is_empty() {
@@ -2072,18 +2194,23 @@ pub mod unix_impl {
         all_lyrics: &[(String, f64)],
         group_start: usize,
         current_idx: usize,
+        single_line_mode: bool,
     ) -> (Vec<(String, bool)>, bool) {
         let mut lines = Vec::new();
         let mut current_visible = false;
         let mut idx = group_start;
-        while lines.len() < 4 && idx < all_lyrics.len() {
-            let cleaned = clean_text(&all_lyrics[idx].0);
+        let max_lines = if single_line_mode { 2 } else { 4 };
+        while lines.len() < max_lines && idx < all_lyrics.len() {
+            let cleaned = karaoke_display_text(&clean_text(&all_lyrics[idx].0));
             if !cleaned.is_empty() {
                 let is_current = idx == current_idx;
                 current_visible |= is_current;
                 lines.push((cleaned, is_current));
             }
             idx += 1;
+        }
+        if single_line_mode && lines.len() > 1 {
+            lines.insert(1, (String::new(), false));
         }
         (lines, current_visible)
     }
@@ -2504,9 +2631,27 @@ pub mod unix_impl {
                 } else {
                     &state.font_latin
                 };
-                let clean = clean_text(text);
-                let quads = rasterize_font_text(font_to_use, latin_font_to_use, &clean, fs);
-                widths[i] = glyph_text_width(&quads);
+                if state.single_line_mode {
+                    let (original, translation) = split_bilingual_text(text);
+                    let original_quads = rasterize_font_text(
+                        font_to_use,
+                        latin_font_to_use,
+                        &clean_text(original),
+                        fs,
+                    );
+                    let translation_quads = rasterize_font_text(
+                        font_to_use,
+                        latin_font_to_use,
+                        &clean_text(translation),
+                        fs,
+                    );
+                    widths[i] =
+                        glyph_text_width(&original_quads).max(glyph_text_width(&translation_quads));
+                } else {
+                    let clean = clean_text(text);
+                    let quads = rasterize_font_text(font_to_use, latin_font_to_use, &clean, fs);
+                    widths[i] = glyph_text_width(&quads);
+                }
             }
 
             let mut positions = vec![0.0f32; state.all_lyrics.len()];
@@ -2527,6 +2672,7 @@ pub mod unix_impl {
             let final_offset = state.scroll_offset;
 
             let center_y = h as f32 * 0.5;
+            let bilingual_line_gap = (h as f32 * 0.04).max(4.0);
 
             for (i, (text, _)) in state.all_lyrics.iter().enumerate() {
                 if text.is_empty() {
@@ -2544,40 +2690,81 @@ pub mod unix_impl {
                 } else {
                     &state.font_latin
                 };
-                let clean = clean_text(text);
-                let quads = rasterize_font_text(font_to_use, latin_font_to_use, &clean, fs);
                 let x = positions[i] - final_offset;
-                let baseline = glyph_centered_baseline(&quads, center_y);
-                for q in &quads {
-                    let ox = (x + q.x) as i32;
-                    let oy = (baseline + q.y) as i32;
-                    for gy in 0..q.height {
-                        let py = oy + gy as i32;
-                        if py < 0 || py >= h as i32 {
-                            continue;
+                let render_quads =
+                    |buf: &mut [u32], origin_x: f32, quads: Vec<GlyphQuad>, baseline: f32| {
+                        for q in &quads {
+                            let ox = (origin_x + q.x) as i32;
+                            let oy = (baseline + q.y) as i32;
+                            for gy in 0..q.height {
+                                let py = oy + gy as i32;
+                                if py < 0 || py >= h as i32 {
+                                    continue;
+                                }
+                                for gx in 0..q.width {
+                                    let px = ox + gx as i32;
+                                    if px < 0 || px >= w as i32 {
+                                        continue;
+                                    }
+                                    let cov = q.pixels[gy * q.width + gx];
+                                    if cov <= 0.001 {
+                                        continue;
+                                    }
+                                    let cov = cov.powf(0.75).min(1.0);
+                                    let blend = cov;
+                                    let rr = (bg.0 as f32 + (color.0 as f32 - bg.0 as f32) * blend)
+                                        as u32;
+                                    let gg = (bg.1 as f32 + (color.1 as f32 - bg.1 as f32) * blend)
+                                        as u32;
+                                    let bb = (bg.2 as f32 + (color.2 as f32 - bg.2 as f32) * blend)
+                                        as u32;
+                                    let ca = txt_a as u32;
+                                    if ca == 0 {
+                                        continue;
+                                    }
+                                    let idx = (py as u32 * w + px as u32) as usize;
+                                    buf[idx] = (rr << 16) | (gg << 8) | bb | (ca << 24);
+                                }
+                            }
                         }
-                        for gx in 0..q.width {
-                            let px = ox + gx as i32;
-                            if px < 0 || px >= w as i32 {
-                                continue;
-                            }
-                            let cov = q.pixels[gy * q.width + gx];
-                            if cov <= 0.001 {
-                                continue;
-                            }
-                            let cov = cov.powf(0.75).min(1.0);
-                            let blend = cov;
-                            let rr = (bg.0 as f32 + (color.0 as f32 - bg.0 as f32) * blend) as u32;
-                            let gg = (bg.1 as f32 + (color.1 as f32 - bg.1 as f32) * blend) as u32;
-                            let bb = (bg.2 as f32 + (color.2 as f32 - bg.2 as f32) * blend) as u32;
-                            let ca = txt_a as u32;
-                            if ca == 0 {
-                                continue;
-                            }
-                            let idx = (py as u32 * w + px as u32) as usize;
-                            buf[idx] = (rr << 16) | (gg << 8) | bb | (ca << 24);
-                        }
+                    };
+                if state.single_line_mode {
+                    let (original, translation) = split_bilingual_text(text);
+                    let original_quads = rasterize_font_text(
+                        font_to_use,
+                        latin_font_to_use,
+                        &clean_text(original),
+                        fs,
+                    );
+                    let original_width = glyph_text_width(&original_quads);
+                    let has_translation = !translation.is_empty();
+                    let top_center_y = if has_translation {
+                        center_y - (fs + bilingual_line_gap) * 0.5
+                    } else {
+                        center_y
+                    };
+                    let bottom_center_y = center_y + (fs + bilingual_line_gap) * 0.5;
+                    let original_baseline = glyph_centered_baseline(&original_quads, top_center_y);
+                    let original_x = x + (widths[i] - original_width) * 0.5;
+                    render_quads(buf, original_x, original_quads, original_baseline);
+                    if !translation.is_empty() {
+                        let translation_quads = rasterize_font_text(
+                            font_to_use,
+                            latin_font_to_use,
+                            &clean_text(translation),
+                            fs,
+                        );
+                        let translation_width = glyph_text_width(&translation_quads);
+                        let translation_baseline =
+                            glyph_centered_baseline(&translation_quads, bottom_center_y);
+                        let translation_x = x + (widths[i] - translation_width) * 0.5;
+                        render_quads(buf, translation_x, translation_quads, translation_baseline);
                     }
+                } else {
+                    let clean = clean_text(text);
+                    let quads = rasterize_font_text(font_to_use, latin_font_to_use, &clean, fs);
+                    let baseline = glyph_centered_baseline(&quads, center_y);
+                    render_quads(buf, x, quads, baseline);
                 }
             }
             return;
@@ -2671,14 +2858,19 @@ pub mod unix_impl {
             let current_idx = if current_idx == 0 { 0 } else { current_idx - 1 };
 
             let group_start = if state.karaoke_line_group == usize::MAX {
-                karaoke_group_start(&state.all_lyrics, current_idx)
+                let group_size = if state.single_line_mode { 2 } else { 4 };
+                karaoke_group_start(&state.all_lyrics, current_idx, group_size)
             } else {
                 state.karaoke_line_group
             };
 
             let current_visible;
-            (lines, current_visible) =
-                karaoke_lines_for_group(&state.all_lyrics, group_start, current_idx);
+            (lines, current_visible) = karaoke_lines_for_group(
+                &state.all_lyrics,
+                group_start,
+                current_idx,
+                state.single_line_mode,
+            );
             if state.karaoke_transition_progress < 1.0
                 && state.old_karaoke_line_group != usize::MAX
                 && state.old_karaoke_line_group != group_start
@@ -2687,6 +2879,7 @@ pub mod unix_impl {
                     &state.all_lyrics,
                     state.old_karaoke_line_group,
                     current_idx,
+                    state.single_line_mode,
                 )
                 .0;
             }
@@ -2785,7 +2978,7 @@ pub mod unix_impl {
 
         let _text_h = fs + 6.0;
         let char_spacing = 0.0; // 字间距
-        let gap = w as f32 * 0.01; // 句间间隔，逗号大小
+        let gap = (w as f32 * 0.025).max(24.0); // 句间间隔，避免双语歌词连接在一起
         let top_y = h as f32 * 0.18;
         let bottom_y = h as f32 * 0.55;
         let left_margin = w as f32 * 0.06;
@@ -2987,6 +3180,7 @@ pub mod unix_impl {
         karaoke_line_group: usize,
         old_karaoke_line_group: usize,
         karaoke_transition_progress: f32,
+        single_line_mode: bool,
     }
 
     struct AppState {
@@ -3117,11 +3311,14 @@ pub mod unix_impl {
                                 if let Ok(new_lyrics) =
                                     serde_json::from_str::<Vec<(String, f64)>>(&cmd.all_lyrics_json)
                                 {
+                                    let mode_changed =
+                                        cmd.single_line_mode != self.render_state.single_line_mode;
                                     if new_lyrics != self.render_state.all_lyrics
                                         || (cmd.current_time_sec
                                             - self.render_state.current_time_sec)
                                             .abs()
                                             > 0.1
+                                        || mode_changed
                                     {
                                         self.render_state.old_all_lyrics =
                                             self.render_state.all_lyrics.clone();
@@ -3129,6 +3326,12 @@ pub mod unix_impl {
                                             self.render_state.scroll_offset;
                                         self.render_state.all_lyrics = new_lyrics;
                                         self.render_state.current_time_sec = cmd.current_time_sec;
+                                        self.render_state.single_line_mode = cmd.single_line_mode;
+                                        if mode_changed {
+                                            self.render_state.karaoke_line_group = usize::MAX;
+                                            self.render_state.old_karaoke_line_group = usize::MAX;
+                                            self.render_state.karaoke_transition_progress = 1.0;
+                                        }
                                         self.render_state.horizontal_progress = 0.0;
                                         self.render_state.transitioning = true;
                                         changed = true;
@@ -3605,8 +3808,13 @@ pub mod unix_impl {
                         .all_lyrics
                         .partition_point(|&(_, t)| t <= self.render_state.current_time_sec);
                     let current_idx = if current_idx == 0 { 0 } else { current_idx - 1 };
+                    let group_size = if self.render_state.single_line_mode {
+                        2
+                    } else {
+                        4
+                    };
                     let target_group =
-                        karaoke_group_start(&self.render_state.all_lyrics, current_idx);
+                        karaoke_group_start(&self.render_state.all_lyrics, current_idx, group_size);
                     if self.render_state.karaoke_line_group != target_group
                         && !self.render_state.all_lyrics.is_empty()
                     {
@@ -4149,6 +4357,7 @@ pub mod unix_impl {
                     karaoke_line_group: usize::MAX,
                     old_karaoke_line_group: usize::MAX,
                     karaoke_transition_progress: 1.0,
+                    single_line_mode: false,
                 },
                 dragging: false,
                 drag_offset_x: 0,

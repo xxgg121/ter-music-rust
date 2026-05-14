@@ -24,6 +24,114 @@ pub struct LyricLine {
     pub text: String,
 }
 
+/// 带翻译的歌词行
+#[derive(Debug, Clone)]
+pub struct TranslatedLyricLine {
+    /// 时间戳（毫秒）
+    pub time: Duration,
+    /// 原文歌词
+    pub original: String,
+    /// 翻译文本
+    pub translation: String,
+}
+
+/// 翻译歌词
+#[derive(Debug, Clone)]
+pub struct TranslatedLyrics {
+    /// 翻译后的歌词行列表（按时间排序）
+    lines: Vec<TranslatedLyricLine>,
+}
+
+impl TranslatedLyrics {
+    /// 创建空翻译歌词
+    pub fn new() -> Self {
+        TranslatedLyrics { lines: Vec::new() }
+    }
+
+    /// 从原文歌词和 AI 翻译文本构建翻译歌词
+    /// translation_text 格式：每行对应原文歌词的翻译
+    pub fn from_lyrics_and_translation(lyrics: &Lyrics, translation_text: &str) -> Self {
+        let translation_lines: Vec<&str> = translation_text.lines().collect();
+        let mut lines = Vec::new();
+
+        for (i, lyric) in lyrics.get_lines().iter().enumerate() {
+            let translation = translation_lines
+                .get(i)
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+
+            lines.push(TranslatedLyricLine {
+                time: lyric.time,
+                original: lyric.text.clone(),
+                translation,
+            });
+        }
+
+        TranslatedLyrics { lines }
+    }
+
+    /// 获取当前播放时间对应的翻译歌词行索引
+    pub fn get_current_index(&self, current_time: Duration) -> Option<usize> {
+        if self.lines.is_empty() {
+            return None;
+        }
+
+        let idx = self.lines.partition_point(|line| line.time <= current_time);
+        if idx == 0 {
+            None
+        } else {
+            Some(idx - 1)
+        }
+    }
+
+    /// 获取可见的翻译歌词行
+    /// 返回 (起始索引, 可见歌词列表, 当前高亮索引)
+    pub fn get_visible_lines(
+        &self,
+        current_time: Duration,
+        visible_count: usize,
+    ) -> (usize, Vec<&TranslatedLyricLine>, Option<usize>) {
+        if self.lines.is_empty() {
+            return (0, Vec::new(), None);
+        }
+
+        let current_idx = self.get_current_index(current_time).unwrap_or(0);
+
+        // 计算可见范围，让当前歌词尽量在中间
+        let half = visible_count / 2;
+        let start = current_idx.saturating_sub(half);
+
+        let end = std::cmp::min(start + visible_count, self.lines.len());
+        let actual_start = if end == self.lines.len() && self.lines.len() > visible_count {
+            self.lines.len() - visible_count
+        } else {
+            start
+        };
+
+        let visible: Vec<&TranslatedLyricLine> = self.lines[actual_start..end].iter().collect();
+        let highlight_idx = current_idx.checked_sub(actual_start);
+
+        (actual_start, visible, highlight_idx)
+    }
+
+    /// 是否为空
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+
+    /// 获取所有翻译歌词行
+    pub fn get_lines(&self) -> &[TranslatedLyricLine] {
+        &self.lines
+    }
+}
+
+impl Default for TranslatedLyrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// 歌词解析器
 #[derive(Debug, Clone)]
 pub struct Lyrics {
@@ -375,6 +483,15 @@ impl Lyrics {
         let highlight_idx = current_idx.checked_sub(actual_start);
 
         (actual_start, visible, highlight_idx)
+    }
+
+    /// 获取所有歌词文本（用于翻译）
+    pub fn get_full_text(&self) -> String {
+        self.lines
+            .iter()
+            .map(|l| l.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 

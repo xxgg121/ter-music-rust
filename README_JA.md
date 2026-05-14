@@ -30,6 +30,12 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 - **シーク**: 5 秒 / 10 秒の高速シーク
 - **進捗バーシーク**: 進捗バーをクリックして任意位置へジャンプ
 - **音量調整**: 0-100 のリアルタイム調整、音量バーのクリックにも対応
+- **おすすめ曲**: `r` で今日のおすすめを有効化し、`a` で自然言語のリクエストからおすすめ曲を生成
+- **最近再生**: `b` で最近再生リストを表示し、曲名・再生時刻・再生回数を記録
+- **M3U インポート/エクスポート**: `x` で M3U プレイリストをインポートし、`e` で現在のプレイリストをエクスポート
+- **検索履歴**: 検索入力が空のとき履歴を表示し、最大 20 件を自動保存
+- **倍速再生**: 50%-200% の再生速度に対応し、`{`/`}` で 25% 刻みに調整
+- **A-B ループ**: `;` で A 点、`'` で B 点またはループ切替、`、` で解除
 
 ### 🔄 再生モード
 | キー | モード | 説明 |
@@ -46,6 +52,10 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 - **オンライン自動取得**: ローカルに歌詞がない場合、非同期でバックグラウンド取得
 - **スクロールハイライト**: 現在行を `>` でハイライトし、自動中央スクロール
 - **歌詞位置ジャンプ**: 歌詞領域のドラッグ/マウスホイールでタイムスタンプへ移動
+- **歌詞翻訳**: `y` で歌詞翻訳を表示し、ストリーミング翻訳と翻訳キャッシュに対応
+- **二言語歌詞**: メイン画面とデスクトップ歌詞で原文と訳文を同時表示
+- **デスクトップ歌詞**: `z` でフローティング歌詞を切り替え、縦スクロール・横スクロール・カラオケモードに対応
+- **歌詞校正**: `u` で歌詞時間校正モードに入り、歌詞時間オフセットを微調整して保存
 
 ### 🔍 検索
 - **ローカル検索**: `s` で現在の音楽ディレクトリ内を検索
@@ -71,6 +81,7 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 
 ### 💬 コメント
 - **曲コメント閲覧**: `c` で現在曲のコメントを表示
+- **コメント要約**: コメント画面でもう一度 `c` を押すと、AI が共感ポイント、感情の雰囲気、代表的な意見、キーワード、相違点を要約
 - **コメント詳細**: `Enter` で一覧/詳細を切り替え（詳細は全文表示）
 - **返信表示**: 返信先コメント本文・ニックネーム・時刻を表示
 - **コメントページング**: `PgUp` / `PgDn`、1 ページ 20 件
@@ -124,7 +135,7 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 - 一時停止中は波形を固定
 
 ### ⚙️ 設定の永続化
-設定は `USERPROFILE/ter-music-rust/config.json` に保存され、自動保存/復元されます:
+Windows では設定は `%USERPROFILE%/AppData/Roaming/ter-music-rust/config.json` に保存されます。Linux と macOS では `XDG_CONFIG_HOME/ter-music-rust/config.json` または `~/.config/ter-music-rust/config.json` に保存され、自動保存/復元されます:
 
 | 設定項目 | 説明 |
 |--------|------|
@@ -134,21 +145,23 @@ Rust で実装された、シンプルで実用的なターミナル向け音楽
 | `volume` | 音量 (0-100) |
 | `favorites` | お気に入り一覧 |
 | `dir_history` | ディレクトリ履歴 |
+| `search_history` | 検索履歴（最大 20 件を保持） |
 | `api_key` | API Key（楽曲情報検索用、旧フィールド `deepseek_api_key` と互換） |
 | `api_base_url` | API ベース URL（デフォルト: `https://api.deepseek.com/`） |
 | `api_model` | AI モデル名（デフォルト: `deepseek-v4-flash`） |
 | `github_token` | GitHub Token（楽曲情報 Discussion 投稿用、空欄でデフォルト Token を使用） |
+| `recommand` | 今日のおすすめ曲切り替え (デフォルト `false`) |
 | `theme` | テーマ名 |
 | `language` | UI 言語（`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`） |
-| `lyrics_enabled` | デスクトップ歌詞の表示/非表示 |
-| `lyrics_position` | デスクトップ歌詞の位置（bottom/top） |
+| `lyrics_visible` | デスクトップ歌詞を表示するかどうか（デフォルト `false`） |
+| `lyrics_position` | デスクトップ歌詞の位置（`bottom` / `top`、デフォルト `bottom`） |
 | `lyrics_scroll` | デスクトップ歌詞のスクロールモード（`vertical` / `horizontal` / `karaoke`、デフォルト `vertical`） |
-| `lyrics_alpha` | デスクトップ歌詞の背景透明度（10-100） |
-| `lyrics_x` | デスクトップ歌詞ウィンドウのX座標 |
-| `lyrics_y` | デスクトップ歌詞ウィンドウのY座標 |
-| `recommand` | 今日のおすすめ曲切り替え (デフォルト `false`) |
+| `lyrics_alpha` | デスクトップ歌詞の背景透明度 10-100（デフォルト 70） |
+| `lyrics_x` | デスクトップ歌詞ウィンドウの X 座標（-1 は自動計算） |
+| `lyrics_y` | デスクトップ歌詞ウィンドウの Y 座標（-1 は自動計算） |
+| `lyrics_offset` | 歌詞時間オフセット（秒、歌詞校正機能で使用） |
 
-**自動保存のタイミング**: 曲切り替え、テーマ変更、言語変更、お気に入り変更、30 秒ごと、終了時（Ctrl+C 含む）
+**自動保存のタイミング**: 曲切り替え、テーマ変更、言語変更、お気に入り変更、検索履歴更新、デスクトップ歌詞操作変更、30 秒ごと、終了時（Ctrl+C 含む）
 
 ---
 
@@ -228,6 +241,10 @@ cargo run --release -- -o d:\Music
 | `,` | 10 秒巻き戻し |
 | `.` | 10 秒早送り |
 | `+/-` | 音量増減（ステップ 5） |
+| `{/}` | 再生速度を速く/遅く（ステップ 25%） |
+| `;` | A-B ループの開始点 A を設定 |
+| `'` | A-B ループの終了点 B を設定 / ループを切替 |
+| `、` | A-B ループをクリア |
 | `1-5` | 再生モード切り替え |
 | `o` | 音楽ディレクトリを開く |
 | `s` | ローカル曲検索 |
@@ -247,6 +264,11 @@ cargo run --release -- -o d:\Music
 | `g` | GitHub Token 設定 |
 | `z` | デスクトップ歌詞の表示切替 |
 | `r` | おすすめ曲の切替 |
+| `y` | 歌詞翻訳 / 二言語表示切替 |
+| `b` | 最近の再生リストを開く |
+| `x` | M3U プレイリストをインポート |
+| `e` | 現在のプレイリストを M3U としてエクスポート |
+| `u` | 歌詞時間補正モードに入る |
 | `q` | 終了 |
 
 ### 検索画面
@@ -259,7 +281,6 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | 結果選択 |
 | `PgUp/PgDn` | ページ切り替え（オンライン検索） |
 | `s/n/j` | ローカル/オンライン/アグリゲート検索切り替え |
-
 | `Esc` | 検索終了 |
 
 ### お気に入り画面
@@ -706,14 +727,33 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 初回は依存関係のダウンロードとコンパイルが発生するため時間がかかります。2 回目以降は大幅に高速化されます。
 
 ### Release のダウンロード
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新履歴
+
+## バージョン 2.0.0 (2026-05-14)
+
+### 🎉 新機能1
+- ✨ **歌詞翻訳**：`y` を押して歌詞翻訳を表示。ストリーミング翻訳と翻訳キャッシュをサポートし、訳文のみ表示または二言語表示に切り替え可能。
+- ✨ **二言語歌詞**：メイン画面およびデスクトップ歌詞で原文と訳文を同時表示。デスクトップの二言語レイアウトを最適化。
+- ✨ **最近再生**：再生履歴（history.json）を記録。`b` で最近再生リストを開き、曲名・時間・再生回数を表示。
+- ✨ **倍速再生**：50%～200% をサポート。`{` で速度アップ、`}` で速度ダウン（ステップ 25%）、UI に現在速度を表示。
+- ✨ **検索履歴**：検索入力が空のときに履歴を表示、最大 20 件を保存し設定に自動保存。
+
+### 🎉 新機能2
+- ✨ **A-B ループ**：A（`；`）（`;`）と B（`'`）を設定して区間をループ再生。`、` で A-B ループをクリア。
+- ✨ **M3U インポート/エクスポート**：`x` で M3U をインポート、`e` で現在のプレイリストを M3U にエクスポート。
+- ✨ **歌詞校正**：`u` で歌詞時間校正モードに入り、`lyrics_offset` を微調整して保存可能。
+- ✨ **ダウンロード再試行**：ネットワークダウンロードが再試行に対応し成功率と安定性を向上。
+- ✨ **増分スキャン**：音楽ディレクトリのバックグラウンド増分スキャンをサポートし、ブロックを減らし追加/削除の統計を表示。
+
+### 🔧 改善
+- 上記機能に対応する UI と設定の永続化を実装し、デスクトップ歌詞と二言語表示の同期ロジックを改善。
 
 ## バージョン 1.9.0 (2026-05-11)
 
@@ -781,7 +821,7 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 
 ### 🔧 機能改善
 
-- 🔍 **新しい設定項目**：`lyrics_enabled`（表示/非表示）、`lyrics_position`（bottom/top）、`lyrics_scroll`（スクロールモード：vertical/horizontal/karaoke）、`lyrics_alpha`（10-100）、`lyrics_x`/`lyrics_y`（ウィンドウ座標）
+- 🔍 **新しい設定項目**：`lyrics_visible`（表示/非表示）、`lyrics_position`（bottom/top）、`lyrics_scroll`（スクロールモード：vertical/horizontal/karaoke）、`lyrics_alpha`（10-100）、`lyrics_x`/`lyrics_y`（ウィンドウ座標）
 - 🎨 **デスクトップ歌詞の表示最適化**：Linux デスクトップ歌詞の文字透明度合成ロジックを統一し、角丸半径とアンチエイリアス効果を調整して、透明背景・歌詞ハイライト・ウィンドウ端の表示を一貫させました
 
 ### 💻 技術的詳細

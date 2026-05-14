@@ -30,6 +30,12 @@ Un lecteur de musique en terminal, simple et pratique, développé en Rust. Il p
 - **Avance rapide** : saut rapide de 5s / 10s
 - **Recherche par barre de progression** : cliquez sur la barre de progression pour un saut précis
 - **Contrôle du volume** : ajustement en temps réel de 0 à 100, cliquez sur la barre de volume pour définir
+- **Chansons recommandées** : appuyez sur `r` pour activer les recommandations du jour, puis sur `a` pour générer des recommandations depuis une demande en langage naturel
+- **Lectures récentes** : appuyez sur `b` pour consulter la liste avec titre, heure de lecture et nombre de lectures
+- **Import/export M3U** : appuyez sur `x` pour importer une playlist M3U et sur `e` pour exporter la playlist actuelle
+- **Historique de recherche** : affiche l'historique lorsque la recherche est vide, conserve jusqu'à 20 entrées et les sauvegarde automatiquement
+- **Vitesse de lecture** : prend en charge 50%-200%, ajustable avec `{`/`}` par pas de 25%
+- **Boucle A-B** : `;` définit le point A, `'` définit le point B ou bascule la boucle, `、` efface la boucle
 
 ### 🔄 Modes de lecture
 | Touche | Mode | Description |
@@ -46,6 +52,10 @@ Un lecteur de musique en terminal, simple et pratique, développé en Rust. Il p
 - **Téléchargement automatique en ligne** : téléchargement asynchrone en arrière-plan lorsque les paroles locales sont manquantes
 - **Surbrillance défilante** : la ligne en cours est mise en surbrillance avec `>`, défilement automatique centré
 - **Saut par position de paroles** : glissez la zone des paroles ou utilisez la molette de la souris pour sauter à l'horodatage des paroles
+- **Traduction des paroles** : appuyez sur `y` pour afficher la traduction, avec traduction en flux et cache de traduction
+- **Paroles bilingues** : affiche le texte original et la traduction ensemble dans la vue principale et les paroles de bureau
+- **Paroles de bureau** : appuyez sur `z` pour basculer les paroles flottantes, avec modes vertical, horizontal et Karaoke
+- **Calibration des paroles** : appuyez sur `u` pour ajuster et enregistrer le décalage temporel des paroles
 
 ### 🔍 Recherche
 - **Recherche locale** : appuyez sur `s` pour rechercher des chansons dans le répertoire de musique actuel
@@ -71,6 +81,7 @@ Un lecteur de musique en terminal, simple et pratique, développé en Rust. Il p
 
 ### 💬 Commentaires
 - **Commentaires de chanson** : appuyez sur `c` pour voir les commentaires de la chanson en cours
+- **Résumé des commentaires** : dans la page des commentaires, appuyez de nouveau sur `c` pour que l'IA résume les points de résonance, l'ambiance émotionnelle, les avis représentatifs, les mots-clés et les divergences
 - **Détails des commentaires** : appuyez sur `Entrée` pour basculer entre la vue liste/détail (texte complet en détail)
 - **Affichage des réponses** : montre le texte du commentaire original, le pseudo et l'heure
 - **Pagination des commentaires** : `PgUp` / `PgDn`, 20 commentaires par page
@@ -124,7 +135,7 @@ Prend en charge 4 thèmes (cycle avec `t`) :
 - La forme d'onde se fige en pause
 
 ### ⚙️ Configuration persistante
-La configuration est stockée dans `USERPROFILE/ter-music-rust/config.json` dans le répertoire du programme et est automatiquement sauvegardée/restaurée :
+Sous Windows, la configuration est stockée dans `%USERPROFILE%/AppData/Roaming/ter-music-rust/config.json`. Sous Linux et macOS, elle est stockée dans `XDG_CONFIG_HOME/ter-music-rust/config.json` ou `~/.config/ter-music-rust/config.json`, puis sauvegardée/restaurée automatiquement :
 
 | Élément de configuration | Description |
 |--------|------|
@@ -134,21 +145,23 @@ La configuration est stockée dans `USERPROFILE/ter-music-rust/config.json` dans
 | `volume` | Volume (0-100) |
 | `favorites` | Liste des favoris |
 | `dir_history` | Historique des répertoires |
+| `search_history` | Historique de recherche (conserve jusqu'à 20 entrées) |
 | `api_key` | Clé API (pour la requête d'informations sur les chansons, compatible avec `deepseek_api_key`) |
 | `api_base_url` | URL de base de l'API (par défaut : `https://api.deepseek.com/`) |
 | `api_model` | Nom du modèle AI (par défaut : `deepseek-v4-flash`) |
 | `github_token` | Jeton GitHub (utilisé pour soumettre des discussions sur les chansons ; laisser vide pour utiliser le jeton par défaut) |
+| `recommand` | Bascule des chansons recommandées du jour (par défaut `false`) |
 | `theme` | Nom du thème |
 | `language` | Langue de l'interface (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
-| `lyrics_enabled` | Afficher/masquer les paroles du bureau |
-| `lyrics_position` | Position (bottom/top) |
+| `lyrics_visible` | Afficher les paroles du bureau ou non (par défaut `false`) |
+| `lyrics_position` | Position des paroles du bureau (`bottom` / `top`, par défaut `bottom`) |
 | `lyrics_scroll` | Mode de défilement des paroles du bureau (`vertical` / `horizontal` / `karaoke`, par défaut `vertical`) |
-| `lyrics_alpha` | Transparence du fond (10-100) |
-| `lyrics_x` | Coordonnée X de la fenêtre |
-| `lyrics_y` | Coordonnée Y de la fenêtre |
-| `recommand` | Bascule des chansons recommandées du jour (par défaut `false`) |
+| `lyrics_alpha` | Transparence du fond des paroles du bureau 10-100 (par défaut 70) |
+| `lyrics_x` | Coordonnée X de la fenêtre des paroles du bureau (-1 signifie calcul automatique) |
+| `lyrics_y` | Coordonnée Y de la fenêtre des paroles du bureau (-1 signifie calcul automatique) |
+| `lyrics_offset` | Décalage temporel des paroles en secondes (utilisé pour la calibration) |
 
-**Déclencheurs de sauvegarde automatique** : changement de piste, changement de thème, changement de langue, modification des favoris, toutes les 30 secondes, et à la sortie (y compris Ctrl+C)
+**Déclencheurs de sauvegarde automatique** : changement de piste, changement de thème, changement de langue, modification des favoris, mise à jour de l'historique de recherche, changement des contrôles des paroles du bureau, toutes les 30 secondes, et à la sortie (y compris Ctrl+C)
 
 ---
 
@@ -228,6 +241,10 @@ cargo run --release -- -o d:\Music
 | `,` | Reculer de 10s |
 | `.` | Avancer de 10s |
 | `+/-` | Augmenter/diminuer le volume (pas de 5) |
+| `{/}` | Augmenter/Diminuer la vitesse de lecture (pas 25%) |
+| `;` | Définir le point de départ A pour la boucle A-B |
+| `'` | Définir le point de fin B ou basculer la boucle A-B |
+| `、` | Effacer la boucle A-B |
 | `1-5` | Changer de mode de lecture |
 | `o` | Ouvrir le répertoire de musique |
 | `s` | Rechercher des chansons locales |
@@ -247,6 +264,11 @@ cargo run --release -- -o d:\Music
 | `g` | Configurer le jeton GitHub |
 | `z` | Basculer affichage paroles sur le bureau |
 | `r` | Basculer chansons recommandées |
+| `y` | Traduction des paroles / Basculer affichage bilingue |
+| `b` | Ouvrir la liste des lect. récentes |
+| `x` | Importer une playlist M3U |
+| `e` | Exporter la playlist actuelle en M3U |
+| `u` | Entrer en mode calibration du timing des paroles |
 | `q` | Quitter |
 
 ### Vue de recherche
@@ -259,7 +281,6 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | Sélectionner un résultat |
 | `PgUp/PgDn` | Page haut/bas (recherche en ligne) |
 | `s/n/j` | Basculer recherche locale/en ligne/Juhe |
-
 | `Échap` | Quitter la recherche |
 
 ### Vue des favoris
@@ -706,14 +727,35 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La première compilation télécharge et compile toutes les dépendances ; c'est normal. Les compilations suivantes sont beaucoup plus rapides.
 
 ### Télécharger les versions
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Journal des modifications
+
+## Version 2.0.0 (2026-05-14)
+
+### 🎉 Nouvelles fonctionnalités 1
+- ✨ **Traduction des paroles** : Appuyez sur `y` pour afficher la traduction des paroles ; prise en charge de la traduction en flux et du cache de traduction, possibilité d'afficher la traduction seule ou en affichage bilingue.
+- ✨ **Paroles bilingues** : Affichage simultané du texte original et de la traduction dans la vue principale et les paroles de bureau ; mise en page bilingue du bureau optimisée.
+- ✨ **Lectures récentes** : Enregistrement de l'historique de lecture (history.json). Appuyez sur `b` pour ouvrir la liste des lectures récentes (titre, heure, nombre de lectures).
+- ✨ **Contrôle de la vitesse de lecture** : Prise en charge de 50%-200% ; appuyez sur `{` pour accélérer et `}` pour ralentir (pas de 25%), l'interface affiche le pourcentage courant.
+- ✨ **Historique de recherche** : Affiche l'historique lorsque le champ de recherche est vide, conserve jusqu'à 20 entrées, enregistrement automatique dans la configuration.
+
+### 🎉 Nouvelles fonctionnalités 2
+- ✨ **Boucle A-B** : Prise en charge du réglage des points A ( `;` ) et B ( `'` ) et de la lecture en boucle de l'intervalle ; appuyez sur `、` pour effacer la boucle A-B.
+- ✨ **Import/Export M3U** : Appuyez sur `x` pour importer M3U, appuyez sur `e` pour exporter la playlist actuelle en M3U.
+- ✨ **Calibration des paroles** : Appuyez sur `u` pour entrer en mode de calibration du timing des paroles et ajuster/enregistrer `lyrics_offset`.
+- ✨ **Nouvel essai des téléchargements** : Les téléchargements réseau prennent en charge la répétition pour améliorer le taux de réussite et la stabilité.
+- ✨ **Scan incrémental** : Scan incrémental en arrière-plan du répertoire musical, réduit le blocage et affiche les statistiques d'ajout/suppression.
+
+### 🔧 Améliorations
+- Support de l'interface et de la persistance pour les fonctionnalités ci-dessus, optimisation de la logique de synchronisation entre les paroles de bureau et l'affichage bilingue.
+
+---
 
 ## Version 1.9.0 (2026-05-11)
 
@@ -781,7 +823,7 @@ La première compilation télécharge et compile toutes les dépendances ; c'est
 
 ### 🔧 Améliorations
 
-- 🔍 **Nouveaux éléments de configuration** : `lyrics_enabled` (afficher/masquer), `lyrics_position` (bottom/top), `lyrics_scroll` (mode de défilement : vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordonnées de la fenêtre)
+- 🔍 **Nouveaux éléments de configuration** : `lyrics_visible` (afficher/masquer), `lyrics_position` (bottom/top), `lyrics_scroll` (mode de défilement : vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordonnées de la fenêtre)
 - 🎨 **Optimisation visuelle des paroles du bureau** : unification de la composition de transparence du texte sous Linux, optimisation du rayon des coins et de l'anticrénelage pour garder un rendu cohérent du fond transparent, de la surbrillance et des bords de fenêtre
 
 ### 💻 Détails techniques

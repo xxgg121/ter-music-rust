@@ -30,6 +30,12 @@ Un lettore musicale da terminale semplice e pratico, sviluppato in Rust. Support
 - **Avanzamento rapido**: avanzamento rapido di 5s / 10s
 - **Barra di avanzamento**: clicca sulla barra di avanzamento per saltare con precisione
 - **Controllo del volume**: regolazione in tempo reale da 0 a 100, clicca sulla barra del volume per impostare
+- **Canzoni consigliate**: premi `r` per attivare le raccomandazioni del giorno e `a` per generarle da richieste in linguaggio naturale
+- **Riproduzioni recenti**: premi `b` per vedere l'elenco con titolo, orario di riproduzione e conteggio riproduzioni
+- **Import/export M3U**: premi `x` per importare una playlist M3U e `e` per esportare la playlist corrente
+- **Cronologia di ricerca**: mostra la cronologia quando la ricerca è vuota, conserva fino a 20 voci e le salva automaticamente
+- **Velocità di riproduzione**: supporta 50%-200%, regolabile con `{`/`}` a passi del 25%
+- **Loop A-B**: `;` imposta il punto A, `'` imposta il punto B o alterna il loop, `、` lo cancella
 
 ### 🔄 Modalità di riproduzione
 | Tasto | Modalità | Descrizione |
@@ -46,6 +52,10 @@ Un lettore musicale da terminale semplice e pratico, sviluppato in Rust. Support
 - **Download automatico online**: download asincrono in background quando mancano i testi locali
 - **Scorrimento evidenziato**: la riga corrente è evidenziata con `>`, scorrimento automatico centrato
 - **Salto per timestamp del testo**: trascina l'area dei testi o usa la rotellina del mouse per saltare al timestamp
+- **Traduzione dei testi**: premi `y` per mostrare la traduzione, con traduzione in streaming e cache delle traduzioni
+- **Testi bilingue**: mostra originale e traduzione insieme nella vista principale e nelle lyrics desktop
+- **Lyrics desktop**: premi `z` per alternare i testi flottanti, con modalità verticale, orizzontale e Karaoke
+- **Calibrazione testi**: premi `u` per regolare e salvare l'offset temporale dei testi
 
 ### 🔍 Ricerca
 - **Ricerca locale**: premi `s` per cercare brani nella directory musicale corrente
@@ -71,6 +81,7 @@ Un lettore musicale da terminale semplice e pratico, sviluppato in Rust. Support
 
 ### 💬 Commenti
 - **Commenti al brano**: premi `c` per visualizzare i commenti del brano corrente
+- **Riepilogo commenti**: nella pagina dei commenti premi di nuovo `c` per far riassumere all'IA i punti di risonanza, l'atmosfera emotiva, le opinioni rappresentative, le parole chiave e le divergenze
 - **Dettagli commento**: premi `Enter` per alternare vista lista/dettaglio (testo completo nel dettaglio)
 - **Visualizzazione risposte**: mostra il testo del commento originale a cui si risponde, nickname e ora
 - **Paginazione commenti**: `PgUp` / `PgDn`, 20 commenti per pagina
@@ -124,7 +135,7 @@ Supporta 4 temi (scorri con `t`):
 - La forma d'onda si congela quando in pausa
 
 ### ⚙️ Configurazione persistente
-La configurazione è memorizzata in `USERPROFILE/ter-music-rust/config.json` nella directory del programma e viene salvata/ripristinata automaticamente:
+Su Windows la configurazione è memorizzata in `%USERPROFILE%/AppData/Roaming/ter-music-rust/config.json`. Su Linux e macOS è memorizzata in `XDG_CONFIG_HOME/ter-music-rust/config.json` o `~/.config/ter-music-rust/config.json` e viene salvata/ripristinata automaticamente:
 
 | Elemento di configurazione | Descrizione |
 |--------|------|
@@ -134,21 +145,23 @@ La configurazione è memorizzata in `USERPROFILE/ter-music-rust/config.json` nel
 | `volume` | Volume (0-100) |
 | `favorites` | Lista dei preferiti |
 | `dir_history` | Cronologia delle directory |
+| `search_history` | Cronologia di ricerca (mantiene fino a 20 voci) |
 | `api_key` | API Key (per interrogazione informazioni brano, retrocompatibile con `deepseek_api_key`) |
 | `api_base_url` | URL base dell'API (predefinito: `https://api.deepseek.com/`) |
 | `api_model` | Nome del modello AI (predefinito: `deepseek-v4-flash`) |
 | `github_token` | Token GitHub (usato per inviare discussioni sulle informazioni dei brani; lasciare vuoto per usare il Token predefinito) |
+| `recommand` | Attivatore canzoni raccomandate del giorno (predefinito `false`) |
 | `theme` | Nome del tema |
 | `language` | Lingua dell'interfaccia (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
-| `lyrics_enabled` | Mostra/nascondi la finestra flottante delle lyrics desktop |
-| `lyrics_position` | Posizione della finestra lyrics desktop (bottom/top) |
+| `lyrics_visible` | Indica se mostrare le lyrics desktop (predefinito `false`) |
+| `lyrics_position` | Posizione delle lyrics desktop (`bottom` / `top`, predefinito `bottom`) |
 | `lyrics_scroll` | Modalità di scorrimento lyrics desktop (`vertical` / `horizontal` / `karaoke`, predefinita `vertical`) |
-| `lyrics_alpha` | Trasparenza dello sfondo della finestra lyrics desktop (10-100) |
-| `lyrics_x` | Coordinata X della finestra lyrics desktop |
-| `lyrics_y` | Coordinata Y della finestra lyrics desktop |
-| `recommand` | Attivatore canzoni raccomandate del giorno (predefinito `false`) |
+| `lyrics_alpha` | Trasparenza dello sfondo delle lyrics desktop 10-100 (predefinito 70) |
+| `lyrics_x` | Coordinata X della finestra lyrics desktop (-1 indica calcolo automatico) |
+| `lyrics_y` | Coordinata Y della finestra lyrics desktop (-1 indica calcolo automatico) |
+| `lyrics_offset` | Offset temporale dei testi in secondi (usato per la calibrazione) |
 
-**Attivatori di salvataggio automatico**: cambio traccia, cambio tema, cambio lingua, cambio preferiti, ogni 30 secondi e all'uscita (incluso Ctrl+C)
+**Attivatori di salvataggio automatico**: cambio traccia, cambio tema, cambio lingua, cambio preferiti, aggiornamento cronologia di ricerca, modifica dei controlli lyrics desktop, ogni 30 secondi e all'uscita (incluso Ctrl+C)
 
 ---
 
@@ -228,6 +241,10 @@ cargo run --release -- -o d:\Music
 | `,` | Indietro di 10s |
 | `.` | Avanti di 10s |
 | `+/-` | Volume su/giù (passo 5) |
+| `{/}` | Aumenta/Diminuisci velocità di riproduzione (passo 25%) |
+| `;` | Imposta punto di inizio A per loop A-B |
+| `'` | Imposta punto di fine B o alterna loop A-B |
+| `、` | Cancella loop A-B |
 | `1-5` | Cambia modalità di riproduzione |
 | `o` | Apri directory musicale |
 | `s` | Cerca brani locali |
@@ -247,6 +264,11 @@ cargo run --release -- -o d:\Music
 | `g` | Configura Token GitHub |
 | `z` | Attiva/disattiva lyrics desktop |
 | `r` | Attiva/disattiva canzoni raccomandate |
+| `y` | Traduzione testi / Alterna visualizzazione bilingue |
+| `b` | Apri lista delle riproduzioni recenti |
+| `x` | Importa playlist M3U |
+| `e` | Esporta playlist corrente come M3U |
+| `u` | Entra in modalità calibrazione temporale dei testi |
 | `q` | Esci |
 
 
@@ -260,7 +282,6 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | Seleziona risultato |
 | `PgUp/PgDn` | Pagina su/giù (ricerca online) |
 | `s/n/j` | Cambia ricerca locale/online/Juhe |
-
 | `Esc` | Esci dalla ricerca |
 
 ### Vista preferiti
@@ -707,14 +728,35 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La prima compilazione scarica e compila tutte le dipendenze; questo è normale. Le compilazioni successive sono molto più veloci.
 
 ### Scarica Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Registro delle modifiche
+
+## Versione 2.0.0 (2026-05-14)
+
+### 🎉 Nuove funzionalità 1
+- ✨ **Traduzione dei testi**: premi `y` per mostrare la traduzione dei testi; supporta traduzione in streaming e cache delle traduzioni, con possibilità di passare tra sola traduzione e visualizzazione bilingue.
+- ✨ **Testi bilingue**: supporta la visualizzazione simultanea di testo originale e traduzione nella vista principale e nelle lyrics desktop; spaziatura e layout della visualizzazione bilingue desktop sono stati ottimizzati.
+- ✨ **Riproduzioni recenti**: registra la cronologia di riproduzione (history.json); premi `b` per aprire l'elenco delle riproduzioni recenti con nome brano, ora e numero di riproduzioni.
+- ✨ **Velocità di riproduzione**: supporta velocità 50%-200%; premi `{` per accelerare e `}` per rallentare (passo 25%); l'interfaccia mostra la percentuale corrente.
+- ✨ **Cronologia di ricerca**: mostra la cronologia quando l'input di ricerca è vuoto, conserva fino a 20 voci e la salva automaticamente nella configurazione.
+
+### 🎉 Nuove funzionalità 2
+- ✨ **Loop A-B**: supporta l'impostazione dei punti A (premi `;`) e B (premi `'`) e la riproduzione in loop dell'intervallo; premi `、` per cancellare il loop A-B.
+- ✨ **Import/export M3U**: premi `x` per importare M3U e `e` per esportare la playlist corrente in un file M3U.
+- ✨ **Calibrazione testi**: premi `u` per entrare in modalità calibrazione temporale dei testi, regolare finemente e salvare l'offset temporale (voce di configurazione `lyrics_offset`).
+- ✨ **Riprova download**: le attività di download di rete supportano un meccanismo di riprova per migliorare percentuale di successo e stabilità.
+- ✨ **Scansione incrementale**: supporta la scansione incrementale in background della directory musicale, riducendo i blocchi durante l'aggiornamento della playlist e mostrando statistiche di aggiunte/rimozioni.
+
+### 🔧 Miglioramenti
+- Aggiunto supporto di interfaccia e persistenza della configurazione per le funzionalità sopra, e ottimizzata la logica di sincronizzazione tra lyrics desktop e visualizzazione bilingue.
+
+---
 
 ## Versione 1.9.0 (2026-05-11)
 
@@ -782,7 +824,7 @@ La prima compilazione scarica e compila tutte le dipendenze; questo è normale. 
 
 ### 🔧 Miglioramenti
 
-- 🔍 **Nuovi elementi di configurazione** : `lyrics_enabled` (mostra/nascondi), `lyrics_position` (bottom/top), `lyrics_scroll` (modalità di scorrimento: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordinate finestra)
+- 🔍 **Nuovi elementi di configurazione** : `lyrics_visible` (mostra/nascondi), `lyrics_position` (bottom/top), `lyrics_scroll` (modalità di scorrimento: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordinate finestra)
 - 🎨 **Ottimizzazione visiva lyrics desktop** : unificata la composizione della trasparenza del testo su Linux, ottimizzati raggio degli angoli e antialiasing per mantenere coerenti sfondo trasparente, evidenziazioni e bordi finestra
 
 ### 💻 Dettagli tecnici

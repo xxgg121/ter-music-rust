@@ -289,6 +289,68 @@ impl Playlist {
             }
         }
     }
+
+    /// 导出播放列表为 M3U 文件
+    pub fn export_m3u(&self, path: &Path) -> Result<(), String> {
+        let mut content = String::from("#EXTM3U\n");
+        for file in &self.files {
+            let title = file.name.clone();
+            let duration_secs = file.duration.map(|d| d.as_secs() as i64).unwrap_or(-1);
+            if duration_secs > 0 {
+                content.push_str(&format!("#EXTINF:{},{}\n", duration_secs, title));
+            } else {
+                content.push_str(&format!("#EXTINF:-1,{}\n", title));
+            }
+            content.push_str(&format!("{}\n", file.path.to_string_lossy()));
+        }
+        std::fs::write(path, content).map_err(|e| format!("Failed to write M3U file: {}", e))
+    }
+
+    /// 从 M3U 文件导入播放列表
+    pub fn import_m3u(&mut self, path: &Path) -> Result<usize, String> {
+        let content =
+            std::fs::read_to_string(path).map_err(|e| format!("Failed to read M3U file: {}", e))?;
+        let mut count = 0;
+        let mut current_title: Option<String> = None;
+
+        for line in content.lines() {
+            let line = line.trim();
+            if line.starts_with("#EXTINF:") {
+                // 解析 #EXTINF:duration,title
+                if let Some(comma_pos) = line.find(',') {
+                    let title = line[comma_pos + 1..].trim().to_string();
+                    if !title.is_empty() {
+                        current_title = Some(title);
+                    }
+                }
+            } else if !line.is_empty() && !line.starts_with('#') {
+                // 文件路径
+                let file_path = Path::new(line);
+                if file_path.exists() && is_supported_audio(file_path) {
+                    let name = current_title.take().unwrap_or_else(|| {
+                        file_path
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("Unknown")
+                            .to_string()
+                    });
+                    let ext = file_path
+                        .extension()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    self.files.push(MusicFile {
+                        path: file_path.to_path_buf(),
+                        name,
+                        ext,
+                        duration: None,
+                    });
+                    count += 1;
+                }
+            }
+        }
+        Ok(count)
+    }
 }
 
 impl Default for Playlist {

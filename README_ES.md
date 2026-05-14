@@ -30,6 +30,12 @@ Un reproductor de música para terminal, simple y práctico, implementado en Rus
 - **Avance rápido**: avance rápido de 5s / 10s
 - **Barra de progreso**: haz clic en la barra de progreso para saltar con precisión
 - **Control de volumen**: ajuste en tiempo real de 0 a 100, haz clic en la barra de volumen para establecer
+- **Canciones recomendadas**: pulsa `r` para activar las recomendaciones del día y `a` para generarlas desde solicitudes en lenguaje natural
+- **Reproducciones recientes**: pulsa `b` para ver la lista con título, hora de reproducción y número de reproducciones
+- **Importación/exportación M3U**: pulsa `x` para importar una playlist M3U y `e` para exportar la playlist actual
+- **Historial de búsqueda**: muestra el historial cuando la búsqueda está vacía, conserva hasta 20 entradas y las guarda automáticamente
+- **Velocidad de reproducción**: admite 50%-200%, ajustable con `{`/`}` en pasos del 25%
+- **Bucle A-B**: `;` define el punto A, `'` define el punto B o alterna el bucle, `、` lo borra
 
 ### 🔄 Modos de reproducción
 | Tecla | Modo | Descripción |
@@ -46,6 +52,10 @@ Un reproductor de música para terminal, simple y práctico, implementado en Rus
 - **Descarga automática en línea**: descarga asíncrona en segundo plano cuando faltan letras locales
 - **Desplazamiento resaltado**: la línea actual se resalta con `>`, desplazamiento automático centrado
 - **Salto por marca de letra**: arrastra el área de letras o usa la rueda del ratón para saltar por marca de tiempo
+- **Traducción de letras**: pulsa `y` para mostrar la traducción, con traducción en streaming y caché de traducción
+- **Letras bilingües**: muestra original y traducción juntos en la vista principal y en las letras de escritorio
+- **Letras de escritorio**: pulsa `z` para alternar letras flotantes, con modos vertical, horizontal y Karaoke
+- **Calibración de letras**: pulsa `u` para ajustar y guardar el desplazamiento temporal de las letras
 
 ### 🔍 Búsqueda
 - **Búsqueda local**: pulsa `s` para buscar canciones en el directorio de música actual
@@ -71,6 +81,7 @@ Un reproductor de música para terminal, simple y práctico, implementado en Rus
 
 ### 💬 Comentarios
 - **Comentarios de canciones**: pulsa `c` para ver los comentarios de la canción actual
+- **Resumen de comentarios**: en la página de comentarios, pulsa `c` de nuevo para que la IA resuma puntos de conexión, ambiente emocional, opiniones representativas, palabras clave y diferencias
 - **Detalles del comentario**: pulsa `Enter` para alternar vista de lista/detalle (texto completo en detalle)
 - **Visualización de respuestas**: muestra el texto del comentario original respondido, apodo y hora
 - **Paginación de comentarios**: `PgUp` / `PgDn`, 20 comentarios por página
@@ -124,7 +135,7 @@ Soporta 4 temas (ciclar con `t`):
 - La forma de onda se congela al pausar
 
 ### ⚙️ Configuración persistente
-La configuración se almacena en `USERPROFILE/ter-music-rust/config.json` en el directorio del programa y se guarda/restaura automáticamente:
+En Windows, la configuración se almacena en `%USERPROFILE%/AppData/Roaming/ter-music-rust/config.json`. En Linux y macOS, se almacena en `XDG_CONFIG_HOME/ter-music-rust/config.json` o `~/.config/ter-music-rust/config.json`, y se guarda/restaura automáticamente:
 
 | Elemento de configuración | Descripción |
 |--------|------|
@@ -134,21 +145,23 @@ La configuración se almacena en `USERPROFILE/ter-music-rust/config.json` en el 
 | `volume` | Volumen (0-100) |
 | `favorites` | Lista de favoritos |
 | `dir_history` | Historial de directorios |
+| `search_history` | Historial de búsqueda (conserva hasta 20 entradas) |
 | `api_key` | API Key (para consulta de información de canciones, compatible con `deepseek_api_key`) |
 | `api_base_url` | URL base de la API (predeterminado: `https://api.deepseek.com/`) |
 | `api_model` | Nombre del modelo AI (predeterminado: `deepseek-v4-flash`) |
 | `github_token` | Token de GitHub (usado para enviar discusiones de información de canciones; dejar vacío para usar Token predeterminado) |
+| `recommand` | Alternador de canciones recomendadas del día (predeterminado `false`) |
 | `theme` | Nombre del tema |
 | `language` | Idioma de la interfaz (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
-| `lyrics_enabled` | Mostrar/ocultar letras de escritorio |
-| `lyrics_position` | Posición de letras de escritorio (bottom/top) |
+| `lyrics_visible` | Indica si se muestran las letras de escritorio (predeterminado `false`) |
+| `lyrics_position` | Posición de letras de escritorio (`bottom` / `top`, predeterminado `bottom`) |
 | `lyrics_scroll` | Modo de desplazamiento de letras de escritorio (`vertical` / `horizontal` / `karaoke`, predeterminado `vertical`) |
-| `lyrics_alpha` | Transparencia de letras de escritorio (10-100) |
-| `lyrics_x` | Coordenada X de la ventana de letras de escritorio |
-| `lyrics_y` | Coordenada Y de la ventana de letras de escritorio |
-| `recommand` | Alternador de canciones recomendadas del día (predeterminado `false`) |
+| `lyrics_alpha` | Transparencia del fondo de letras de escritorio 10-100 (predeterminado 70) |
+| `lyrics_x` | Coordenada X de la ventana de letras de escritorio (-1 significa cálculo automático) |
+| `lyrics_y` | Coordenada Y de la ventana de letras de escritorio (-1 significa cálculo automático) |
+| `lyrics_offset` | Desplazamiento temporal de las letras en segundos (usado para calibración) |
 
-**Disparadores de guardado automático**: cambio de pista, cambio de tema, cambio de idioma, cambio de favoritos, cada 30 segundos y al salir (incluyendo Ctrl+C)
+**Disparadores de guardado automático**: cambio de pista, cambio de tema, cambio de idioma, cambio de favoritos, actualización del historial de búsqueda, cambio de controles de letras de escritorio, cada 30 segundos y al salir (incluyendo Ctrl+C)
 
 ---
 
@@ -228,6 +241,10 @@ cargo run --release -- -o d:\Music
 | `,` | Retroceder 10s |
 | `.` | Avanzar 10s |
 | `+/-` | Subir/Bajar volumen (paso 5) |
+| `{/}` | Aumentar/Disminuir la velocidad de reproducción (paso 25%) |
+| `;` | Establecer inicio del bucle A-B punto A |
+| `'` | Establecer fin del bucle A-B punto B o alternar bucle |
+| `、` | Borrar bucle A-B |
 | `1-5` | Cambiar modo de reproducción |
 | `o` | Abrir directorio de música |
 | `s` | Buscar canciones locales |
@@ -247,6 +264,11 @@ cargo run --release -- -o d:\Music
 | `g` | Configurar Token de GitHub |
 | `z` | Letras de escritorio on/off |
 | `r` | Canciones recomendadas on/off |
+| `y` | Traducción de letras / Alternar visualización bilingüe |
+| `b` | Abrir la lista de reproducción recientemente reproducida |
+| `x` | Importar lista de reproducción M3U |
+| `e` | Exportar la lista de reproducción actual a M3U |
+| `u` | Entrar en modo de calibración de tiempo de letras |
 | `q` | Salir |
 
 ### Vista de búsqueda
@@ -259,7 +281,6 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | Seleccionar resultado |
 | `PgUp/PgDn` | Página arriba/abajo (búsqueda en línea) |
 | `s/n/j` | Cambiar búsqueda local/en línea/Juhe |
-
 | `Esc` | Salir de la búsqueda |
 
 ### Vista de favoritos
@@ -706,14 +727,35 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La primera compilación descarga y compila todas las dependencias; esto es esperado. Las compilaciones posteriores son mucho más rápidas.
 
 ### Descargar Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Registro de cambios
+
+## Versión 2.0.0 (2026-05-14)
+
+### 🎉 Nuevas funcionalidades 1
+- ✨ **Traducción de letras**: pulsa `y` para mostrar la traducción de las letras; admite traducción en streaming y caché de traducción, y permite alternar entre traducción o visualización bilingüe.
+- ✨ **Letras bilingües**: admite mostrar simultáneamente original y traducción en la vista principal y en las letras de escritorio; se optimizaron el espaciado y el diseño de la visualización bilingüe de escritorio.
+- ✨ **Reproducciones recientes**: registra el historial de reproducción (history.json); pulsa `b` para abrir la lista de reproducciones recientes con nombre de canción, hora y número de reproducciones.
+- ✨ **Velocidad de reproducción**: admite velocidad del 50%-200%; pulsa `{` para acelerar y `}` para desacelerar (paso del 25%); la interfaz muestra el porcentaje actual.
+- ✨ **Historial de búsqueda**: muestra el historial cuando la entrada de búsqueda está vacía, conserva hasta 20 elementos y lo guarda automáticamente en la configuración.
+
+### 🎉 Nuevas funcionalidades 2
+- ✨ **Bucle A-B**: admite establecer los puntos A (pulsa `;`) y B (pulsa `'`) y reproducir en bucle el intervalo; pulsa `、` para borrar el bucle A-B.
+- ✨ **Importación/exportación M3U**: pulsa `x` para importar M3U y `e` para exportar la lista de reproducción actual a un archivo M3U.
+- ✨ **Calibración de letras**: pulsa `u` para entrar en el modo de calibración de tiempo de letras, ajustar y guardar el desplazamiento temporal (elemento de configuración `lyrics_offset`).
+- ✨ **Reintento de descarga**: las descargas de red admiten reintentos para mejorar la tasa de éxito y la estabilidad.
+- ✨ **Escaneo incremental**: admite escaneo incremental en segundo plano del directorio de música, reduce bloqueos al actualizar la lista de reproducción y muestra estadísticas de añadidos/eliminados.
+
+### 🔧 Mejoras
+- Se añadió soporte de interfaz y persistencia de configuración para las funciones anteriores, y se optimizó la lógica de sincronización entre letras de escritorio y visualización bilingüe.
+
+---
 
 ## Versión 1.9.0 (2026-05-11)
 
@@ -781,7 +823,7 @@ La primera compilación descarga y compila todas las dependencias; esto es esper
 
 ### 🔧 Mejoras
 
-- 🔍 **Nuevos elementos de configuración** : `lyrics_enabled` (mostrar/ocultar), `lyrics_position` (bottom/top), `lyrics_scroll` (modo de desplazamiento: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordenadas de la ventana)
+- 🔍 **Nuevos elementos de configuración** : `lyrics_visible` (mostrar/ocultar), `lyrics_position` (bottom/top), `lyrics_scroll` (modo de desplazamiento: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (coordenadas de la ventana)
 - 🎨 **Optimización visual de letras de escritorio** : unificada la composición de transparencia del texto en Linux, optimizados el radio de esquinas y el antialiasing para mantener consistentes el fondo transparente, los resaltados y los bordes de la ventana
 
 ### 💻 Detalles técnicos

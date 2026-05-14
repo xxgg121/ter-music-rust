@@ -257,7 +257,6 @@ fn main() {
     if config.lyrics_visible {
         ui.open_desktop_lyrics(&config.theme);
     }
-
     // 注册 Ctrl+C 信号处理器，优雅退出并保存配置
     {
         let should_quit = ui.get_should_quit();
@@ -266,12 +265,17 @@ fn main() {
         })
         .expect(texts.cli_ctrlc_error);
     }
-
     // 从配置加载收藏列表
     ui.set_favorites(config.favorites.clone());
 
     // 从配置加载目录历史
     ui.set_dir_history(config.dir_history.clone());
+
+    // 从配置加载搜索历史
+    ui.set_search_history(config.search_history.clone());
+
+    // 从配置加载歌词偏移
+    ui.set_lyrics_offset(config.lyrics_offset);
 
     // 启动后自动播放：优先恢复上次索引，否则首次运行播放第一首
     let startup_index = {
@@ -324,6 +328,7 @@ fn main() {
             volume: player.get_volume(),
             favorites: ui.get_favorites(),
             dir_history: ui.get_dir_history(),
+            search_history: ui.get_search_history(),
             theme: ui.get_theme_key().to_string(),
             language: ui.get_language_key().to_string(),
             api_key: ui.get_api_key(),
@@ -337,6 +342,7 @@ fn main() {
             lyrics_x: ui.get_lyrics_x(),
             lyrics_y: ui.get_lyrics_y(),
             lyrics_scroll: ui.get_lyrics_scroll(),
+            lyrics_offset: ui.get_lyrics_offset(),
         };
 
         new_config.save();

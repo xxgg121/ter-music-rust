@@ -200,6 +200,7 @@ impl super::UserInterface {
             KeyCode::Enter => {
                 if self.comments_mode || self.help_mode {
                     handled_in_search = false;
+                } else if self.try_use_selected_search_history() {
                 } else if self.online_search_mode {
                     if self.online_searching || self.online_downloading {
                     } else if self.playlist_search_mode && self.current_playlist.is_none() {
@@ -255,6 +256,8 @@ impl super::UserInterface {
             KeyCode::Up => {
                 if self.comments_mode || self.song_info_mode || self.help_mode {
                     handled_in_search = false;
+                } else if self.search_history_visible() {
+                    self.move_search_history_selection(-1);
                 } else if self.online_search_mode {
                     if self.online_selected_index > 0 {
                         self.online_selected_index -= 1;
@@ -268,6 +271,8 @@ impl super::UserInterface {
             KeyCode::Down => {
                 if self.comments_mode || self.song_info_mode || self.help_mode {
                     handled_in_search = false;
+                } else if self.search_history_visible() {
+                    self.move_search_history_selection(1);
                 } else if self.online_search_mode {
                     let total = if self.playlist_search_mode && self.current_playlist.is_none() {
                         self.playlist_search_results.len()
@@ -411,5 +416,96 @@ impl super::UserInterface {
         }
 
         handled_in_search
+    }
+
+    pub(super) fn handle_m3u_input(&mut self, code: KeyCode) -> bool {
+        if !self.m3u_file_input_mode {
+            return false;
+        }
+
+        match code {
+            KeyCode::Esc => {
+                self.m3u_file_input_mode = false;
+                self.m3u_file_input.clear();
+                self.m3u_export_mode = false;
+            }
+            KeyCode::Enter => {
+                let path = self.m3u_file_input.trim().to_string();
+                if !path.is_empty() {
+                    let path = std::path::Path::new(&path);
+                    if self.m3u_export_mode {
+                        let playlist = self.playlist.lock().unwrap();
+                        if let Err(e) = playlist.export_m3u(path) {
+                            self.status_message = format!("{}: {}", self.t().m3u_export_failed, e);
+                        } else {
+                            self.status_message = format!(
+                                "{}: {} -> {}",
+                                self.t().m3u_export_success,
+                                playlist.len(),
+                                path.display()
+                            );
+                        }
+                    } else {
+                        let mut playlist = self.playlist.lock().unwrap();
+                        match playlist.import_m3u(path) {
+                            Ok(count) => {
+                                self.status_message =
+                                    format!("{}: {}", self.t().m3u_import_success, count);
+                            }
+                            Err(e) => {
+                                self.status_message =
+                                    format!("{}: {}", self.t().m3u_import_failed, e);
+                            }
+                        }
+                    }
+                }
+                self.m3u_file_input_mode = false;
+                self.m3u_file_input.clear();
+                self.m3u_export_mode = false;
+            }
+            KeyCode::Backspace => {
+                self.m3u_file_input.pop();
+            }
+            KeyCode::Char(c) => {
+                self.m3u_file_input.push(c);
+            }
+            _ => {}
+        }
+
+        true
+    }
+
+    pub(super) fn handle_lyrics_calibration(&mut self, code: KeyCode) -> bool {
+        if !self.lyrics_calibration_mode {
+            return false;
+        }
+
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
+                self.lyrics_calibration_mode = false;
+            }
+            KeyCode::Left | KeyCode::Char('h') | KeyCode::Char('H') => {
+                self.lyrics_offset -= 0.1;
+            }
+            KeyCode::Right | KeyCode::Char('l') | KeyCode::Char('L') => {
+                self.lyrics_offset += 0.1;
+            }
+            KeyCode::Up => {
+                self.lyrics_offset -= 0.5;
+            }
+            KeyCode::Down => {
+                self.lyrics_offset += 0.5;
+            }
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                self.lyrics_offset = 0.0;
+            }
+            KeyCode::Enter => {
+                self.lyrics_calibration_mode = false;
+                self.save_config_now();
+            }
+            _ => {}
+        }
+
+        true
     }
 }

@@ -20,6 +20,7 @@ pub(super) struct ControlsView {
     pub(super) progress_ratio: f64,
     pub(super) volume_percent: u8,
     pub(super) realtime_percent: u8,
+    pub(super) speed_percent: u32,
 }
 
 pub(super) struct SearchResultsView {

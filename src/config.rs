@@ -123,6 +123,9 @@ pub struct Config {
     /// 目录历史记录（存储目录路径）
     #[serde(default)]
     pub dir_history: Vec<String>,
+    /// 搜索历史记录（存储搜索关键词）
+    #[serde(default)]
+    pub search_history: Vec<String>,
     /// 界面主题
     #[serde(default = "default_theme")]
     pub theme: String,
@@ -162,6 +165,9 @@ pub struct Config {
     /// 桌面歌词窗口 Y 坐标 (-1 = 使用默认计算位置)
     #[serde(default = "default_lyrics_coord")]
     pub lyrics_y: i32,
+    /// 歌词时间偏移（秒）
+    #[serde(default)]
+    pub lyrics_offset: f32,
 }
 
 impl Default for Config {
@@ -173,6 +179,7 @@ impl Default for Config {
             volume: 50,
             favorites: Vec::new(),
             dir_history: Vec::new(),
+            search_history: Vec::new(),
             theme: default_theme(),
             language: default_language(),
             api_key: default_api_key(),
@@ -186,6 +193,7 @@ impl Default for Config {
             lyrics_scroll: default_lyrics_scroll(),
             lyrics_x: default_lyrics_coord(),
             lyrics_y: default_lyrics_coord(),
+            lyrics_offset: 0.0,
         }
     }
 }

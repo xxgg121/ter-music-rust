@@ -31,6 +31,12 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 - **탐색(Seek)**: 5초 / 10초 빠른 이동
 - **진행 바 이동**: 진행 바 클릭으로 원하는 위치로 정확히 이동
 - **볼륨 조절**: 0-100 실시간 조절, 볼륨 바 클릭 지원
+- **추천 곡**: `r`로 오늘의 추천을 켜고, `a`로 자연어 요청을 입력해 추천 곡을 생성
+- **최근 재생**: `b`로 최근 재생 목록을 보고 곡명, 재생 시간, 재생 횟수를 기록
+- **M3U 가져오기/내보내기**: `x`로 M3U 재생 목록을 가져오고 `e`로 현재 재생 목록을 내보내기
+- **검색 기록**: 검색 입력이 비어 있을 때 기록을 표시하고 최대 20개를 자동 저장
+- **재생 속도**: 50%-200% 재생 속도를 지원하며 `{`/`}`로 25% 단위 조정
+- **A-B 루프**: `;`로 A 지점 설정, `'`로 B 지점 설정 또는 루프 전환, `、`로 루프 해제
 
 ### 🔄 지 재생 모드
 | 키 | 모드 | 설명 |
@@ -47,6 +53,10 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 - **온라인 자동 다운로드**: 로컬 가사가 없으면 백그라운드 비동기 다운로드
 - **스크롤 하이라이트**: 현재 가사 줄을 `>`로 강조, 자동 중앙 정렬 스크롤
 - **가사 위치 이동**: 가사 영역 드래그/마우스 휠로 해당 타임스탬프로 이동
+- **가사 번역**: `y`로 가사 번역을 표시하며 스트리밍 번역과 번역 캐시 지원
+- **이중 언어 가사**: 메인 화면과 데스크톱 가사에서 원문과 번역문을 함께 표시
+- **데스크톱 가사**: `z`로 플로팅 가사를 켜고 끄며 세로, 가로, 카라오케 모드 지원
+- **가사 보정**: `u`로 가사 시간 보정 모드에 들어가 시간 오프셋을 미세 조정하고 저장
 
 ### 🔍 검색
 - **로컬 검색**: `s` 키로 현재 음악 디렉터리에서 검색
@@ -72,6 +82,7 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 
 ### 💬 댓글
 - **곡 댓글 보기**: `c` 키로 현재 곡 댓글 조회
+- **댓글 요약**: 곡 댓글 페이지에서 `c`를 한 번 더 누르면 AI가 공감 포인트, 감정 분위기, 대표 의견, 키워드, 차이점을 요약
 - **댓글 상세 보기**: `Enter`로 목록/상세 전환(상세에서 전체 내용 표시)
 - **답글 표시**: 원댓글 내용, 닉네임, 시간 표시
 - **댓글 페이지 이동**: `PgUp` / `PgDn`, 페이지당 20개
@@ -125,7 +136,7 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 - 일시정지 시 파형 고정
 
 ### ⚙️ 설정 영구 저장
-설정은 `USERPROFILE/ter-music-rust/config.json`에 저장되며 자동 저장/복원됩니다:
+Windows 설정은 `%USERPROFILE%/AppData/Roaming/ter-music-rust/config.json`에 저장됩니다. Linux 및 macOS 설정은 `XDG_CONFIG_HOME/ter-music-rust/config.json` 또는 `~/.config/ter-music-rust/config.json`에 저장되며 자동 저장/복원됩니다:
 
 | 설정 항목 | 설명 |
 |--------|------|
@@ -135,21 +146,23 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 | `volume` | 볼륨 (0-100) |
 | `favorites` | 즐겨찾기 목록 |
 | `dir_history` | 디렉터리 기록 |
+| `search_history` | 검색 기록(최대 20개 유지) |
 | `api_key` | API Key(곡 정보 조회용, 기존 필드 `deepseek_api_key`와 호환) |
 | `api_base_url` | API 베이스 URL(기본값: `https://api.deepseek.com/`) |
 | `api_model` | AI 모델명(기본값: `deepseek-v4-flash`) |
 | `github_token` | GitHub Token(곡 정보 Discussion 제출용, 비워두면 기본 Token 사용) |
+| `recommand` | 오늘 추천 곡 토글 (기본 `false`) |
 | `theme` | 테마 이름 |
 | `language` | UI 언어 (`sc` / `tc` / `en` / `ja` / `ko` / `ru` / `fr` / `de` / `es` / `it` / `pt`) |
-| `lyrics_enabled` | 데스크톱 가사 표시/숨기기 |
-| `lyrics_position` | 데스크톱 가사 위치 (bottom/top) |
+| `lyrics_visible` | 데스크톱 가사 표시 여부(기본 `false`) |
+| `lyrics_position` | 데스크톱 가사 위치(`bottom` / `top`, 기본 `bottom`) |
 | `lyrics_scroll` | 데스크톱 가사 스크롤 모드 (`vertical` / `horizontal` / `karaoke`, 기본 `vertical`) |
-| `lyrics_alpha` | 데스크톱 가사 투명도 (10-100) |
-| `lyrics_x` | 데스크톱 가사 창 X 좌표 |
-| `lyrics_y` | 데스크톱 가사 창 Y 좌표 |
-| `recommand` | 오늘 추천 곡 토글 (기본 `false`) |
+| `lyrics_alpha` | 데스크톱 가사 배경 투명도 10-100(기본 70) |
+| `lyrics_x` | 데스크톱 가사 창 X 좌표(-1은 자동 계산) |
+| `lyrics_y` | 데스크톱 가사 창 Y 좌표(-1은 자동 계산) |
+| `lyrics_offset` | 가사 시간 오프셋(초, 가사 보정 기능에서 사용) |
 
-**자동 저장 시점**: 곡 전환, 테마 전환, 언어 전환, 즐겨찾기 변경, 30초마다, 종료 시(Ctrl+C 포함)
+**자동 저장 시점**: 곡 전환, 테마 전환, 언어 전환, 즐겨찾기 변경, 검색 기록 업데이트, 데스크톱 가사 제어 변경, 30초마다, 종료 시(Ctrl+C 포함)
 
 ---
 
@@ -231,6 +244,10 @@ cargo run --release -- -o d:\Music
 | `,` | 10초 뒤로 이동 |
 | `.` | 10초 앞으로 이동 |
 | `+/-` | 볼륨 증가/감소(단계 5) |
+| `{/}` | 재생 속도 증가/감소 (단계 25%) |
+| `;` | A-B 루프 시작점 A 설정 |
+| `'` | A-B 루프 종료점 B 설정 또는 루프 전환 |
+| `、` | A-B 루프 지우기 |
 | `1-5` | 재생 모드 전환 |
 | `o` | 음악 디렉터리 열기 |
 | `s` | 로컬 곡 검색 |
@@ -250,6 +267,11 @@ cargo run --release -- -o d:\Music
 | `g` | GitHub Token 설정 |
 | `z` | 데스크톱 가사 표시 전환 |
 | `r` | 추천 곡 토글 |
+| `y` | 가사 번역 / 이중 언어 표시 전환 |
+| `b` | 최근 재생 목록 열기 |
+| `x` | M3U 재생 목록 가져오기 |
+| `e` | 현재 재생 목록을 M3U로 내보내기 |
+| `u` | 가사 시간 보정 모드 진입 |
 | `q` | 종료 |
 
 ### 검색 화면
@@ -262,7 +284,6 @@ cargo run --release -- -o d:\Music
 | `↑/↓` | 결과 선택 |
 | `PgUp/PgDn` | 페이지 이동(온라인 검색) |
 | `s/n/j` | 로컬/온라인/통합 검색 전환 |
-
 | `Esc` | 검색 종료 |
 
 ### 즐겨찾기 화면
@@ -709,14 +730,35 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605120843451501_ter-music-rust-win.zip "附件(Attached)")
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605120843524719_ter-music-rust-mac.zip "附件(Attached)")
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605120843596622_ter-music-rust-linux.zip "附件(Attached)")
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605120844045457_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 업데이트 로그
+
+## 버전 2.0.0 (2026-05-14)
+
+### 🎉 새로운 기능 1
+- ✨ **가사 번역**: `y`를 눌러 가사 번역을 표시하며, 스트리밍 번역과 번역 캐시를 지원하고 번역문만 표시하거나 이중 언어 표시로 전환할 수 있습니다.
+- ✨ **이중 언어 가사**: 메인 화면과 데스크톱 가사에서 원문과 번역문을 동시에 표시하며, 데스크톱 가사의 이중 언어 표시에서 문장 간 간격과 레이아웃을 최적화했습니다.
+- ✨ **최근 재생**: 재생 기록(history.json)을 저장하고, `b`를 눌러 최근 재생 목록에서 곡명, 시간, 재생 횟수를 확인할 수 있습니다.
+- ✨ **재생 속도**: 50%-200% 재생 속도를 지원하며, `{`로 가속하고 `}`로 감속합니다(단계 25%). UI에 현재 재생 속도 백분율을 표시합니다.
+- ✨ **검색 기록**: 검색 입력이 비어 있을 때 기록을 표시하고, 최대 20개를 유지하며 설정 파일에 자동 저장합니다.
+
+### 🎉 새로운 기능 2
+- ✨ **A-B 루프**: A 지점(`;`)과 B 지점(`'`)을 설정해 구간 반복 재생을 지원하며, `、`로 A-B 루프를 지울 수 있습니다.
+- ✨ **M3U 가져오기/내보내기**: `x`로 M3U를 가져오고, `e`로 현재 재생 목록을 M3U 파일로 내보냅니다.
+- ✨ **가사 보정**: `u`를 눌러 가사 시간 보정 모드에 진입하고, 가사 시간 오프셋을 미세 조정해 저장할 수 있습니다(설정 항목 `lyrics_offset`).
+- ✨ **다운로드 재시도**: 네트워크 다운로드 작업이 재시도 메커니즘을 지원해 성공률과 안정성을 높입니다.
+- ✨ **증분 스캔**: 음악 디렉터리의 백그라운드 증분 스캔을 지원해 재생 목록 업데이트 시 블로킹을 줄이고 추가/삭제 통계를 표시합니다.
+
+### 🔧 기능 개선
+- 위 기능에 맞춘 UI와 설정 영구 저장 지원을 추가하고, 데스크톱 가사와 이중 언어 표시의 동기화 로직을 최적화했습니다.
+
+---
 
 ## 버전 1.9.0 (2026-05-11)
 
@@ -784,7 +826,7 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 
 ### 🔧 기능 개선
 
-- 🔍 **새로운 설정 항목**：`lyrics_enabled` (표시/숨기기), `lyrics_position` (bottom/top), `lyrics_scroll` (스크롤 모드: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (창 좌표)
+- 🔍 **새로운 설정 항목**：`lyrics_visible` (표시/숨기기), `lyrics_position` (bottom/top), `lyrics_scroll` (스크롤 모드: vertical/horizontal/karaoke), `lyrics_alpha` (10-100), `lyrics_x`/`lyrics_y` (창 좌표)
 - 🎨 **데스크톱 가사 시각 최적화**：Linux 데스크톱 가사의 텍스트 투명도 합성 로직을 통일하고, 둥근 모서리 반경과 안티앨리어싱 효과를 조정하여 투명 배경, 가사 강조, 창 가장자리 표시가 일관되도록 했습니다
 
 ### 💻 기술적 세부사항
