@@ -22,6 +22,8 @@ Um player de música para terminal, simples e prático, implementado em Rust. Su
 
 ![preview6](preview6.png)
 
+![preview7](preview7.png)
+
 ## ✨ Funcionalidades
 
 ### 🎵 Reprodução de áudio
@@ -727,14 +729,46 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 A primeira compilação baixa e compila todas as dependências; isso é esperado. Compilações subsequentes são muito mais rápidas.
 
 ### Baixar releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Registro de alterações
+
+## Versão 2.1.0 (2026-05-17)
+
+### 🎉 Novas funcionalidades
+- ✨ **Importação de playlist por URL**: importe playlists online via link; suporta links de playlists do Apple Music, Spotify Music e importação de paradas musicais.
+- ✨ **Importação de paradas por URL**: importe playlists e paradas do Kugou, Kuwo, NetEase e outras plataformas por URL para expandir rapidamente a playlist atual.
+- ✨ **Reconhecimento de URL multiplataforma**: melhoria no reconhecimento e processamento de links de diferentes plataformas musicais na importação por URL.
+- ✨ **Apple Music**:
+- `https://music.apple.com/br/room/*`
+- `https://music.apple.com/br/album/*/*`
+- `https://music.apple.com/br/playlist/*/*`
+- `https://music.apple.com/br/artist/*/*/top-songs`
+- `https://music.apple.com/cn/new/top-charts/songs`
+
+- ✨ **Spotify Music**:
+- `https://open.spotify.com/album/*`
+- `https://open.spotify.com/artist/*`
+- `https://open.spotify.com/playlist/*`
+- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+
+- ✨ **NetEase Music**:
+- `https://music.163.com/#/album?id=*`
+- `https://music.163.com/#/artist?id=*`
+- `https://music.163.com/#/playlist?id=*`
+- `https://music.163.com/#/discover/toplist?id=*`
+
+- ✨ **Other Music**:
+- `https://www.kuwo.cn/rankList`
+- `https://www.kuwo.cn/singer_detail/*`
+- `https://www.kuwo.cn/playlist_detail/*`
+- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+---
 
 ## Versão 2.0.0 (2026-05-14)
 

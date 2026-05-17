@@ -294,6 +294,7 @@ impl Lyrics {
     fn download_lyrics(music_path: &Path) -> Option<String> {
         // 创建复用的 HTTP 客户端
         let client = reqwest::blocking::Client::builder()
+            .no_proxy()
             .timeout(std::time::Duration::from_secs(5))
             .build()
             .ok()?;

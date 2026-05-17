@@ -22,6 +22,8 @@ Un lecteur de musique en terminal, simple et pratique, développé en Rust. Il p
 
 ![preview6](preview6.png)
 
+![preview7](preview7.png)
+
 ## ✨ Fonctionnalités
 
 ### 🎵 Lecture audio
@@ -727,14 +729,45 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La première compilation télécharge et compile toutes les dépendances ; c'est normal. Les compilations suivantes sont beaucoup plus rapides.
 
 ### Télécharger les versions
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
-
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
 ---
 
 ## 📝 Journal des modifications
+
+## Version 2.1.0 (2026-05-17)
+
+### 🎉 Nouvelles fonctionnalités
+- ✨ **Import de playlist par URL** : importez des playlists en ligne via un lien ; prise en charge des liens de playlists Apple Music, Spotify Music et des classements.
+- ✨ **Import de classements par URL** : importez des playlists et classements depuis Kugou, Kuwo, NetEase et d'autres plateformes via URL pour enrichir rapidement la playlist actuelle.
+- ✨ **Reconnaissance d'URL multi-plateformes** : amélioration de la reconnaissance et du traitement des liens de différentes plateformes musicales lors de l'import par URL.
+- ✨ **Apple Music** :
+- `https://music.apple.com/cn/room/*`
+- `https://music.apple.com/cn/album/*/*`
+- `https://music.apple.com/cn/playlist/*/*`
+- `https://music.apple.com/cn/artist/*/*/top-songs`
+- `https://music.apple.com/cn/new/top-charts/songs`
+
+- ✨ **Spotify Music** :
+- `https://open.spotify.com/album/*`
+- `https://open.spotify.com/artist/*`
+- `https://open.spotify.com/playlist/*`
+- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+
+- ✨ **NetEase Music** :
+- `https://music.163.com/#/album?id=*`
+- `https://music.163.com/#/artist?id=*`
+- `https://music.163.com/#/playlist?id=*`
+- `https://music.163.com/#/discover/toplist?id=*`
+
+- ✨ **Other Music** :
+- `https://www.kuwo.cn/rankList`
+- `https://www.kuwo.cn/singer_detail/*`
+- `https://www.kuwo.cn/playlist_detail/*`
+- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+---
 
 ## Version 2.0.0 (2026-05-14)
 

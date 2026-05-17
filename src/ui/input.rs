@@ -160,10 +160,15 @@ impl super::UserInterface {
                 } else if self.help_mode {
                     self.help_mode = false;
                 } else if self.playlist_search_mode && self.current_playlist.is_some() {
+                    let was_url_import = self.online_list_url_import_mode
+                        || self.online_list_url_source.is_some()
+                        || !self.lazy_online_all_results.is_empty();
                     self.clear_online_download_state();
-                    self.search_input_focused = false;
                     self.current_playlist = None;
                     self.online_search_results.clear();
+                    self.lazy_online_page_rx = None;
+                    self.online_list_url_page_rx = None;
+                    self.online_list_url_import_mode = false;
                     self.online_selected_index = self.playlist_list_selected_index;
                     self.online_scroll_offset = self.online_selected_index.saturating_sub(2);
                     let total = self.playlist_search_results.len();
@@ -175,6 +180,16 @@ impl super::UserInterface {
                     );
                     self.online_searching = false;
                     self.playlist_songs_rx = None;
+                    if was_url_import {
+                        self.search_input_focused = true;
+                        self.search_query.clear();
+                        self.active_preset_rank_title = None;
+                        self.playlist_search_results.clear();
+                        self.online_selected_index = 0;
+                        self.online_scroll_offset = 0;
+                    } else {
+                        self.search_input_focused = false;
+                    }
                 } else {
                     self.clear_online_download_state();
                     self.search_mode = false;
@@ -186,6 +201,8 @@ impl super::UserInterface {
                     self.search_selected_index = 0;
                     self.search_scroll_offset = 0;
                     self.online_search_results.clear();
+                    self.clear_lazy_online_page_state();
+                    self.online_list_url_import_mode = false;
                     self.online_selected_index = 0;
                     self.online_scroll_offset = 0;
                     self.online_searching = false;
@@ -200,9 +217,17 @@ impl super::UserInterface {
             KeyCode::Enter => {
                 if self.comments_mode || self.help_mode {
                     handled_in_search = false;
+                } else if self.preset_rank_has_focus() {
+                    let _ = self.activate_selected_preset_rank();
                 } else if self.try_use_selected_search_history() {
+                } else if self.preset_rank_grid_visible() {
+                    let _ = self.activate_selected_preset_rank();
                 } else if self.online_search_mode {
                     if self.online_searching || self.online_downloading {
+                    } else if online_input_focused
+                        && Self::is_online_list_url_input(&self.search_query)
+                    {
+                        self.start_online_list_url_import();
                     } else if self.playlist_search_mode && self.current_playlist.is_none() {
                         if !self.playlist_search_results.is_empty() {
                             if let Some(pl) = self
@@ -214,6 +239,8 @@ impl super::UserInterface {
                                 self.playlist_list_selected_index = self.online_selected_index;
                                 self.online_searching = true;
                                 self.online_search_results.clear();
+                                self.clear_lazy_online_page_state();
+                                self.online_list_url_import_mode = false;
                                 self.online_selected_index = 0;
                                 self.online_scroll_offset = 0;
                                 self.current_playlist = Some(pl.clone());
@@ -226,10 +253,7 @@ impl super::UserInterface {
                             self.start_online_search();
                         }
                     } else if !self.online_search_results.is_empty() {
-                        if let Some(song) = self
-                            .online_search_results
-                            .get(self.online_selected_index)
-                            .cloned()
+                        if let Some(song) = self.resolved_online_song_at(self.online_selected_index)
                         {
                             self.online_auto_skip_times.clear();
                             self.start_download_song(song);
@@ -256,8 +280,19 @@ impl super::UserInterface {
             KeyCode::Up => {
                 if self.comments_mode || self.song_info_mode || self.help_mode {
                     handled_in_search = false;
+                } else if self.preset_rank_has_focus() {
+                    self.move_preset_rank_selection(-3);
+                    if self.preset_rank_selected_index == Some(0) && self.search_history_visible() {
+                        self.preset_rank_selected_index = None;
+                        let len = self.visible_search_history_items().len();
+                        self.search_history_selected_index = len.saturating_sub(1);
+                    }
                 } else if self.search_history_visible() {
-                    self.move_search_history_selection(-1);
+                    if self.search_history_selected_index == 0 && self.preset_rank_grid_visible() {
+                        self.preset_rank_selected_index = Some(0);
+                    } else {
+                        self.move_search_history_selection(-1);
+                    }
                 } else if self.online_search_mode {
                     if self.online_selected_index > 0 {
                         self.online_selected_index -= 1;
@@ -271,8 +306,15 @@ impl super::UserInterface {
             KeyCode::Down => {
                 if self.comments_mode || self.song_info_mode || self.help_mode {
                     handled_in_search = false;
+                } else if self.preset_rank_has_focus() {
+                    self.move_preset_rank_selection(3);
                 } else if self.search_history_visible() {
-                    self.move_search_history_selection(1);
+                    let len = self.visible_search_history_items().len();
+                    if self.search_history_selected_index + 1 >= len && self.preset_rank_grid_visible() {
+                        self.preset_rank_selected_index = Some(0);
+                    } else {
+                        self.move_search_history_selection(1);
+                    }
                 } else if self.online_search_mode {
                     let total = if self.playlist_search_mode && self.current_playlist.is_none() {
                         self.playlist_search_results.len()
@@ -297,6 +339,8 @@ impl super::UserInterface {
                     } else if !self.search_query.is_empty() {
                         self.search_query.pop();
                         self.online_search_results.clear();
+                        self.clear_lazy_online_page_state();
+                        self.online_list_url_import_mode = false;
                         self.playlist_search_results.clear();
                         self.current_playlist = None;
                         self.online_selected_index = 0;
@@ -322,6 +366,8 @@ impl super::UserInterface {
                     } else {
                         handled_in_search = false;
                     }
+                } else if self.search_history_visible() && (c == 'd' || c == 'D') {
+                    let _ = self.delete_selected_search_history();
                 } else if self.online_search_mode && !online_input_focused {
                     handled_in_search = false;
                 } else {
@@ -332,6 +378,8 @@ impl super::UserInterface {
                             || self.current_playlist.is_some()
                         {
                             self.online_search_results.clear();
+                            self.clear_lazy_online_page_state();
+                            self.online_list_url_import_mode = false;
                             self.playlist_search_results.clear();
                             self.current_playlist = None;
                             self.online_selected_index = 0;
@@ -349,19 +397,29 @@ impl super::UserInterface {
                 if self.comments_mode || self.song_info_mode || self.help_mode {
                     handled_in_search = false;
                 } else if self.playlist_search_mode && self.current_playlist.is_some() {
-                    let page_size = 20usize;
-                    let total = self.online_search_results.len();
-                    if total > 0 {
-                        let cur_page = self.online_selected_index / page_size;
-                        let prev_page = cur_page.saturating_sub(1);
-                        self.online_selected_index = prev_page * page_size;
-                        self.online_scroll_offset = self.online_selected_index;
-                        Self::clamp_selected_and_scroll(
-                            &mut self.online_selected_index,
-                            &mut self.online_scroll_offset,
-                            total,
-                            (self.terminal_height as usize).saturating_sub(12).max(5),
-                        );
+                    if self.online_list_url_source.is_some() {
+                        if self.online_list_url_page > 1 && !self.online_searching {
+                            self.start_online_list_url_page_load(self.online_list_url_page - 1);
+                        }
+                    } else if !self.lazy_online_all_results.is_empty() {
+                        if self.lazy_online_page > 0 && !self.online_searching {
+                            self.start_lazy_online_page_load(self.lazy_online_page - 1, 20);
+                        }
+                    } else {
+                        let page_size = 20usize;
+                        let total = self.online_search_results.len();
+                        if total > 0 {
+                            let cur_page = self.online_selected_index / page_size;
+                            let prev_page = cur_page.saturating_sub(1);
+                            self.online_selected_index = prev_page * page_size;
+                            self.online_scroll_offset = self.online_selected_index;
+                            Self::clamp_selected_and_scroll(
+                                &mut self.online_selected_index,
+                                &mut self.online_scroll_offset,
+                                total,
+                                (self.terminal_height as usize).saturating_sub(12).max(5),
+                            );
+                        }
                     }
                     self.search_input_focused = false;
                 } else if self.online_search_mode
@@ -373,24 +431,51 @@ impl super::UserInterface {
                     self.search_input_focused = false;
                 }
             }
+            KeyCode::Left => {
+                if self.preset_rank_grid_visible() {
+                    self.move_preset_rank_selection(-1);
+                } else {
+                    handled_in_search = false;
+                }
+            }
+            KeyCode::Right => {
+                if self.preset_rank_grid_visible() {
+                    self.move_preset_rank_selection(1);
+                } else {
+                    handled_in_search = false;
+                }
+            }
             KeyCode::PageDown => {
                 if self.comments_mode || self.song_info_mode || self.help_mode {
                     handled_in_search = false;
                 } else if self.playlist_search_mode && self.current_playlist.is_some() {
-                    let page_size = 20usize;
-                    let total = self.online_search_results.len();
-                    if total > 0 {
-                        let cur_page = self.online_selected_index / page_size;
-                        let next_index = (cur_page + 1) * page_size;
-                        if next_index < total {
-                            self.online_selected_index = next_index;
-                            self.online_scroll_offset = self.online_selected_index;
-                            Self::clamp_selected_and_scroll(
-                                &mut self.online_selected_index,
-                                &mut self.online_scroll_offset,
-                                total,
-                                (self.terminal_height as usize).saturating_sub(12).max(5),
-                            );
+                    if self.online_list_url_source.is_some() {
+                        if !self.online_searching {
+                            self.start_online_list_url_page_load(self.online_list_url_page + 1);
+                        }
+                    } else if !self.lazy_online_all_results.is_empty() {
+                        let page_size = 20usize;
+                        let total_pages =
+                            (self.lazy_online_all_results.len() + page_size - 1) / page_size;
+                        if self.lazy_online_page + 1 < total_pages && !self.online_searching {
+                            self.start_lazy_online_page_load(self.lazy_online_page + 1, page_size);
+                        }
+                    } else {
+                        let page_size = 20usize;
+                        let total = self.online_search_results.len();
+                        if total > 0 {
+                            let cur_page = self.online_selected_index / page_size;
+                            let next_index = (cur_page + 1) * page_size;
+                            if next_index < total {
+                                self.online_selected_index = next_index;
+                                self.online_scroll_offset = self.online_selected_index;
+                                Self::clamp_selected_and_scroll(
+                                    &mut self.online_selected_index,
+                                    &mut self.online_scroll_offset,
+                                    total,
+                                    (self.terminal_height as usize).saturating_sub(12).max(5),
+                                );
+                            }
                         }
                     }
                     self.search_input_focused = false;

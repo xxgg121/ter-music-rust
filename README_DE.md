@@ -22,6 +22,8 @@ Ein schlanker und praktischer Terminal-Musikplayer in Rust mit lokaler/online Su
 
 ![preview6](preview6.png)
 
+![preview7](preview7.png)
+
 ## ✨ Funktionen
 
 ### 🎵 Audiowiedergabe
@@ -727,14 +729,46 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 Der erste Build lädt und kompiliert alle Abhängigkeiten herunter; dies ist erwartet. Spätere Builds sind deutlich schneller.
 
 ### Downloads
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Änderungsprotokoll
+
+## Version 2.1.0 (2026-05-17)
+
+### 🎉 Neue Funktionen
+- ✨ **Playlist-URL-Import**: Online-Playlists per Link importieren; unterstützt Apple Music- und Spotify Music-Playlist-Links sowie Chart-Importe.
+- ✨ **Chart-URL-Import**: Playlists und Charts von Kugou, Kuwo, NetEase und weiteren Plattformen per URL importieren, um die aktuelle Playlist schnell zu erweitern.
+- ✨ **Plattformübergreifende URL-Erkennung**: Verbesserte Erkennung und Verarbeitung von Links verschiedener Musikplattformen beim URL-Import.
+- ✨ **Apple Music**:
+- `https://music.apple.com/de/room/*`
+- `https://music.apple.com/de/album/*/*`
+- `https://music.apple.com/de/playlist/*/*`
+- `https://music.apple.com/de/artist/*/*/top-songs`
+- `https://music.apple.com/cn/new/top-charts/songs`
+
+- ✨ **Spotify Music**:
+- `https://open.spotify.com/album/*`
+- `https://open.spotify.com/artist/*`
+- `https://open.spotify.com/playlist/*`
+- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+
+- ✨ **NetEase Music**:
+- `https://music.163.com/#/album?id=*`
+- `https://music.163.com/#/artist?id=*`
+- `https://music.163.com/#/playlist?id=*`
+- `https://music.163.com/#/discover/toplist?id=*`
+
+- ✨ **Other Music**:
+- `https://www.kuwo.cn/rankList`
+- `https://www.kuwo.cn/singer_detail/*`
+- `https://www.kuwo.cn/playlist_detail/*`
+- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+---
 
 ## Version 2.0.0 (2026-05-14)
 

@@ -15,7 +15,7 @@ mod theme;
 mod ui_format;
 mod view_model;
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -45,8 +45,9 @@ use crate::desktop_lyrics::{DesktopLyricsHandle, DesktopLyricsPosition};
 use crate::langs::{LangTexts, UiLanguage};
 use crate::lyrics::{Lyrics, LyricsDownloadResult};
 use crate::search::{
-    DownloadProgress, GitHubDiscussionResult, OnlinePlaylist, OnlineSong, PlaylistSearchResult,
-    PlaylistSongsResult, SearchDownloadResult, SongCommentItem, SongCommentsResult,
+    resolve_unresolved_juhe_song, DownloadProgress, GitHubDiscussionResult, OnlinePlaylist,
+    OnlineSong, PlaylistSearchResult, PlaylistSongsResult, SearchDownloadResult, SongCommentItem,
+    SongCommentsResult,
 };
 
 use interaction_layout::{LyricsAreaLayout, PlaylistLayout, ProgressBarLayout, VolumeBarLayout};
@@ -67,6 +68,12 @@ struct PlayHistoryRecord {
     path: String,
     last_played: String,
     play_count: u64,
+}
+
+#[derive(Debug, Clone)]
+enum SearchHistoryItem {
+    ClearAll,
+    History(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +103,12 @@ enum MainFocus {
 enum SongInfoKind {
     SongInfo,
     CommentSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct OnlineListUrlPageCacheKey {
+    input: String,
+    page: usize,
 }
 
 /// 用户界面
@@ -280,6 +293,12 @@ pub struct UserInterface {
     search_history_selected_index: usize,
     /// 搜索历史列表滚动偏移
     search_history_scroll_offset: usize,
+    /// 预设排行榜网格选中索引
+    preset_rank_selected_index: Option<usize>,
+    /// 预设排行榜网格行滚动偏移
+    preset_rank_scroll_offset: usize,
+    /// 当前通过预设排行榜打开的标题
+    active_preset_rank_title: Option<String>,
     /// A-B 循环阶段：None=未设置，Some(false)=已设A点，Some(true)=已设A和B点
     ab_loop_stage: Option<bool>,
     /// 歌词时间偏移（秒）
@@ -299,6 +318,26 @@ pub struct UserInterface {
     online_search_mode: bool,
     /// 网络搜索结果
     online_search_results: Vec<OnlineSong>,
+    /// 懒加载分页的完整候选列表（当前页显示在 online_search_results）
+    lazy_online_all_results: Vec<OnlineSong>,
+    /// 懒加载分页当前页（0-based）
+    lazy_online_page: usize,
+    /// 懒加载分页解析接收器
+    lazy_online_page_rx: Option<std::sync::mpsc::Receiver<(usize, Vec<OnlineSong>)>>,
+    /// URL 导入远程分页接收器
+    online_list_url_page_rx: Option<std::sync::mpsc::Receiver<PlaylistSongsResult>>,
+    /// URL 导入远程分页原始 URL
+    online_list_url_source: Option<String>,
+    /// URL 导入原始 URL（包含非远程分页的排行榜/歌单 URL）
+    online_list_url_import_source: Option<String>,
+    /// URL 导入远程分页当前页（1-based）
+    online_list_url_page: usize,
+    /// URL 导入远程分页缓存（排行榜/远程分页列表按 URL + 页码缓存）
+    online_list_url_page_cache: HashMap<OnlineListUrlPageCacheKey, PlaylistSongsResult>,
+    /// URL 导入完整结果缓存（非远程分页排行榜按 URL 缓存完整解析结果）
+    online_list_url_import_cache: HashMap<String, PlaylistSongsResult>,
+    /// URL 导入本地分页解析缓存（按 URL 保存已解析过页面回写后的完整列表）
+    online_list_url_lazy_results_cache: HashMap<String, Vec<OnlineSong>>,
     /// 网络搜索结果中的选中索引
     online_selected_index: usize,
     /// 网络搜索结果的滚动偏移
@@ -333,6 +372,10 @@ pub struct UserInterface {
     playlist_search_rx: Option<std::sync::mpsc::Receiver<PlaylistSearchResult>>,
     /// 歌单歌曲加载接收器
     playlist_songs_rx: Option<std::sync::mpsc::Receiver<PlaylistSongsResult>>,
+    /// URL 导入结果加载后是否自动播放第一首
+    online_list_url_import_pending_play: bool,
+    /// 当前歌单详情是否来自 URL 导入
+    online_list_url_import_mode: bool,
     /// 聚合搜索歌词接收器
     juhe_lyrics_rx: Option<std::sync::mpsc::Receiver<crate::search::JuheLyricsResult>>,
     /// 聚合搜索歌词下载中
@@ -486,6 +529,9 @@ impl UserInterface {
             search_history: Vec::new(),
             search_history_selected_index: 0,
             search_history_scroll_offset: 0,
+            preset_rank_selected_index: None,
+            preset_rank_scroll_offset: 0,
+            active_preset_rank_title: None,
             ab_loop_stage: None,
             lyrics_offset: 0.0,
             lyrics_calibration_mode: false,
@@ -495,6 +541,16 @@ impl UserInterface {
             prev_mode_state: (false, false, false, false, false, false, false, false),
             online_search_mode: false,
             online_search_results: Vec::new(),
+            lazy_online_all_results: Vec::new(),
+            lazy_online_page: 0,
+            lazy_online_page_rx: None,
+            online_list_url_page_rx: None,
+            online_list_url_source: None,
+            online_list_url_import_source: None,
+            online_list_url_page: 1,
+            online_list_url_page_cache: HashMap::new(),
+            online_list_url_import_cache: HashMap::new(),
+            online_list_url_lazy_results_cache: HashMap::new(),
             online_selected_index: 0,
             online_scroll_offset: 0,
             online_searching: false,
@@ -512,6 +568,8 @@ impl UserInterface {
             playlist_list_selected_index: 0,
             playlist_search_rx: None,
             playlist_songs_rx: None,
+            online_list_url_import_pending_play: false,
+            online_list_url_import_mode: false,
             juhe_lyrics_rx: None,
             juhe_lyrics_loading: false,
             theme: UiTheme::Neon,
@@ -2030,6 +2088,7 @@ impl UserInterface {
     }
 
     fn render_left_panel(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        frame.render_widget(ratatui::widgets::Clear, area);
         let inner = Self::inner_area(area);
         let visible_count = inner.height as usize;
         self.playlist_layout = Some(PlaylistLayout {
@@ -2335,7 +2394,92 @@ impl UserInterface {
             chunks[1],
         );
 
+        if self.preset_rank_grid_visible() {
+            self.render_preset_rank_grid(frame, chunks[1]);
+        }
+
         frame.render_widget(block, area);
+    }
+
+    fn render_preset_rank_grid(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        let history_rows = self.search_history_visible_row_count(area.height as usize);
+        let start_y = area
+            .y
+            .saturating_add(history_rows.min(area.height as usize) as u16);
+        if start_y >= area.y.saturating_add(area.height) {
+            return;
+        }
+        let col_width = (area.width as usize / 3).max(1);
+        let grid_width = (col_width * 3).min(area.width as usize) as u16;
+        let grid_area = Rect {
+            x: area.x + area.width.saturating_sub(grid_width) / 2,
+            y: start_y,
+            width: grid_width,
+            height: area.y.saturating_add(area.height).saturating_sub(start_y),
+        };
+        let visible_rows = grid_area.height as usize;
+        let total_rows = (crate::rank::PRESET_RANKS.len() + 2) / 3;
+        if let Some(selected) = self.preset_rank_selected_index {
+            let selected = selected.min(crate::rank::PRESET_RANKS.len().saturating_sub(1));
+            self.preset_rank_selected_index = Some(selected);
+            let selected_row = selected / 3;
+            if selected_row < self.preset_rank_scroll_offset {
+                self.preset_rank_scroll_offset = selected_row;
+            } else if selected_row >= self.preset_rank_scroll_offset + visible_rows {
+                self.preset_rank_scroll_offset =
+                    selected_row.saturating_sub(visible_rows.saturating_sub(1));
+            }
+        }
+        self.preset_rank_scroll_offset = self
+            .preset_rank_scroll_offset
+            .min(total_rows.saturating_sub(visible_rows));
+        let rows = crate::rank::PRESET_RANKS
+            .chunks(3)
+            .enumerate()
+            .skip(self.preset_rank_scroll_offset)
+            .take(visible_rows)
+            .map(|chunk| {
+                let (row_idx, chunk) = chunk;
+                let mut spans = Vec::new();
+                for (col, rank) in chunk.iter().enumerate() {
+                    if col > 0 {
+                        spans.push(Span::raw(" "));
+                    }
+                    let idx = row_idx * 3 + col;
+                    let width = col_width.saturating_sub(1);
+                    let selected = Some(idx) == self.preset_rank_selected_index;
+                    let label = if selected {
+                        format!("[{}]", rank.name)
+                    } else {
+                        rank.name.to_string()
+                    };
+                    let style = if selected {
+                        self.tui_style(self.theme_colors.song_playing)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        self.tui_style(self.theme_colors.song_normal)
+                    };
+                    spans.push(Span::styled(
+                        Self::center_display_width(&label, width),
+                        style,
+                    ));
+                }
+                ListItem::new(Line::from(spans))
+            })
+            .collect::<Vec<_>>();
+        frame.render_widget(List::new(rows), grid_area);
+    }
+
+    fn center_display_width(text: &str, width: usize) -> String {
+        let line = truncate_to_width(text, width);
+        let display_width = term_display_width(&line);
+        if display_width >= width {
+            return line;
+        }
+        let padding = width - display_width;
+        let left = padding / 2;
+        let right = padding - left;
+        format!("{}{}{}", " ".repeat(left), line, " ".repeat(right))
     }
 
     fn search_results_view(&mut self, visible_count: usize) -> SearchResultsView {
@@ -2356,33 +2500,53 @@ impl UserInterface {
             .to_string();
 
         if self.search_history_visible() {
+            let visible_history = self.visible_search_history_items();
+            let history_visible_count = self.search_history_visible_row_count(visible_count);
             Self::clamp_selected_and_scroll(
                 &mut self.search_history_selected_index,
                 &mut self.search_history_scroll_offset,
-                self.search_history.len(),
-                visible_count.max(1),
+                visible_history.len(),
+                history_visible_count.max(1),
             );
-            let rows = self
-                .search_history
-                .iter()
+            let rows = visible_history
+                .into_iter()
                 .enumerate()
                 .skip(self.search_history_scroll_offset)
-                .take(visible_count)
-                .map(|(idx, query)| SelectableTextRow {
-                    text: format!(
-                        "{} {}",
-                        if idx == self.search_history_selected_index {
-                            ">"
-                        } else {
-                            " "
-                        },
-                        query
-                    ),
-                    selected: idx == self.search_history_selected_index,
+                .take(history_visible_count)
+                .filter_map(|(visible_idx, history_idx)| {
+                    let label = match history_idx {
+                        SearchHistoryItem::ClearAll => self.t().clear_search_history.to_string(),
+                        SearchHistoryItem::History(idx) => self
+                            .search_history
+                            .get(idx)
+                            .map(|query| Self::display_search_history_label(query))?,
+                    };
+                    Some(SelectableTextRow {
+                        text: format!(
+                            "{} {}",
+                            if visible_idx == self.search_history_selected_index {
+                                ">"
+                            } else {
+                                " "
+                            },
+                            label
+                        ),
+                        selected: visible_idx == self.search_history_selected_index,
+                    })
                 })
                 .collect();
             return SearchResultsView {
-                title: format!("{} - {}", title, self.t().search_history_title_suffix),
+                title: if self.playlist_search_mode {
+                    format!(
+                        "{} - {}",
+                        title,
+                        self.active_preset_rank_title
+                            .as_deref()
+                            .unwrap_or(self.t().search_playlist_preset_rank)
+                    )
+                } else {
+                    format!("{} - {}", title, self.t().search_history_title_suffix)
+                },
                 rows,
                 empty_hint: None,
             };
@@ -2496,6 +2660,15 @@ impl UserInterface {
         } else {
             None
         };
+        let title = if self.online_search_mode && self.playlist_search_mode {
+            self.active_preset_rank_title
+                .as_deref()
+                .map(|rank_title| format!("{} - {}", title, rank_title))
+                .unwrap_or(title)
+        } else {
+            title
+        };
+
         SearchResultsView {
             title,
             rows,
@@ -3687,6 +3860,7 @@ impl UserInterface {
                     self.playlist_search_mode = false;
                     self.search_query.clear();
                     self.online_search_results.clear();
+                    self.clear_lazy_online_page_state();
                     self.online_selected_index = 0;
                     self.online_scroll_offset = 0;
                     self.online_searching = false;
@@ -3715,6 +3889,7 @@ impl UserInterface {
                     self.playlist_search_mode = false;
                     self.search_query.clear();
                     self.online_search_results.clear();
+                    self.clear_lazy_online_page_state();
                     self.online_selected_index = 0;
                     self.online_scroll_offset = 0;
                     self.online_searching = false;
@@ -3735,6 +3910,7 @@ impl UserInterface {
                 self.playlist_search_mode = true;
                 self.search_query.clear();
                 self.online_search_results.clear();
+                self.clear_lazy_online_page_state();
                 self.playlist_search_results.clear();
                 self.current_playlist = None;
                 self.online_selected_index = 0;
@@ -4046,17 +4222,74 @@ impl UserInterface {
         self.search_mode
             && self.search_input_focused
             && self.search_query.trim().is_empty()
-            && !self.search_history.is_empty()
+            && (!self.visible_search_history_items().is_empty()
+                || (self.online_search_mode
+                    && self.playlist_search_mode
+                    && self.current_playlist.is_none()))
             && !(self.online_search_mode
                 && self.playlist_search_mode
                 && self.current_playlist.is_some())
     }
 
+    fn visible_search_history_items(&self) -> Vec<SearchHistoryItem> {
+        let mut items = Vec::new();
+        if !self.search_history.is_empty() {
+            items.push(SearchHistoryItem::ClearAll);
+        }
+        items.extend(
+            self.search_history
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, query)| {
+                    let is_url = Self::is_online_list_url_input(query);
+                    let show = if is_url {
+                        self.online_search_mode
+                            && self.playlist_search_mode
+                            && self.current_playlist.is_none()
+                    } else {
+                        true
+                    };
+                    show.then_some(SearchHistoryItem::History(idx))
+                }),
+        );
+        items
+    }
+
+    fn display_search_history_label(query: &str) -> String {
+        query
+            .replace("https://", "")
+            .replace("http://", "")
+    }
+
+    fn search_history_visible_row_count(&self, available_rows: usize) -> usize {
+        if !self.search_history_visible() {
+            return 0;
+        }
+        let history_len = self.visible_search_history_items().len();
+        if !self.preset_rank_grid_visible() {
+            return history_len.min(available_rows);
+        }
+        let total_rank_rows = (crate::rank::PRESET_RANKS.len() + 2) / 3;
+        let reserved_rank_rows = total_rank_rows.min(available_rows / 2).max(1);
+        history_len.min(available_rows.saturating_sub(reserved_rank_rows).max(1))
+    }
+
+    fn preset_rank_grid_visible(&self) -> bool {
+        self.search_mode
+            && self.search_input_focused
+            && self.search_query.trim().is_empty()
+            && self.online_search_mode
+            && self.playlist_search_mode
+            && self.current_playlist.is_none()
+    }
+
     fn move_search_history_selection(&mut self, delta: isize) {
-        if self.search_history.is_empty() {
+        let visible = self.visible_search_history_items();
+        if visible.is_empty() {
             return;
         }
-        let len = self.search_history.len();
+        self.preset_rank_selected_index = None;
+        let len = visible.len();
         if delta < 0 {
             self.search_history_selected_index = self
                 .search_history_selected_index
@@ -4076,16 +4309,32 @@ impl UserInterface {
         if !self.search_history_visible() {
             return false;
         }
-        let Some(query) = self
-            .search_history
-            .get(self.search_history_selected_index)
-            .cloned()
-        else {
+        let visible = self.visible_search_history_items();
+        let Some(item) = visible.get(self.search_history_selected_index).cloned() else {
             return false;
+        };
+        let query = match item {
+            SearchHistoryItem::ClearAll => {
+                self.search_history.clear();
+                self.search_history_selected_index = 0;
+                self.search_history_scroll_offset = 0;
+                self.save_config_now();
+                return true;
+            }
+            SearchHistoryItem::History(history_idx) => {
+                let Some(query) = self.search_history.get(history_idx).cloned() else {
+                    return false;
+                };
+                query
+            }
         };
         self.search_query = query;
         self.search_input_focused = false;
         if self.online_search_mode {
+            if Self::is_online_list_url_input(&self.search_query) {
+                self.start_online_list_url_import();
+                return true;
+            }
             self.online_search_page = 1;
             self.start_online_search();
         } else {
@@ -4094,11 +4343,156 @@ impl UserInterface {
         true
     }
 
+    fn delete_selected_search_history(&mut self) -> bool {
+        if !self.search_history_visible() {
+            return false;
+        }
+        let visible = self.visible_search_history_items();
+        let Some(item) = visible.get(self.search_history_selected_index).cloned() else {
+            return false;
+        };
+        match item {
+            SearchHistoryItem::History(idx) => {
+                if idx < self.search_history.len() {
+                    self.search_history.remove(idx);
+                    let new_len = self.visible_search_history_items().len();
+                    if self.search_history_selected_index >= new_len {
+                        self.search_history_selected_index = new_len.saturating_sub(1);
+                    }
+                    self.search_history_scroll_offset =
+                        self.search_history_scroll_offset
+                            .min(new_len.saturating_sub(
+                                (self.terminal_height as usize).saturating_sub(13).max(1),
+                            ));
+                    self.save_config_now();
+                    return true;
+                }
+            }
+            SearchHistoryItem::ClearAll => {
+                self.search_history.clear();
+                self.search_history_selected_index = 0;
+                self.search_history_scroll_offset = 0;
+                self.save_config_now();
+                return true;
+            }
+        }
+        false
+    }
+
+    fn preset_rank_at_position(
+        &self,
+        col: u16,
+        row: u16,
+    ) -> Option<&'static crate::rank::PresetRank> {
+        if !self.preset_rank_grid_visible() {
+            return None;
+        }
+        let layout = self.playlist_layout?;
+        if col >= layout.left_width || row < layout.start_row.saturating_add(1) {
+            return None;
+        }
+        let available_rows = layout.visible_count.saturating_sub(1);
+        let history_rows = self.search_history_visible_row_count(available_rows) as u16;
+        let grid_start = layout
+            .start_row
+            .saturating_add(1)
+            .saturating_add(history_rows);
+        if row < grid_start {
+            return None;
+        }
+        let grid_row = (row - grid_start) as usize + self.preset_rank_scroll_offset;
+        let col_width = (layout.left_width as usize / 3).max(1);
+        let grid_col = (col as usize / col_width).min(2);
+        let idx = grid_row * 3 + grid_col;
+        crate::rank::PRESET_RANKS.get(idx)
+    }
+
+    fn move_preset_rank_selection(&mut self, delta: isize) {
+        let len = crate::rank::PRESET_RANKS.len();
+        if len == 0 {
+            return;
+        }
+        let Some(current) = self.preset_rank_selected_index else {
+            self.preset_rank_selected_index = Some(0);
+            return;
+        };
+        let next = match delta {
+            -3 => self.move_preset_rank_vertical(current, -1),
+            3 => self.move_preset_rank_vertical(current, 1),
+            d if d < 0 => current.saturating_sub(d.unsigned_abs()),
+            d => (current + d as usize).min(len - 1),
+        };
+        self.preset_rank_selected_index = Some(next);
+    }
+
+    fn move_preset_rank_vertical(&self, current: usize, direction: isize) -> usize {
+        let len = crate::rank::PRESET_RANKS.len();
+        let total_rows = (len + 2) / 3;
+        let row = current / 3;
+        let col = current % 3;
+        if direction > 0 {
+            for next_row in row + 1..total_rows {
+                let idx = next_row * 3 + col;
+                if idx < len {
+                    return idx;
+                }
+            }
+            for next_col in col + 1..3 {
+                let idx = next_col;
+                if idx < len {
+                    return idx;
+                }
+            }
+            current
+        } else {
+            for prev_row in (0..row).rev() {
+                let idx = prev_row * 3 + col;
+                if idx < len {
+                    return idx;
+                }
+            }
+            for prev_col in (0..col).rev() {
+                let mut last_row = total_rows.saturating_sub(1);
+                loop {
+                    let idx = last_row * 3 + prev_col;
+                    if idx < len {
+                        return idx;
+                    }
+                    if last_row == 0 {
+                        break;
+                    }
+                    last_row -= 1;
+                }
+            }
+            current
+        }
+    }
+
+    fn activate_selected_preset_rank(&mut self) -> bool {
+        let Some(selected) = self.preset_rank_selected_index else {
+            return false;
+        };
+        let Some(rank) = crate::rank::PRESET_RANKS.get(selected) else {
+            return false;
+        };
+        self.active_preset_rank_title = Some(rank.name.to_string());
+        self.search_query.clear();
+        self.search_input_focused = false;
+        self.start_online_list_url_import_with_history(rank.url.to_string(), false);
+        true
+    }
+
+    fn preset_rank_has_focus(&self) -> bool {
+        self.preset_rank_grid_visible() && self.preset_rank_selected_index.is_some()
+    }
+
     /// 启动网络搜索
     fn start_online_search(&mut self) {
         if self.search_query.is_empty() {
             return;
         }
+        self.clear_lazy_online_page_state();
+        self.online_list_url_import_pending_play = false;
         self.add_search_history(self.search_query.clone());
         self.online_search_mode = true;
         self.online_searching = true;
@@ -4126,6 +4520,258 @@ impl UserInterface {
         }
     }
 
+    fn is_online_list_url_input(input: &str) -> bool {
+        let trimmed = input.trim();
+        trimmed.starts_with("http://") || trimmed.starts_with("https://")
+    }
+
+    fn start_lazy_online_page_load(&mut self, page: usize, page_size: usize) {
+        if self.lazy_online_all_results.is_empty() {
+            return;
+        }
+        let total_pages = (self.lazy_online_all_results.len() + page_size - 1) / page_size;
+        if page >= total_pages {
+            return;
+        }
+        let start = page * page_size;
+        let end = (start + page_size).min(self.lazy_online_all_results.len());
+        let candidates = self.lazy_online_all_results[start..end].to_vec();
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.lazy_online_page = page;
+        self.online_searching = true;
+        self.lazy_online_page_rx = Some(rx);
+        self.online_search_results.clear();
+        self.online_selected_index = 0;
+        self.online_scroll_offset = 0;
+        self.update_status(self.t().querying_song_info);
+        std::thread::spawn(move || {
+            let resolved = candidates
+                .into_iter()
+                .map(|song| resolve_unresolved_juhe_song(&song).unwrap_or(song))
+                .collect::<Vec<_>>();
+            let _ = tx.send((page, resolved));
+        });
+    }
+
+    fn clear_lazy_online_page_state(&mut self) {
+        self.lazy_online_all_results.clear();
+        self.lazy_online_page = 0;
+        self.lazy_online_page_rx = None;
+        self.online_list_url_page_rx = None;
+        self.online_list_url_source = None;
+        self.online_list_url_import_source = None;
+        self.online_list_url_page = 1;
+        self.online_list_url_import_mode = false;
+    }
+
+    fn can_remote_page_online_list_url(input: &str) -> bool {
+        match crate::search::parse_online_list_url(input) {
+            Ok(crate::search::OnlineListUrlKind::Rank(crate::search::PlaylistSource::Kugou, _)) => {
+                true
+            }
+            Ok(crate::search::OnlineListUrlKind::Playlist(
+                crate::search::PlaylistSource::Kuwo,
+                _,
+            )) => true,
+            Ok(crate::search::OnlineListUrlKind::Artist(
+                crate::search::PlaylistSource::Kuwo,
+                _,
+            )) => true,
+            Ok(crate::search::OnlineListUrlKind::External(
+                crate::search::ExternalPlaylistSource::Spotify,
+                _,
+            )) => true,
+            Ok(crate::search::OnlineListUrlKind::External(
+                crate::search::ExternalPlaylistSource::AppleMusic,
+                url,
+            )) => {
+                let lower = url.to_ascii_lowercase();
+                lower.contains("/playlist/")
+                    || lower.contains("/room/")
+                    || lower.contains("/album/")
+                    || lower.contains("/new/top-charts/songs")
+                    || (lower.contains("/artist/") && lower.contains("/top-songs"))
+            }
+            _ => false,
+        }
+    }
+
+    fn start_online_list_url_page_load(&mut self, page: usize) {
+        let Some(input) = self.online_list_url_source.clone() else {
+            return;
+        };
+        let page = page.max(1);
+        let cache_key = OnlineListUrlPageCacheKey {
+            input: input.clone(),
+            page,
+        };
+        if let Some(result) = self.online_list_url_page_cache.get(&cache_key).cloned() {
+            self.online_searching = false;
+            self.online_list_url_page = page;
+            self.online_list_url_page_rx = None;
+            self.clear_online_download_state();
+            self.current_playlist = Some(result.playlist);
+            self.online_search_results = result.songs;
+            self.online_selected_index = 0;
+            self.online_scroll_offset = 0;
+            if self.online_search_results.is_empty() {
+                self.update_status(self.t().online_list_url_failed);
+            }
+            return;
+        }
+        self.online_searching = true;
+        self.online_list_url_page = page;
+        self.online_list_url_page_rx = Some(crate::search::fetch_online_list_url_page_background(
+            input,
+            self.online_list_url_page,
+            20,
+        ));
+        self.online_search_results.clear();
+        self.online_selected_index = 0;
+        self.online_scroll_offset = 0;
+        self.update_status(self.t().querying_song_info);
+    }
+
+    fn resolved_online_song_at(&mut self, index: usize) -> Option<OnlineSong> {
+        if index >= self.online_search_results.len() {
+            return None;
+        }
+        if self.online_search_results[index].is_unresolved_juhe_candidate() {
+            if let Some(resolved) = resolve_unresolved_juhe_song(&self.online_search_results[index])
+            {
+                self.online_search_results[index] = resolved;
+            } else {
+                self.update_status(self.t().online_list_url_failed);
+                return None;
+            }
+        }
+        self.online_search_results.get(index).cloned()
+    }
+
+    fn start_online_list_url_import(&mut self) {
+        let input = self.search_query.trim().to_string();
+        self.start_online_list_url_import_with_history(input, true);
+    }
+
+    fn start_online_list_url_import_with_history(&mut self, input: String, save_history: bool) {
+        if input.is_empty() {
+            return;
+        }
+
+        if save_history {
+            self.add_search_history(input.clone());
+        }
+        let remote_page = Self::can_remote_page_online_list_url(&input);
+        let same_url = self.online_list_url_import_source.as_deref() == Some(input.as_str());
+        if !same_url {
+            self.clear_lazy_online_page_state();
+        } else {
+            self.lazy_online_page_rx = None;
+            self.online_list_url_page_rx = None;
+        }
+        self.online_list_url_source = if remote_page {
+            Some(input.clone())
+        } else {
+            None
+        };
+        self.online_list_url_import_source = Some(input.clone());
+        self.online_list_url_page = 1;
+        self.search_mode = true;
+        self.online_search_mode = true;
+        self.juhe_search_mode = false;
+        self.playlist_search_mode = true;
+        self.online_searching = true;
+        self.online_list_url_import_pending_play = true;
+        self.online_list_url_import_mode = true;
+        self.clear_online_download_state();
+        self.online_search_results.clear();
+        self.playlist_search_results.clear();
+        self.current_playlist = None;
+        self.online_selected_index = 0;
+        self.online_scroll_offset = 0;
+        self.online_search_rx = None;
+        self.playlist_search_rx = None;
+        let cached_lazy_results = if !remote_page {
+            self.online_list_url_lazy_results_cache.get(&input).cloned()
+        } else {
+            None
+        };
+        if let Some(cached_results) = cached_lazy_results {
+            self.online_searching = false;
+            self.playlist_songs_rx = None;
+            if self.current_playlist.is_none() {
+                if let Some(result) = self.online_list_url_import_cache.get(&input) {
+                    self.current_playlist = Some(result.playlist.clone());
+                }
+            }
+            self.lazy_online_all_results = cached_results;
+            let end = 20.min(self.lazy_online_all_results.len());
+            self.online_search_results = self.lazy_online_all_results[..end].to_vec();
+            self.lazy_online_page = 0;
+            self.online_list_url_import_pending_play = false;
+            self.search_input_focused = false;
+            return;
+        }
+        let cache_key = OnlineListUrlPageCacheKey {
+            input: input.clone(),
+            page: 1,
+        };
+        if let Some(result) = if remote_page {
+            self.online_list_url_page_cache.get(&cache_key).cloned()
+        } else {
+            self.online_list_url_import_cache.get(&input).cloned()
+        } {
+            self.online_searching = false;
+            self.playlist_songs_rx = None;
+            self.current_playlist = Some(result.playlist);
+            if remote_page {
+                self.online_search_results = result.songs;
+                self.online_selected_index = 0;
+                self.online_scroll_offset = 0;
+                self.online_list_url_import_pending_play = false;
+                if self.online_search_results.is_empty() {
+                    self.update_status(self.t().online_list_url_failed);
+                }
+                self.search_input_focused = false;
+                return;
+            }
+            let lazy = result
+                .songs
+                .iter()
+                .any(|song| song.is_unresolved_juhe_candidate());
+            let paged = !remote_page && result.songs.len() > 20;
+            if lazy || paged {
+                self.lazy_online_all_results = result.songs;
+                self.lazy_online_page = 0;
+                self.online_search_results.clear();
+                self.start_lazy_online_page_load(0, 20);
+            } else {
+                self.online_search_results = result.songs;
+            }
+            if self.online_search_results.is_empty() {
+                self.online_list_url_import_pending_play = false;
+                self.update_status(self.t().online_list_url_failed);
+            } else if self.online_list_url_import_pending_play && !lazy && !paged {
+                self.online_list_url_import_pending_play = false;
+                let count = self.online_search_results.len();
+                self.update_status(
+                    &self
+                        .t()
+                        .fmt_online_list_url_loaded
+                        .replace("{}", &count.to_string()),
+                );
+            }
+        } else {
+            self.playlist_songs_rx = Some(crate::search::fetch_online_list_url_page_background(
+                input, 1, 20,
+            ));
+        }
+        self.search_input_focused = false;
+        if self.online_searching {
+            self.update_status(self.t().online_list_url_loading);
+        }
+    }
+
     /// 检查网络搜索结果
     fn check_online_search_result(&mut self) {
         if let Some(ref rx) = self.online_search_rx {
@@ -4141,6 +4787,82 @@ impl UserInterface {
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     self.online_searching = false;
                     self.online_search_rx = None;
+                    self.update_status(self.t().online_search_failed);
+                }
+            }
+        }
+        if let Some(ref rx) = self.lazy_online_page_rx {
+            match rx.try_recv() {
+                Ok((page, songs)) => {
+                    self.online_searching = false;
+                    self.lazy_online_page_rx = None;
+                    self.lazy_online_page = page;
+                    self.online_search_results = songs;
+                    self.online_selected_index = 0;
+                    self.online_scroll_offset = 0;
+                    let start = page * 20;
+                    for (offset, song) in self.online_search_results.iter().cloned().enumerate() {
+                        if let Some(slot) = self.lazy_online_all_results.get_mut(start + offset) {
+                            *slot = song;
+                        }
+                    }
+                    if let Some(input) = self.online_list_url_import_source.clone() {
+                        self.online_list_url_lazy_results_cache
+                            .insert(input, self.lazy_online_all_results.clone());
+                    }
+                    if self.online_search_results.is_empty() {
+                        self.online_list_url_import_pending_play = false;
+                        self.update_status(self.t().online_list_url_failed);
+                    } else if self.online_list_url_import_pending_play && page == 0 {
+                        self.online_list_url_import_pending_play = false;
+                        let count = self.lazy_online_all_results.len();
+                        self.update_status(
+                            &self
+                                .t()
+                                .fmt_online_list_url_loaded
+                                .replace("{}", &count.to_string()),
+                        );
+                        if let Some(song) = self.resolved_online_song_at(0) {
+                            self.online_auto_skip_times.clear();
+                            self.start_download_song(song);
+                        }
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.online_searching = false;
+                    self.lazy_online_page_rx = None;
+                    self.update_status(self.t().online_search_failed);
+                }
+            }
+        }
+        if let Some(ref rx) = self.online_list_url_page_rx {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.online_searching = false;
+                    self.online_list_url_page_rx = None;
+                    self.clear_online_download_state();
+                    if let Some(input) = self.online_list_url_source.clone() {
+                        self.online_list_url_page_cache.insert(
+                            OnlineListUrlPageCacheKey {
+                                input,
+                                page: self.online_list_url_page,
+                            },
+                            result.clone(),
+                        );
+                    }
+                    self.current_playlist = Some(result.playlist);
+                    self.online_search_results = result.songs;
+                    self.online_selected_index = 0;
+                    self.online_scroll_offset = 0;
+                    if self.online_search_results.is_empty() {
+                        self.update_status(self.t().online_list_url_failed);
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.online_searching = false;
+                    self.online_list_url_page_rx = None;
                     self.update_status(self.t().online_search_failed);
                 }
             }
@@ -4171,15 +4893,89 @@ impl UserInterface {
                     self.online_searching = false;
                     self.playlist_songs_rx = None;
                     self.clear_online_download_state();
+                    if self.online_list_url_source.is_some() {
+                        if let Some(input) = self.online_list_url_source.clone() {
+                            self.online_list_url_page_cache.insert(
+                                OnlineListUrlPageCacheKey { input, page: 1 },
+                                result.clone(),
+                            );
+                        }
+                        self.current_playlist = Some(result.playlist);
+                        self.online_search_results = result.songs;
+                        self.online_selected_index = 0;
+                        self.online_scroll_offset = 0;
+                        if self.online_search_results.is_empty() {
+                            self.online_list_url_import_pending_play = false;
+                            self.update_status(self.t().online_list_url_failed);
+                        } else if self.online_list_url_import_pending_play {
+                            self.online_list_url_import_pending_play = false;
+                            let count = self.online_search_results.len();
+                            self.update_status(
+                                &self
+                                    .t()
+                                    .fmt_online_list_url_loaded
+                                    .replace("{}", &count.to_string()),
+                            );
+                            if let Some(song) = self.resolved_online_song_at(0) {
+                                self.online_auto_skip_times.clear();
+                                self.start_download_song(song);
+                            }
+                        }
+                        return;
+                    }
+                    if let Some(input) = self.online_list_url_import_source.clone() {
+                        self.online_list_url_import_cache
+                            .insert(input, result.clone());
+                    }
                     self.current_playlist = Some(result.playlist);
-                    self.online_search_results = result.songs;
+                    let url_import_mode = self.online_list_url_import_mode;
+                    self.lazy_online_all_results.clear();
+                    self.lazy_online_page = 0;
+                    self.lazy_online_page_rx = None;
+                    let lazy = result
+                        .songs
+                        .iter()
+                        .any(|song| song.is_unresolved_juhe_candidate());
+                    let paged = url_import_mode && result.songs.len() > 20;
+                    if lazy || paged {
+                        self.lazy_online_all_results = result.songs;
+                        self.lazy_online_page = 0;
+                        self.online_search_results.clear();
+                        if let Some(input) = self.online_list_url_import_source.clone() {
+                            self.online_list_url_lazy_results_cache
+                                .insert(input, self.lazy_online_all_results.clone());
+                        }
+                    } else {
+                        self.online_search_results = result.songs;
+                    }
                     self.online_selected_index = 0;
                     self.online_scroll_offset = 0;
+                    if lazy || paged {
+                        self.start_lazy_online_page_load(0, 20);
+                    }
+                    if !lazy && !paged && self.online_search_results.is_empty() {
+                        self.online_list_url_import_pending_play = false;
+                        self.update_status(self.t().online_list_url_failed);
+                    } else if !lazy && !paged && self.online_list_url_import_pending_play {
+                        self.online_list_url_import_pending_play = false;
+                        let count = self.online_search_results.len();
+                        self.update_status(
+                            &self
+                                .t()
+                                .fmt_online_list_url_loaded
+                                .replace("{}", &count.to_string()),
+                        );
+                        if let Some(song) = self.resolved_online_song_at(0) {
+                            self.online_auto_skip_times.clear();
+                            self.start_download_song(song);
+                        }
+                    }
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     self.online_searching = false;
                     self.playlist_songs_rx = None;
+                    self.online_list_url_import_pending_play = false;
                     self.update_status(self.t().playlist_songs_failed);
                 }
             }
@@ -4670,11 +5466,6 @@ impl UserInterface {
     fn handle_mouse_event_impl(&mut self, mouse_event: MouseEvent) -> io::Result<()> {
         let col = mouse_event.column as usize;
         let row = mouse_event.row;
-        let in_playlist_detail = self.search_mode
-            && self.online_search_mode
-            && self.playlist_search_mode
-            && self.current_playlist.is_some();
-
         match mouse_event.kind {
             MouseEventKind::Down(button) => {
                 // 只处理左键点击
@@ -4782,6 +5573,41 @@ impl UserInterface {
                     let in_playlist_detail = self.online_search_mode
                         && self.playlist_search_mode
                         && self.current_playlist.is_some();
+                    if let Some(rank) = self.preset_rank_at_position(col as u16, row) {
+                        if let Some(idx) = crate::rank::PRESET_RANKS
+                            .iter()
+                            .position(|candidate| candidate.url == rank.url)
+                        {
+                            self.preset_rank_selected_index = Some(idx);
+                        }
+                        self.active_preset_rank_title = Some(rank.name.to_string());
+                        self.search_query.clear();
+                        self.search_input_focused = false;
+                        self.start_online_list_url_import_with_history(rank.url.to_string(), false);
+                        return Ok(());
+                    }
+                    if self.search_history_visible() && col < left_width {
+                        if let Some(layout) = self.playlist_layout {
+                            let history_start_row = layout.start_row.saturating_add(1);
+                            let history_rows = self.search_history_visible_row_count(
+                                layout.visible_count.saturating_sub(1),
+                            ) as u16;
+                            if row >= history_start_row
+                                && row < history_start_row.saturating_add(history_rows)
+                            {
+                                let click_row = (row - history_start_row) as usize;
+                                let clicked_visible_index =
+                                    self.search_history_scroll_offset + click_row;
+                                let visible_history = self.visible_search_history_items();
+                                if clicked_visible_index < visible_history.len() {
+                                    self.preset_rank_selected_index = None;
+                                    self.search_history_selected_index = clicked_visible_index;
+                                    let _ = self.try_use_selected_search_history();
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    }
                     if !in_playlist_detail && row == 4 && col < left_width {
                         self.search_input_focused = true;
                         return Ok(());
@@ -5056,7 +5882,13 @@ impl UserInterface {
                     // 搜索模式：滚轮向上
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize {
-                            if self.online_search_mode {
+                            if self.preset_rank_grid_visible()
+                                && self.preset_rank_at_position(col as u16, row).is_some()
+                            {
+                                self.move_preset_rank_selection(-3);
+                            } else if self.search_history_visible() {
+                                self.move_search_history_selection(-1);
+                            } else if self.online_search_mode {
                                 let total = if self.playlist_search_mode
                                     && self.current_playlist.is_none()
                                 {
@@ -5181,8 +6013,7 @@ impl UserInterface {
             }
             MouseEventKind::ScrollDown => {
                 // 所有模式：歌词区域滚轮向下 -> 跳转到下一句歌词
-                // 歌单详情页优先用于歌单滚动，不触发歌词滚轮跳转
-                if !in_playlist_detail && self.lyric_time_at_position(col, row).is_some() {
+                if self.lyric_time_at_position(col, row).is_some() {
                     self.seek_by_lyric_wheel(1);
                     return Ok(());
                 }
@@ -5233,9 +6064,14 @@ impl UserInterface {
                 } else if self.search_mode {
                     // 搜索模式：滚轮向下
                     if let Some(layout) = self.playlist_layout {
-                        let allow_scroll = in_playlist_detail || col < layout.left_width as usize;
-                        if allow_scroll {
-                            if self.online_search_mode {
+                        if col < layout.left_width as usize {
+                            if self.preset_rank_grid_visible()
+                                && self.preset_rank_at_position(col as u16, row).is_some()
+                            {
+                                self.move_preset_rank_selection(3);
+                            } else if self.search_history_visible() {
+                                self.move_search_history_selection(1);
+                            } else if self.online_search_mode {
                                 let total = if self.playlist_search_mode
                                     && self.current_playlist.is_none()
                                 {
@@ -5548,7 +6384,7 @@ impl UserInterface {
                     &mut self.online_scroll_offset,
                     (self.terminal_height as usize).saturating_sub(12).max(5),
                 );
-                if let Some(song) = self.online_search_results.get(i).cloned() {
+                if let Some(song) = self.resolved_online_song_at(i) {
                     self.start_download_song(song);
                 }
             } else if !manual {
@@ -5616,7 +6452,7 @@ impl UserInterface {
                 &mut self.online_scroll_offset,
                 (self.terminal_height as usize).saturating_sub(12).max(5),
             );
-            if let Some(song) = self.online_search_results.get(prev_idx).cloned() {
+            if let Some(song) = self.resolved_online_song_at(prev_idx) {
                 // 手动上一曲属于人工切换，重置自动切歌节流窗口
                 self.online_auto_skip_times.clear();
                 self.start_download_song(song);

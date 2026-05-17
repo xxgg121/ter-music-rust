@@ -22,6 +22,8 @@
 
 ![preview6](preview6.png)
 
+![preview7](preview7.png)
+
 ## ✨ 功能特性
 
 ### 🎵 音频播放
@@ -727,14 +729,46 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新日志
+
+## 版本 2.1.0 (2026-05-17)
+
+### 🎉 新功能
+- ✨ **歌单URL导入**：支持通过链接导入在线播放列表，已扩展Apple Music播放列表链接与Spotify Music播放列表链接与排行榜导入。
+- ✨ **榜单URL导入**：支持导入酷狗、酷我、网易等链接的歌单与排行榜，便于快速扩展当前播放列表。
+- ✨ **多平台链接识别**：优化URL导入入口对不同链接的识别与处理流程，提升跨平台歌单导入体验。
+- ✨ **Apple Music**：
+- `https://music.apple.com/cn/room/*`
+- `https://music.apple.com/cn/album/*/*`
+- `https://music.apple.com/cn/playlist/*/*`
+- `https://music.apple.com/cn/artist/*/*/top-songs`
+- `https://music.apple.com/cn/new/top-charts/songs`
+
+- ✨ **Spotify Music**：
+- `https://open.spotify.com/album/*`
+- `https://open.spotify.com/artist/*`
+- `https://open.spotify.com/playlist/*`
+- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+
+- ✨ **NetEase Music**：
+- `https://music.163.com/#/album?id=*`
+- `https://music.163.com/#/artist?id=*`
+- `https://music.163.com/#/playlist?id=*`
+- `https://music.163.com/#/discover/toplist?id=*`
+
+- ✨ **Other Music**：
+- `https://www.kuwo.cn/rankList`
+- `https://www.kuwo.cn/singer_detail/*`
+- `https://www.kuwo.cn/playlist_detail/*`
+- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+---
 
 ## 版本 2.0.0 (2026-05-14)
 

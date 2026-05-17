@@ -22,6 +22,8 @@
 
 ![preview6](preview6.png)
 
+![preview7](preview7.png)
+
 ## ✨ Функции
 
 ### 🎵 Воспроизведение аудио
@@ -728,14 +730,46 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 Первая сборка загружает и компилирует все зависимости; это ожидаемо. Последующие сборки будут значительно быстрее.
 
 ### Загрузка релизов
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Список изменений
+
+## Версия 2.1.0 (2026-05-17)
+
+### 🎉 Новые функции
+- ✨ **Импорт плейлиста по URL**: поддержка импорта онлайн-плейлистов по ссылке; добавлена поддержка ссылок на плейлисты Apple Music, Spotify Music и чартов.
+- ✨ **Импорт чартов по URL**: импорт плейлистов и чартов с Kugou, Kuwo, NetEase и других платформ по URL для быстрого расширения текущего плейлиста.
+- ✨ **Распознавание URL разных платформ**: улучшено распознавание и обработка ссылок различных музыкальных платформ при импорте по URL.
+- ✨ **Apple Music**:
+- `https://music.apple.com/cn/room/*`
+- `https://music.apple.com/cn/album/*/*`
+- `https://music.apple.com/cn/playlist/*/*`
+- `https://music.apple.com/cn/artist/*/*/top-songs`
+- `https://music.apple.com/cn/new/top-charts/songs`
+
+- ✨ **Spotify Music**:
+- `https://open.spotify.com/album/*`
+- `https://open.spotify.com/artist/*`
+- `https://open.spotify.com/playlist/*`
+- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+
+- ✨ **NetEase Music**:
+- `https://music.163.com/#/album?id=*`
+- `https://music.163.com/#/artist?id=*`
+- `https://music.163.com/#/playlist?id=*`
+- `https://music.163.com/#/discover/toplist?id=*`
+
+- ✨ **Other Music**:
+- `https://www.kuwo.cn/rankList`
+- `https://www.kuwo.cn/singer_detail/*`
+- `https://www.kuwo.cn/playlist_detail/*`
+- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+---
 
 ## Версия 2.0.0 (2026-05-14)
 

@@ -8,6 +8,7 @@ mod desktop_lyrics;
 mod langs;
 mod lyrics;
 mod playlist;
+mod rank;
 mod search;
 mod ui;
 

@@ -23,6 +23,8 @@ Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어
 
 ![preview6](preview6.png)
 
+![preview7](preview7.png)
+
 ## ✨ 주요 기능
 
 ### 🎵 오디오 재생
@@ -730,14 +732,46 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 업데이트 로그
+
+## 버전 2.1.0 (2026-05-17)
+
+### 🎉 새로운 기능
+- ✨ **플레이리스트 URL 가져오기**: URL을 통해 온라인 플레이리스트를 가져올 수 있습니다. Apple Music 및 Spotify Music 플레이리스트 링크와 차트 가져오기를 지원합니다.
+- ✨ **차트 URL 가져오기**: 酷狗, 酷我, 网易 등의 플레이리스트 및 차트를 URL로 가져와 현재 플레이리스트를 빠르게 확장할 수 있습니다.
+- ✨ **멀티 플랫폼 URL 인식**: URL 가져오기 입력창에서 다양한 플랫폼 링크의 인식 및 처리 흐름을 개선하여 크로스 플랫폼 플레이리스트 가져오기 경험을 향상시켰습니다.
+- ✨ **Apple Music**:
+- `https://music.apple.com/kr/room/*`
+- `https://music.apple.com/kr/album/*/*`
+- `https://music.apple.com/kr/playlist/*/*`
+- `https://music.apple.com/kr/artist/*/*/top-songs`
+- `https://music.apple.com/cn/new/top-charts/songs`
+
+- ✨ **Spotify Music**:
+- `https://open.spotify.com/album/*`
+- `https://open.spotify.com/artist/*`
+- `https://open.spotify.com/playlist/*`
+- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+
+- ✨ **NetEase Music**:
+- `https://music.163.com/#/album?id=*`
+- `https://music.163.com/#/artist?id=*`
+- `https://music.163.com/#/playlist?id=*`
+- `https://music.163.com/#/discover/toplist?id=*`
+
+- ✨ **Other Music**:
+- `https://www.kuwo.cn/rankList`
+- `https://www.kuwo.cn/singer_detail/*`
+- `https://www.kuwo.cn/playlist_detail/*`
+- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+---
 
 ## 버전 2.0.0 (2026-05-14)
 

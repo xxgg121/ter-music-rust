@@ -22,6 +22,8 @@ Un reproductor de música para terminal, simple y práctico, implementado en Rus
 
 ![preview6](preview6.png)
 
+![preview7](preview7.png)
+
 ## ✨ Características
 
 ### 🎵 Reproducción de audio
@@ -727,14 +729,45 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 La primera compilación descarga y compila todas las dependencias; esto es esperado. Las compilaciones posteriores son mucho más rápidas.
 
 ### Descargar Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605141540132256_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605141540256621_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605141540356623_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605141541026672_ter-music-rust_deb.zip "附件(Attached)")
-
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
+[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
 ---
 
 ## 📝 Registro de cambios
+
+## Versión 2.1.0 (2026-05-17)
+
+### 🎉 Nuevas funcionalidades
+- ✨ **Importación de lista de reproducción por URL**: importa listas de reproducción en línea mediante enlace; compatible con enlaces de listas de Apple Music, Spotify Music y clasificaciones.
+- ✨ **Importación de clasificaciones por URL**: importa listas y clasificaciones de Kugou, Kuwo, NetEase y otras plataformas por URL para ampliar rápidamente la lista actual.
+- ✨ **Reconocimiento de URL multiplataforma**: mejora del reconocimiento y procesamiento de enlaces de distintas plataformas musicales al importar por URL.
+- ✨ **Apple Music**:
+- `https://music.apple.com/es/room/*`
+- `https://music.apple.com/es/album/*/*`
+- `https://music.apple.com/es/playlist/*/*`
+- `https://music.apple.com/es/artist/*/*/top-songs`
+- `https://music.apple.com/cn/new/top-charts/songs`
+
+- ✨ **Spotify Music**:
+- `https://open.spotify.com/album/*`
+- `https://open.spotify.com/artist/*`
+- `https://open.spotify.com/playlist/*`
+- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+
+- ✨ **NetEase Music**:
+- `https://music.163.com/#/album?id=*`
+- `https://music.163.com/#/artist?id=*`
+- `https://music.163.com/#/playlist?id=*`
+- `https://music.163.com/#/discover/toplist?id=*`
+
+- ✨ **Other Music**:
+- `https://www.kuwo.cn/rankList`
+- `https://www.kuwo.cn/singer_detail/*`
+- `https://www.kuwo.cn/playlist_detail/*`
+- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+---
 
 ## Versión 2.0.0 (2026-05-14)
 
