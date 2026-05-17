@@ -745,30 +745,32 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - ✨ **Импорт плейлиста по URL**: поддержка импорта онлайн-плейлистов по ссылке; добавлена поддержка ссылок на плейлисты Apple Music, Spotify Music и чартов.
 - ✨ **Импорт чартов по URL**: импорт плейлистов и чартов с Kugou, Kuwo, NetEase и других платформ по URL для быстрого расширения текущего плейлиста.
 - ✨ **Распознавание URL разных платформ**: улучшено распознавание и обработка ссылок различных музыкальных платформ при импорте по URL.
-- ✨ **Apple Music**:
-- `https://music.apple.com/cn/room/*`
-- `https://music.apple.com/cn/album/*/*`
-- `https://music.apple.com/cn/playlist/*/*`
-- `https://music.apple.com/cn/artist/*/*/top-songs`
-- `https://music.apple.com/cn/new/top-charts/songs`
 
-- ✨ **Spotify Music**:
-- `https://open.spotify.com/album/*`
-- `https://open.spotify.com/artist/*`
-- `https://open.spotify.com/playlist/*`
-- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+- ✨ **Apple Music**：
+    `https://music.apple.com/cn/room/*`
+    `https://music.apple.com/cn/album/*/*`
+    `https://music.apple.com/cn/playlist/*/*`
+    `https://music.apple.com/cn/artist/*/*/top-songs`
+    `https://music.apple.com/cn/new/top-charts/songs`
 
-- ✨ **NetEase Music**:
-- `https://music.163.com/#/album?id=*`
-- `https://music.163.com/#/artist?id=*`
-- `https://music.163.com/#/playlist?id=*`
-- `https://music.163.com/#/discover/toplist?id=*`
+- ✨ **Spotify Music**：
+    `https://open.spotify.com/album/*`
+    `https://open.spotify.com/artist/*`
+    `https://open.spotify.com/playlist/*`
+    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
-- ✨ **Other Music**:
-- `https://www.kuwo.cn/rankList`
-- `https://www.kuwo.cn/singer_detail/*`
-- `https://www.kuwo.cn/playlist_detail/*`
-- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+- ✨ **NetEase Music**：
+    `https://music.163.com/#/album?id=*`
+    `https://music.163.com/#/artist?id=*`
+    `https://music.163.com/#/playlist?id=*`
+    `https://music.163.com/#/discover/toplist?id=*`
+
+- ✨ **Other Music**：
+    `https://www.kuwo.cn/rankList`
+    `https://www.kuwo.cn/singer_detail/*`
+    `https://www.kuwo.cn/playlist_detail/*`
+    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+
 ---
 
 ## Версия 2.0.0 (2026-05-14)

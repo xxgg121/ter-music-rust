@@ -733,6 +733,7 @@ La primera compilación descarga y compila todas las dependencias; esto es esper
 [ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
 [ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
 [ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
+
 ---
 
 ## 📝 Registro de cambios
@@ -743,30 +744,32 @@ La primera compilación descarga y compila todas las dependencias; esto es esper
 - ✨ **Importación de lista de reproducción por URL**: importa listas de reproducción en línea mediante enlace; compatible con enlaces de listas de Apple Music, Spotify Music y clasificaciones.
 - ✨ **Importación de clasificaciones por URL**: importa listas y clasificaciones de Kugou, Kuwo, NetEase y otras plataformas por URL para ampliar rápidamente la lista actual.
 - ✨ **Reconocimiento de URL multiplataforma**: mejora del reconocimiento y procesamiento de enlaces de distintas plataformas musicales al importar por URL.
-- ✨ **Apple Music**:
-- `https://music.apple.com/es/room/*`
-- `https://music.apple.com/es/album/*/*`
-- `https://music.apple.com/es/playlist/*/*`
-- `https://music.apple.com/es/artist/*/*/top-songs`
-- `https://music.apple.com/cn/new/top-charts/songs`
 
-- ✨ **Spotify Music**:
-- `https://open.spotify.com/album/*`
-- `https://open.spotify.com/artist/*`
-- `https://open.spotify.com/playlist/*`
-- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+- ✨ **Apple Music**：
+    `https://music.apple.com/cn/room/*`
+    `https://music.apple.com/cn/album/*/*`
+    `https://music.apple.com/cn/playlist/*/*`
+    `https://music.apple.com/cn/artist/*/*/top-songs`
+    `https://music.apple.com/cn/new/top-charts/songs`
 
-- ✨ **NetEase Music**:
-- `https://music.163.com/#/album?id=*`
-- `https://music.163.com/#/artist?id=*`
-- `https://music.163.com/#/playlist?id=*`
-- `https://music.163.com/#/discover/toplist?id=*`
+- ✨ **Spotify Music**：
+    `https://open.spotify.com/album/*`
+    `https://open.spotify.com/artist/*`
+    `https://open.spotify.com/playlist/*`
+    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
-- ✨ **Other Music**:
-- `https://www.kuwo.cn/rankList`
-- `https://www.kuwo.cn/singer_detail/*`
-- `https://www.kuwo.cn/playlist_detail/*`
-- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+- ✨ **NetEase Music**：
+    `https://music.163.com/#/album?id=*`
+    `https://music.163.com/#/artist?id=*`
+    `https://music.163.com/#/playlist?id=*`
+    `https://music.163.com/#/discover/toplist?id=*`
+
+- ✨ **Other Music**：
+    `https://www.kuwo.cn/rankList`
+    `https://www.kuwo.cn/singer_detail/*`
+    `https://www.kuwo.cn/playlist_detail/*`
+    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+
 ---
 
 ## Versión 2.0.0 (2026-05-14)

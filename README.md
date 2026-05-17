@@ -744,30 +744,32 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - ✨ **歌单URL导入**：支持通过链接导入在线播放列表，已扩展Apple Music播放列表链接与Spotify Music播放列表链接与排行榜导入。
 - ✨ **榜单URL导入**：支持导入酷狗、酷我、网易等链接的歌单与排行榜，便于快速扩展当前播放列表。
 - ✨ **多平台链接识别**：优化URL导入入口对不同链接的识别与处理流程，提升跨平台歌单导入体验。
+
 - ✨ **Apple Music**：
-- `https://music.apple.com/cn/room/*`
-- `https://music.apple.com/cn/album/*/*`
-- `https://music.apple.com/cn/playlist/*/*`
-- `https://music.apple.com/cn/artist/*/*/top-songs`
-- `https://music.apple.com/cn/new/top-charts/songs`
+    `https://music.apple.com/cn/room/*`
+    `https://music.apple.com/cn/album/*/*`
+    `https://music.apple.com/cn/playlist/*/*`
+    `https://music.apple.com/cn/artist/*/*/top-songs`
+    `https://music.apple.com/cn/new/top-charts/songs`
 
 - ✨ **Spotify Music**：
-- `https://open.spotify.com/album/*`
-- `https://open.spotify.com/artist/*`
-- `https://open.spotify.com/playlist/*`
-- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+    `https://open.spotify.com/album/*`
+    `https://open.spotify.com/artist/*`
+    `https://open.spotify.com/playlist/*`
+    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
 - ✨ **NetEase Music**：
-- `https://music.163.com/#/album?id=*`
-- `https://music.163.com/#/artist?id=*`
-- `https://music.163.com/#/playlist?id=*`
-- `https://music.163.com/#/discover/toplist?id=*`
+    `https://music.163.com/#/album?id=*`
+    `https://music.163.com/#/artist?id=*`
+    `https://music.163.com/#/playlist?id=*`
+    `https://music.163.com/#/discover/toplist?id=*`
 
 - ✨ **Other Music**：
-- `https://www.kuwo.cn/rankList`
-- `https://www.kuwo.cn/singer_detail/*`
-- `https://www.kuwo.cn/playlist_detail/*`
-- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+    `https://www.kuwo.cn/rankList`
+    `https://www.kuwo.cn/singer_detail/*`
+    `https://www.kuwo.cn/playlist_detail/*`
+    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+
 ---
 
 ## 版本 2.0.0 (2026-05-14)

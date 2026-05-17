@@ -747,30 +747,32 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - ✨ **플레이리스트 URL 가져오기**: URL을 통해 온라인 플레이리스트를 가져올 수 있습니다. Apple Music 및 Spotify Music 플레이리스트 링크와 차트 가져오기를 지원합니다.
 - ✨ **차트 URL 가져오기**: 酷狗, 酷我, 网易 등의 플레이리스트 및 차트를 URL로 가져와 현재 플레이리스트를 빠르게 확장할 수 있습니다.
 - ✨ **멀티 플랫폼 URL 인식**: URL 가져오기 입력창에서 다양한 플랫폼 링크의 인식 및 처리 흐름을 개선하여 크로스 플랫폼 플레이리스트 가져오기 경험을 향상시켰습니다.
-- ✨ **Apple Music**:
-- `https://music.apple.com/kr/room/*`
-- `https://music.apple.com/kr/album/*/*`
-- `https://music.apple.com/kr/playlist/*/*`
-- `https://music.apple.com/kr/artist/*/*/top-songs`
-- `https://music.apple.com/cn/new/top-charts/songs`
 
-- ✨ **Spotify Music**:
-- `https://open.spotify.com/album/*`
-- `https://open.spotify.com/artist/*`
-- `https://open.spotify.com/playlist/*`
-- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+- ✨ **Apple Music**：
+    `https://music.apple.com/cn/room/*`
+    `https://music.apple.com/cn/album/*/*`
+    `https://music.apple.com/cn/playlist/*/*`
+    `https://music.apple.com/cn/artist/*/*/top-songs`
+    `https://music.apple.com/cn/new/top-charts/songs`
 
-- ✨ **NetEase Music**:
-- `https://music.163.com/#/album?id=*`
-- `https://music.163.com/#/artist?id=*`
-- `https://music.163.com/#/playlist?id=*`
-- `https://music.163.com/#/discover/toplist?id=*`
+- ✨ **Spotify Music**：
+    `https://open.spotify.com/album/*`
+    `https://open.spotify.com/artist/*`
+    `https://open.spotify.com/playlist/*`
+    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
-- ✨ **Other Music**:
-- `https://www.kuwo.cn/rankList`
-- `https://www.kuwo.cn/singer_detail/*`
-- `https://www.kuwo.cn/playlist_detail/*`
-- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+- ✨ **NetEase Music**：
+    `https://music.163.com/#/album?id=*`
+    `https://music.163.com/#/artist?id=*`
+    `https://music.163.com/#/playlist?id=*`
+    `https://music.163.com/#/discover/toplist?id=*`
+
+- ✨ **Other Music**：
+    `https://www.kuwo.cn/rankList`
+    `https://www.kuwo.cn/singer_detail/*`
+    `https://www.kuwo.cn/playlist_detail/*`
+    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+
 ---
 
 ## 버전 2.0.0 (2026-05-14)

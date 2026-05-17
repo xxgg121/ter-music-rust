@@ -744,30 +744,32 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - ✨ **プレイリスト URL インポート**：URL からオンラインプレイリストをインポート可能。Apple Music・Spotify Music のプレイリストリンクおよびチャートのインポートに対応。
 - ✨ **チャート URL インポート**：酷狗・酷我・網易などのプレイリストやチャートを URL からインポートし、現在のプレイリストを素早く拡張できます。
 - ✨ **マルチプラットフォーム URL 認識**：URL インポート入口での各プラットフォームリンクの認識・処理フローを改善し、クロスプラットフォームのプレイリストインポート体験を向上。
+
 - ✨ **Apple Music**：
-- `https://music.apple.com/jp/room/*`
-- `https://music.apple.com/jp/album/*/*`
-- `https://music.apple.com/jp/playlist/*/*`
-- `https://music.apple.com/jp/artist/*/*/top-songs`
-- `https://music.apple.com/cn/new/top-charts/songs`
+    `https://music.apple.com/cn/room/*`
+    `https://music.apple.com/cn/album/*/*`
+    `https://music.apple.com/cn/playlist/*/*`
+    `https://music.apple.com/cn/artist/*/*/top-songs`
+    `https://music.apple.com/cn/new/top-charts/songs`
 
 - ✨ **Spotify Music**：
-- `https://open.spotify.com/album/*`
-- `https://open.spotify.com/artist/*`
-- `https://open.spotify.com/playlist/*`
-- `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+    `https://open.spotify.com/album/*`
+    `https://open.spotify.com/artist/*`
+    `https://open.spotify.com/playlist/*`
+    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
 - ✨ **NetEase Music**：
-- `https://music.163.com/#/album?id=*`
-- `https://music.163.com/#/artist?id=*`
-- `https://music.163.com/#/playlist?id=*`
-- `https://music.163.com/#/discover/toplist?id=*`
+    `https://music.163.com/#/album?id=*`
+    `https://music.163.com/#/artist?id=*`
+    `https://music.163.com/#/playlist?id=*`
+    `https://music.163.com/#/discover/toplist?id=*`
 
 - ✨ **Other Music**：
-- `https://www.kuwo.cn/rankList`
-- `https://www.kuwo.cn/singer_detail/*`
-- `https://www.kuwo.cn/playlist_detail/*`
-- `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+    `https://www.kuwo.cn/rankList`
+    `https://www.kuwo.cn/singer_detail/*`
+    `https://www.kuwo.cn/playlist_detail/*`
+    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+
 ---
 
 ## バージョン 2.0.0 (2026-05-14)
