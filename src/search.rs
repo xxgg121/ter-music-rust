@@ -2,6 +2,7 @@
 // 支持多平台搜索：酷我音乐 + 网易音乐 + 酷狗音乐
 
 use chrono::{Local, TimeZone};
+use ferrous_opencc::{config::BuiltinConfig, OpenCC};
 use serde::Deserialize;
 use serde_json::json;
 use std::error::Error;
@@ -159,6 +160,11 @@ pub struct PlaylistSongsResult {
     pub playlist: OnlinePlaylist,
     /// 歌单歌曲
     pub songs: Vec<OnlineSong>,
+}
+
+struct ExternalPlaylistSongsResult {
+    songs: Vec<OnlineSong>,
+    title: Option<String>,
 }
 
 /// 单条评论中的“回复”信息
@@ -615,6 +621,12 @@ pub fn fetch_online_list_url_page_background(
 ) -> mpsc::Receiver<PlaylistSongsResult> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
+        log_file!(
+            "[ListUrl][BG] 开始加载: input={}, page={}, page_size={}",
+            input,
+            page,
+            page_size
+        );
         let result = fetch_online_list_url_with_page(&input, page, page_size);
         let _ = tx.send(result);
     });
@@ -2555,9 +2567,10 @@ pub fn parse_online_list_url(input: &str) -> Result<OnlineListUrlKind, String> {
 }
 
 fn playlist_from_url_kind(kind: &OnlineListUrlKind, fallback_name: &str) -> OnlinePlaylist {
+    let imported_title = title_for_online_list_url(kind);
     match kind {
         OnlineListUrlKind::Playlist(source, id) => OnlinePlaylist {
-            name: format!("{} Playlist {}", source_label(*source), id),
+            name: imported_title.unwrap_or_else(|| format!("{} Playlist {}", source_label(*source), id)),
             author: "URL Import".to_string(),
             playlist_id: id.clone(),
             source: *source,
@@ -2567,11 +2580,13 @@ fn playlist_from_url_kind(kind: &OnlineListUrlKind, fallback_name: &str) -> Onli
             date_text: None,
         },
         OnlineListUrlKind::Rank(source, id) => OnlinePlaylist {
-            name: format!(
-                "{} Rank {}",
-                source_label(*source),
-                id.as_deref().unwrap_or("default")
-            ),
+            name: imported_title.unwrap_or_else(|| {
+                format!(
+                    "{} Rank {}",
+                    source_label(*source),
+                    id.as_deref().unwrap_or("default")
+                )
+            }),
             author: "URL Import".to_string(),
             playlist_id: id.clone().unwrap_or_default(),
             source: *source,
@@ -2581,7 +2596,7 @@ fn playlist_from_url_kind(kind: &OnlineListUrlKind, fallback_name: &str) -> Onli
             date_text: None,
         },
         OnlineListUrlKind::Artist(source, id) => OnlinePlaylist {
-            name: format!("{} Artist {}", source_label(*source), id),
+            name: imported_title.unwrap_or_else(|| format!("{} Artist {}", source_label(*source), id)),
             author: "URL Import".to_string(),
             playlist_id: id.clone(),
             source: *source,
@@ -2591,7 +2606,7 @@ fn playlist_from_url_kind(kind: &OnlineListUrlKind, fallback_name: &str) -> Onli
             date_text: None,
         },
         OnlineListUrlKind::External(source, id) => OnlinePlaylist {
-            name: format!("{:?} Playlist {}", source, id),
+            name: imported_title.unwrap_or_else(|| format!("{:?} Playlist {}", source, id)),
             author: "URL Import".to_string(),
             playlist_id: id.clone(),
             source: PlaylistSource::NetEase,
@@ -2611,6 +2626,190 @@ fn playlist_from_url_kind(kind: &OnlineListUrlKind, fallback_name: &str) -> Onli
             date_text: None,
         },
     }
+}
+
+fn title_for_online_list_url(kind: &OnlineListUrlKind) -> Option<String> {
+    let url = match kind {
+        OnlineListUrlKind::Playlist(PlaylistSource::Kuwo, id) => {
+            format!("https://www.kuwo.cn/playlist_detail/{}", id)
+        }
+        OnlineListUrlKind::Artist(PlaylistSource::Kuwo, id) => {
+            format!("https://www.kuwo.cn/singer_detail/{}", id)
+        }
+        OnlineListUrlKind::Rank(PlaylistSource::Kuwo, Some(id)) => {
+            format!("https://www.kuwo.cn/rankList?bangId={}", id)
+        }
+        OnlineListUrlKind::Playlist(PlaylistSource::Kugou, id) if id.starts_with("gcid_") => {
+            format!("https://www.kugou.com/songlist/{}/", id)
+        }
+        OnlineListUrlKind::Artist(PlaylistSource::Kugou, id) => {
+            format!("https://www.kugou.com/singer/info/{}", id)
+        }
+        OnlineListUrlKind::Rank(PlaylistSource::Kugou, Some(id)) => {
+            format!("https://www.kugou.com/yy/rank/home/{}-8888.html", id)
+        }
+        OnlineListUrlKind::Playlist(PlaylistSource::NetEase, id)
+        | OnlineListUrlKind::Rank(PlaylistSource::NetEase, Some(id)) => {
+            format!("https://music.163.com/playlist?id={}", id)
+        }
+        OnlineListUrlKind::Artist(PlaylistSource::NetEase, id) => {
+            format!("https://music.163.com/artist?id={}", id)
+        }
+        OnlineListUrlKind::External(ExternalPlaylistSource::Spotify, id) => {
+            let (kind, entity_id) = parse_spotify_entity(id);
+            match kind {
+                SpotifyEntityKind::Playlist => format!("https://open.spotify.com/playlist/{}", entity_id),
+                SpotifyEntityKind::Artist => format!("https://open.spotify.com/artist/{}", entity_id),
+                SpotifyEntityKind::Album => format!("https://open.spotify.com/album/{}", entity_id),
+            }
+        }
+        OnlineListUrlKind::External(ExternalPlaylistSource::AppleMusic, url) => url.clone(),
+        _ => return None,
+    };
+    fetch_online_list_page_title(&url)
+}
+
+fn fetch_online_list_page_title(url: &str) -> Option<String> {
+    let is_spotify = url.to_ascii_lowercase().contains("open.spotify.com/");
+    let is_apple_music = url.to_ascii_lowercase().contains("music.apple.com/");
+    let client = if is_spotify {
+        create_spotify_client().or_else(create_external_page_client)
+    } else {
+        create_external_page_client().or_else(create_search_client)
+    }?;
+    let user_agent = if is_spotify {
+        spotify_mobile_user_agent()
+    } else {
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    };
+    let accept_language = if is_apple_music {
+        apple_music_storefront_from_url(url)
+            .as_deref()
+            .map(apple_music_locale_for_storefront)
+            .unwrap_or("zh-CN")
+    } else {
+        "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"
+    };
+    let html = match client
+        .get(url)
+        .header("User-Agent", user_agent)
+        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .header("Accept-Language", accept_language)
+        .send()
+    {
+        Ok(resp) => {
+            let status = resp.status();
+            let text = resp.text().unwrap_or_default();
+            log_file!(
+                "[ListUrl][Title] 页面标题请求 HTTP {} 响应(前200): {}",
+                status.as_u16(),
+                preview_for_log(&text, 200)
+            );
+            if !status.is_success() || text.trim().is_empty() {
+                return None;
+            }
+            text
+        }
+        Err(e) => {
+            log_file!(
+                "[ListUrl][Title] 页面标题请求失败: {}",
+                reqwest_error_detail(&e)
+            );
+            return None;
+        }
+    };
+    let title = if is_spotify {
+        extract_spotify_page_title(&html)
+    } else if is_apple_music {
+        extract_apple_music_page_title(&html)
+    } else {
+        extract_online_list_page_title(&html)
+    }
+    .map(clean_online_list_page_title)
+    .filter(|title| !is_generic_online_list_page_title(title));
+    log_file!("[ListUrl][Title] 页面标题解析结果: {:?}", title);
+    title
+}
+
+fn extract_apple_music_page_title(html: &str) -> Option<String> {
+    extract_html_title(html)
+        .filter(|title| !is_generic_online_list_page_title(title))
+        .or_else(|| extract_online_list_page_title(html))
+}
+
+fn extract_spotify_page_title(html: &str) -> Option<String> {
+    extract_html_title(html)
+        .filter(|title| !is_generic_online_list_page_title(title))
+        .or_else(|| extract_meta_content_by_name(html, "og:title"))
+        .or_else(|| extract_meta_content_by_name(html, "twitter:title"))
+}
+
+fn extract_online_list_page_title(html: &str) -> Option<String> {
+    for key in ["og:title", "twitter:title"] {
+        if let Some(title) = extract_meta_content_by_name(html, key) {
+            return Some(title);
+        }
+    }
+    extract_html_title(html)
+}
+
+fn extract_html_title(html: &str) -> Option<String> {
+    let start = html.to_ascii_lowercase().find("<title")?;
+    let rest = &html[start..];
+    let open_end = rest.find('>')? + 1;
+    let body = &rest[open_end..];
+    let end = body.to_ascii_lowercase().find("</title>")?;
+    Some(decode_html_entities_basic(strip_html_tags(&body[..end]).trim()))
+}
+
+fn is_generic_online_list_page_title(title: &str) -> bool {
+    let title = title.trim();
+    title.is_empty()
+        || title.eq_ignore_ascii_case("Apple Music")
+        || title.contains("Apple Music 网页播放器")
+        || title.contains("Apple Music Web Player")
+}
+
+fn extract_meta_content_by_name(html: &str, expected: &str) -> Option<String> {
+    let lower = html.to_ascii_lowercase();
+    let mut cursor = 0usize;
+    while let Some(rel) = lower[cursor..].find("<meta") {
+        let start = cursor + rel;
+        let rest = &html[start..];
+        let end = rest.find('>')?;
+        let tag = &rest[..=end];
+        let property = extract_html_attr_value_any_quote(tag, "property")
+            .or_else(|| extract_html_attr_value_any_quote(tag, "name"))
+            .unwrap_or_default();
+        if property.eq_ignore_ascii_case(expected) {
+            if let Some(content) = extract_html_attr_value_any_quote(tag, "content") {
+                return Some(decode_html_entities_basic(content.trim()));
+            }
+        }
+        cursor = start + end + 1;
+    }
+    None
+}
+
+fn clean_online_list_page_title(title: String) -> String {
+    let mut title = title.split_whitespace().collect::<Vec<_>>().join(" ");
+    for suffix in [
+        " - Apple Music",
+        " on Apple Music",
+        " | Spotify Playlist",
+        " | Spotify",
+        " - Spotify",
+        " - Kuwo Music",
+        " - 酷我音乐",
+        "_酷狗音乐",
+        " - 酷狗音乐",
+        " - 网易云音乐",
+    ] {
+        if let Some(stripped) = title.strip_suffix(suffix) {
+            title = stripped.trim().to_string();
+        }
+    }
+    title.trim_matches(['\'', '"']).trim().to_string()
 }
 
 fn fetch_kugou_gcid_playlist_songs(
@@ -2797,11 +2996,26 @@ fn extract_html_attr_value(fragment: &str, attr: &str) -> Option<String> {
     Some(rest[..end].to_string())
 }
 
+fn extract_html_attr_value_any_quote(fragment: &str, attr: &str) -> Option<String> {
+    let marker = format!("{}=", attr);
+    let pos = fragment.find(&marker)?;
+    let rest = fragment[pos + marker.len()..].trim_start();
+    let quote = rest.chars().next()?;
+    if quote != '"' && quote != '\'' {
+        return None;
+    }
+    let rest = &rest[quote.len_utf8()..];
+    let end = rest.find(quote)?;
+    Some(rest[..end].to_string())
+}
+
 fn decode_html_entities_basic(input: &str) -> String {
     input
         .replace("&amp;", "&")
         .replace("&quot;", "\"")
+        .replace("&apos;", "'")
         .replace("&#39;", "'")
+        .replace("&nbsp;", " ")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
 }
@@ -3076,7 +3290,10 @@ fn parse_kuwo_legacy_rank_row_candidates(html: &str) -> Vec<(String, String)> {
     dedup_song_artist_candidates(out)
 }
 
-fn parse_kuwo_legacy_rank_row_lines(lines: &[&str], expected_rank: usize) -> Option<(String, String)> {
+fn parse_kuwo_legacy_rank_row_lines(
+    lines: &[&str],
+    expected_rank: usize,
+) -> Option<(String, String)> {
     let rank_pos = lines
         .iter()
         .position(|line| line.parse::<usize>().ok() == Some(expected_rank))?;
@@ -3154,16 +3371,20 @@ pub fn resolve_unresolved_juhe_song(song: &OnlineSong) -> Option<OnlineSong> {
     } else {
         format!("{} - {}", song.name, song.artist)
     };
-    search_juhe(&query, 1).songs.into_iter().next().map(|resolved| OnlineSong {
-        name: song.name.clone(),
-        artist: if song.artist.trim().is_empty() {
-            resolved.artist
-        } else {
-            song.artist.clone()
-        },
-        duration_ms: song.duration_ms.or(resolved.duration_ms),
-        ..resolved
-    })
+    search_juhe(&query, 1)
+        .songs
+        .into_iter()
+        .next()
+        .map(|resolved| OnlineSong {
+            name: song.name.clone(),
+            artist: if song.artist.trim().is_empty() {
+                resolved.artist
+            } else {
+                song.artist.clone()
+            },
+            duration_ms: song.duration_ms.or(resolved.duration_ms),
+            ..resolved
+        })
 }
 
 fn fetch_kugou_rank_songs_page(
@@ -3511,43 +3732,72 @@ fn extract_js_assignment_string(html: &str, key: &str) -> Option<String> {
     Some(rest[..end].trim().to_string()).filter(|s| !s.is_empty())
 }
 
-fn fetch_external_playlist_songs(
+fn fetch_external_playlist_songs_with_title(
     source: ExternalPlaylistSource,
     id_or_url: &str,
     page: usize,
     page_size: usize,
-) -> Vec<OnlineSong> {
+) -> ExternalPlaylistSongsResult {
     let Some(client) = (if source == ExternalPlaylistSource::Spotify {
         create_spotify_client().or_else(create_external_page_client)
     } else {
         create_external_page_client().or_else(create_search_client)
     }) else {
-        return Vec::new();
+        return ExternalPlaylistSongsResult {
+            songs: Vec::new(),
+            title: None,
+        };
     };
     if source == ExternalPlaylistSource::Spotify {
-        if let Some(songs) = fetch_spotify_songs_page(&client, id_or_url, page, page_size) {
-            return songs;
+        if let Some((songs, title)) =
+            fetch_spotify_songs_with_title(&client, id_or_url, page, page_size)
+        {
+            let title = title.or_else(|| fetch_spotify_page_title(id_or_url));
+            log_file!("[ListUrl][Spotify] 标题解析结果: {:?}", title);
+            return ExternalPlaylistSongsResult { songs, title };
         }
         log_file!(
             "[ListUrl][Spotify] API 解析失败；如 open.spotify.com 被拦截，请设置 SPOTIFY_PROXY/HTTPS_PROXY，或设置 SPOTIFY_BEARER_TOKEN_FORCE=1 使用手动 token"
         );
-        return Vec::new();
+        return ExternalPlaylistSongsResult {
+            songs: Vec::new(),
+            title: None,
+        };
     }
     if source == ExternalPlaylistSource::AppleMusic {
-        if let Some(songs) = fetch_apple_music_playlist_songs_page(&client, id_or_url, page, page_size) {
-            return songs;
+        let title = fetch_apple_music_entity_title(&client, id_or_url);
+        if let Some(songs) =
+            fetch_apple_music_playlist_songs_page(&client, id_or_url, page, page_size)
+        {
+            return ExternalPlaylistSongsResult {
+                songs,
+                title: title.clone(),
+            };
         }
-        if let Some(songs) = fetch_apple_music_room_songs_page(&client, id_or_url, page, page_size) {
-            return songs;
+        if let Some(songs) = fetch_apple_music_room_songs_page(&client, id_or_url, page, page_size)
+        {
+            return ExternalPlaylistSongsResult {
+                songs,
+                title: title.clone(),
+            };
         }
-        if let Some(songs) = fetch_apple_music_top_chart_songs_page(&client, id_or_url, page, page_size) {
-            return songs;
+        if let Some(songs) =
+            fetch_apple_music_top_chart_songs_page(&client, id_or_url, page, page_size)
+        {
+            return ExternalPlaylistSongsResult {
+                songs,
+                title: title.clone(),
+            };
         }
-        if let Some(songs) = fetch_apple_music_album_songs_page(&client, id_or_url, page, page_size) {
-            return songs;
+        if let Some(songs) = fetch_apple_music_album_songs_page(&client, id_or_url, page, page_size)
+        {
+            return ExternalPlaylistSongsResult {
+                songs,
+                title: title.clone(),
+            };
         }
         if let Some(songs) = fetch_apple_artist_top_songs_page(&client, id_or_url, page, 25) {
-            return songs;
+            return ExternalPlaylistSongsResult { songs, title };
         }
     }
     let url = match source {
@@ -3577,7 +3827,10 @@ fn fetch_external_playlist_songs(
         Ok(t) => t,
         Err(e) => {
             log_file!("[ListUrl][External] 页面请求失败: {}", e);
-            return Vec::new();
+            return ExternalPlaylistSongsResult {
+                songs: Vec::new(),
+                title: None,
+            };
         }
     };
     log_file!(
@@ -3593,7 +3846,15 @@ fn fetch_external_playlist_songs(
         source,
         candidates.len()
     );
-    candidates_to_unresolved_juhe_songs(candidates)
+    ExternalPlaylistSongsResult {
+        songs: candidates_to_unresolved_juhe_songs(candidates),
+        title: match source {
+            ExternalPlaylistSource::AppleMusic => extract_apple_music_page_title(&html),
+            ExternalPlaylistSource::Spotify => extract_online_list_page_title(&html),
+        }
+        .map(clean_online_list_page_title)
+        .filter(|title| !is_generic_online_list_page_title(title)),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3613,31 +3874,68 @@ fn parse_spotify_entity(id_or_url: &str) -> (SpotifyEntityKind, &str) {
     }
 }
 
-fn fetch_spotify_songs_page(
+fn fetch_spotify_songs_page_with_title(
     client: &reqwest::blocking::Client,
     id_or_url: &str,
     page: usize,
     page_size: usize,
-) -> Option<Vec<OnlineSong>> {
+) -> Option<(Vec<OnlineSong>, Option<String>)> {
     let (kind, id) = parse_spotify_entity(id_or_url);
     match kind {
         SpotifyEntityKind::Playlist => fetch_spotify_playlist_songs_page(client, id, page, page_size),
         SpotifyEntityKind::Artist => fetch_spotify_artist_pathfinder_tracks(client, id)
-            .or_else(|| fetch_spotify_artist_top_tracks(client, id)),
-        SpotifyEntityKind::Album => fetch_spotify_album_pathfinder_tracks_page(client, id, page)
-            .or_else(|| fetch_spotify_album_tracks_page(client, id, page, page_size)),
+            .or_else(|| fetch_spotify_artist_top_tracks(client, id))
+            .map(|songs| (songs, fetch_spotify_page_title(id_or_url))),
+        SpotifyEntityKind::Album => fetch_spotify_album_pathfinder_tracks_page(client, id, page, page_size)
+            .or_else(|| fetch_spotify_album_tracks_page(client, id, page, page_size))
+            .map(|songs| (songs, fetch_spotify_page_title(id_or_url))),
     }
+}
+
+fn fetch_spotify_songs_with_title(
+    client: &reqwest::blocking::Client,
+    id_or_url: &str,
+    page: usize,
+    page_size: usize,
+) -> Option<(Vec<OnlineSong>, Option<String>)> {
+    fetch_spotify_songs_page_with_title(client, id_or_url, page, page_size)
+}
+
+fn fetch_spotify_page_title(id_or_url: &str) -> Option<String> {
+    let (kind, id) = parse_spotify_entity(id_or_url);
+    let url = match kind {
+        SpotifyEntityKind::Playlist => format!("https://open.spotify.com/playlist/{}", id),
+        SpotifyEntityKind::Artist => format!("https://open.spotify.com/artist/{}", id),
+        SpotifyEntityKind::Album => format!("https://open.spotify.com/album/{}", id),
+    };
+    fetch_online_list_page_title(&url)
+}
+
+fn spotify_playlist_title_from_pathfinder(v: &serde_json::Value) -> Option<String> {
+    for pointer in [
+        "/data/playlistV2/name",
+        "/data/playlistV2/profile/name",
+        "/data/playlistV2/title",
+    ] {
+        if let Some(title) = v.pointer(pointer).and_then(|x| x.as_str()) {
+            let title = title.trim();
+            if !title.is_empty() {
+                return Some(title.to_string());
+            }
+        }
+    }
+    None
 }
 
 fn fetch_spotify_playlist_songs_page(
     client: &reqwest::blocking::Client,
     playlist_id: &str,
     page: usize,
-    _page_size: usize,
-) -> Option<Vec<OnlineSong>> {
+    page_size: usize,
+) -> Option<(Vec<OnlineSong>, Option<String>)> {
     const DEFAULT_HASH: &str = "a65e12194ed5fc443a1cdebed5fabe33ca5b07b987185d63c72483867ad13cb4";
     let mut token = fetch_spotify_access_token(client)?;
-    let limit = 50usize;
+    let limit = page_size.max(1).min(50);
     let offset = page.saturating_sub(1).saturating_mul(limit);
     let query_hash = std::env::var("SPOTIFY_PLAYLIST_QUERY_HASH")
         .ok()
@@ -3724,12 +4022,13 @@ fn fetch_spotify_playlist_songs_page(
     let items = v
         .pointer("/data/playlistV2/content/items")
         .and_then(|x| x.as_array())?;
+    let title = spotify_playlist_title_from_pathfinder(&v);
     let songs = items
         .iter()
         .filter_map(spotify_pathfinder_item_to_song)
         .collect::<Vec<_>>();
     log_file!("[ListUrl][Spotify] pathfinder 解析 {} 首", songs.len());
-    Some(songs)
+    Some((songs, title))
 }
 
 fn fetch_spotify_artist_pathfinder_tracks(
@@ -3740,14 +4039,19 @@ fn fetch_spotify_artist_pathfinder_tracks(
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit()))
-        .unwrap_or_else(|| "b82fd661d09d47afff0d0239b165e01c7b21926923064ecc7e63f0cde2b12f4e".to_string());
+        .unwrap_or_else(|| {
+            "b82fd661d09d47afff0d0239b165e01c7b21926923064ecc7e63f0cde2b12f4e".to_string()
+        });
     let variables = json!({
         "uri": format!("spotify:artist:{}", artist_id),
         "locale": ""
     });
     let v = fetch_spotify_pathfinder_json(client, "queryArtistOverview", variables, &hash)?;
     let songs = spotify_collect_track_songs(&v);
-    log_file!("[ListUrl][Spotify] pathfinder artist 解析 {} 首", songs.len());
+    log_file!(
+        "[ListUrl][Spotify] pathfinder artist 解析 {} 首",
+        songs.len()
+    );
     (!songs.is_empty()).then_some(songs)
 }
 
@@ -3755,13 +4059,16 @@ fn fetch_spotify_album_pathfinder_tracks_page(
     client: &reqwest::blocking::Client,
     album_id: &str,
     page: usize,
+    page_size: usize,
 ) -> Option<Vec<OnlineSong>> {
     let hash = std::env::var("SPOTIFY_ALBUM_QUERY_HASH")
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit()))
-        .unwrap_or_else(|| "46ae954ef2d2fe7732b4b2b4022157b2e18b7ea84f70591ceb164e4de1b5d5d3".to_string());
-    let limit = 50usize;
+        .unwrap_or_else(|| {
+            "46ae954ef2d2fe7732b4b2b4022157b2e18b7ea84f70591ceb164e4de1b5d5d3".to_string()
+        });
+    let limit = page_size.max(1).min(50);
     let offset = page.saturating_sub(1).saturating_mul(limit);
     let variables = json!({
         "uri": format!("spotify:album:{}", album_id),
@@ -3771,7 +4078,10 @@ fn fetch_spotify_album_pathfinder_tracks_page(
     });
     let v = fetch_spotify_pathfinder_json(client, "getAlbum", variables, &hash)?;
     let songs = spotify_collect_track_songs(&v);
-    log_file!("[ListUrl][Spotify] pathfinder album 解析 {} 首", songs.len());
+    log_file!(
+        "[ListUrl][Spotify] pathfinder album 解析 {} 首",
+        songs.len()
+    );
     (!songs.is_empty()).then_some(songs)
 }
 
@@ -3829,7 +4139,10 @@ fn fetch_spotify_pathfinder_json(
             preview_for_log(&text, 200)
         );
         if status.as_u16() == 401 && !retried_after_401 {
-            log_file!("[ListUrl][Spotify] pathfinder {} 401，刷新 token 后重试", operation_name);
+            log_file!(
+                "[ListUrl][Spotify] pathfinder {} 401，刷新 token 后重试",
+                operation_name
+            );
             token = fetch_spotify_access_token_force_refresh(client)?;
             retried_after_401 = true;
             continue;
@@ -3841,7 +4154,11 @@ fn fetch_spotify_pathfinder_json(
     }
     let v = serde_json::from_str::<serde_json::Value>(&text).ok()?;
     if let Some(errors) = v.get("errors") {
-        log_file!("[ListUrl][Spotify] pathfinder {} 返回错误: {}", operation_name, errors);
+        log_file!(
+            "[ListUrl][Spotify] pathfinder {} 返回错误: {}",
+            operation_name,
+            errors
+        );
         return None;
     }
     Some(v)
@@ -3851,10 +4168,10 @@ fn fetch_spotify_album_tracks_page(
     client: &reqwest::blocking::Client,
     album_id: &str,
     page: usize,
-    _page_size: usize,
+    page_size: usize,
 ) -> Option<Vec<OnlineSong>> {
     let token = fetch_spotify_access_token(client)?;
-    let limit = 50usize;
+    let limit = page_size.max(1).min(50);
     let offset = page.saturating_sub(1).saturating_mul(limit);
     let url = format!(
         "https://api.spotify.com/v1/albums/{}/tracks?market=from_token&offset={}&limit={}",
@@ -3885,7 +4202,10 @@ fn fetch_spotify_artist_top_tracks(
         .iter()
         .filter_map(spotify_web_api_track_to_song)
         .collect::<Vec<_>>();
-    log_file!("[ListUrl][Spotify] Web API artist top-tracks 解析 {} 首", songs.len());
+    log_file!(
+        "[ListUrl][Spotify] Web API artist top-tracks 解析 {} 首",
+        songs.len()
+    );
     Some(songs)
 }
 
@@ -3898,16 +4218,16 @@ fn fetch_spotify_web_api_json(
     let mut token = token.to_string();
     let mut retried_after_401 = false;
     let text = loop {
-    let mut req = client
-        .get(url)
+        let mut req = client
+            .get(url)
             .header("Authorization", format!("Bearer {}", token))
-        .header("Accept", "application/json")
-        .header("Origin", "https://open.spotify.com")
-        .header("Referer", "https://open.spotify.com/")
-        .header("User-Agent", spotify_user_agent());
-    if let Some(client_token) = spotify_client_token_from_env() {
-        req = req.header("client-token", client_token);
-    }
+            .header("Accept", "application/json")
+            .header("Origin", "https://open.spotify.com")
+            .header("Referer", "https://open.spotify.com/")
+            .header("User-Agent", spotify_user_agent());
+        if let Some(client_token) = spotify_client_token_from_env() {
+            req = req.header("client-token", client_token);
+        }
         let r = match req.send() {
             Ok(r) => r,
             Err(e) => {
@@ -4028,6 +4348,7 @@ struct SpotifyTotpSecret {
 }
 
 static SPOTIFY_TOKEN_CACHE: OnceLock<Mutex<Option<SpotifyTokenCache>>> = OnceLock::new();
+static OPENCC_T2S_CACHE: OnceLock<Option<OpenCC>> = OnceLock::new();
 
 fn spotify_token_cache() -> &'static Mutex<Option<SpotifyTokenCache>> {
     SPOTIFY_TOKEN_CACHE.get_or_init(|| Mutex::new(None))
@@ -4145,8 +4466,8 @@ fn spotify_totp_secret(
     Some(SpotifyTotpSecret {
         version: 61,
         secret: vec![
-            44, 55, 47, 42, 70, 40, 34, 114, 76, 74, 50, 111, 120, 97, 75, 76, 94, 102, 43, 69,
-            49, 120, 118, 80, 64, 78,
+            44, 55, 47, 42, 70, 40, 34, 114, 76, 74, 50, 111, 120, 97, 75, 76, 94, 102, 43, 69, 49,
+            120, 118, 80, 64, 78,
         ],
     })
 }
@@ -4409,7 +4730,10 @@ fn spotify_collect_track_songs_inner(v: &serde_json::Value, out: &mut Vec<Online
 
 fn spotify_pathfinder_track_object_to_song(track: &serde_json::Value) -> Option<OnlineSong> {
     let typename = track.get("__typename").and_then(|x| x.as_str());
-    let uri = track.get("uri").and_then(|x| x.as_str()).unwrap_or_default();
+    let uri = track
+        .get("uri")
+        .and_then(|x| x.as_str())
+        .unwrap_or_default();
     let is_track = typename == Some("Track")
         || typename == Some("TrackResponseWrapper")
         || typename == Some("TrackUnion")
@@ -4435,7 +4759,11 @@ fn spotify_pathfinder_track_object_to_song(track: &serde_json::Value) -> Option<
     let duration_ms = track
         .pointer("/trackDuration/totalMilliseconds")
         .and_then(|x| x.as_i64())
-        .or_else(|| track.pointer("/duration/totalMilliseconds").and_then(|x| x.as_i64()))
+        .or_else(|| {
+            track
+                .pointer("/duration/totalMilliseconds")
+                .and_then(|x| x.as_i64())
+        })
         .or_else(|| track.get("duration_ms").and_then(|x| x.as_i64()))
         .or_else(|| {
             track
@@ -4613,6 +4941,61 @@ fn apple_music_locale_for_storefront(storefront: &str) -> &'static str {
     }
 }
 
+fn apple_music_browse_url_for_storefront(storefront: &str) -> String {
+    format!("https://music.apple.com/{}/browse", storefront)
+}
+
+fn fetch_apple_music_entity_title(
+    client: &reqwest::blocking::Client,
+    url: &str,
+) -> Option<String> {
+    let storefront = apple_music_storefront_from_url(url).unwrap_or_else(|| "cn".to_string());
+    let token = fetch_apple_music_developer_token(client, &storefront)?;
+    let locale = apple_music_locale_for_storefront(&storefront);
+    let api_url = if let Some(playlist_id) = apple_music_playlist_id_from_url(url) {
+        format!(
+            "https://amp-api.music.apple.com/v1/catalog/{}/playlists/{}?l={}&platform=web",
+            storefront, playlist_id, locale
+        )
+    } else if let Some(album_id) = apple_music_album_id_from_url(url) {
+        format!(
+            "https://amp-api.music.apple.com/v1/catalog/{}/albums/{}?l={}&platform=web",
+            storefront, album_id, locale
+        )
+    } else if let Some(artist_id) = apple_artist_top_songs_id(url) {
+        format!(
+            "https://amp-api.music.apple.com/v1/catalog/{}/artists/{}?l={}&platform=web",
+            storefront, artist_id, locale
+        )
+    } else {
+        return fetch_online_list_page_title(url);
+    };
+    log_file!("[ListUrl][AppleMusic] title API: {}", api_url);
+    let text = client
+        .get(&api_url)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Origin", "https://music.apple.com")
+        .header("Referer", url)
+        .header("Accept", "application/json")
+        .header("Accept-Language", locale)
+        .send()
+        .and_then(|r| r.text())
+        .ok()?;
+    log_file!(
+        "[ListUrl][AppleMusic] title 响应(前200): {}",
+        preview_for_log(&text, 200)
+    );
+    let v = serde_json::from_str::<serde_json::Value>(&text).ok()?;
+    let title = v
+        .pointer("/data/0/attributes/name")
+        .and_then(|x| x.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| fetch_online_list_page_title(url));
+    log_file!("[ListUrl][AppleMusic] 标题解析结果: {:?}", title);
+    title
+}
+
 fn fetch_apple_music_playlist_songs_page(
     client: &reqwest::blocking::Client,
     url: &str,
@@ -4621,7 +5004,7 @@ fn fetch_apple_music_playlist_songs_page(
 ) -> Option<Vec<OnlineSong>> {
     let playlist_id = apple_music_playlist_id_from_url(url)?;
     let storefront = apple_music_storefront_from_url(url).unwrap_or_else(|| "cn".to_string());
-    let token = fetch_apple_music_developer_token(client)?;
+    let token = fetch_apple_music_developer_token(client, &storefront)?;
     let limit = page_size.max(1).min(100);
     let offset = page.saturating_sub(1).saturating_mul(limit);
     let locale = apple_music_locale_for_storefront(&storefront);
@@ -4676,7 +5059,7 @@ fn fetch_apple_music_room_songs_page(
 ) -> Option<Vec<OnlineSong>> {
     let room_id = apple_music_room_id_from_url(url)?;
     let storefront = apple_music_storefront_from_url(url).unwrap_or_else(|| "cn".to_string());
-    let token = fetch_apple_music_developer_token(client)?;
+    let token = fetch_apple_music_developer_token(client, &storefront)?;
     let limit = page_size.max(1).min(100);
     let offset = page.saturating_sub(1).saturating_mul(limit);
     let locale = apple_music_locale_for_storefront(&storefront);
@@ -4727,7 +5110,7 @@ fn fetch_apple_music_top_chart_songs_page(
         return None;
     }
     let storefront = apple_music_storefront_from_url(url).unwrap_or_else(|| "cn".to_string());
-    let token = fetch_apple_music_developer_token(client)?;
+    let token = fetch_apple_music_developer_token(client, &storefront)?;
     let limit = page_size.max(1).min(100);
     let offset = page.saturating_sub(1).saturating_mul(limit);
     let locale = apple_music_locale_for_storefront(&storefront);
@@ -4769,7 +5152,7 @@ fn fetch_apple_music_album_songs_page(
 ) -> Option<Vec<OnlineSong>> {
     let album_id = apple_music_album_id_from_url(url)?;
     let storefront = apple_music_storefront_from_url(url).unwrap_or_else(|| "cn".to_string());
-    let token = fetch_apple_music_developer_token(client)?;
+    let token = fetch_apple_music_developer_token(client, &storefront)?;
     let limit = page_size.max(1).min(100);
     let offset = page.saturating_sub(1).saturating_mul(limit);
     let locale = apple_music_locale_for_storefront(&storefront);
@@ -4809,7 +5192,7 @@ fn fetch_apple_artist_top_songs_page(
 ) -> Option<Vec<OnlineSong>> {
     let artist_id = apple_artist_top_songs_id(url)?;
     let storefront = apple_music_storefront_from_url(url).unwrap_or_else(|| "cn".to_string());
-    let token = fetch_apple_music_developer_token(client)?;
+    let token = fetch_apple_music_developer_token(client, &storefront)?;
     let limit = page_size.max(1);
     let offset = page.saturating_sub(1).saturating_mul(limit);
     let locale = apple_music_locale_for_storefront(&storefront);
@@ -4874,22 +5257,81 @@ fn unresolved_juhe_candidate_with_duration(
     }
 }
 
-fn fetch_apple_music_developer_token(client: &reqwest::blocking::Client) -> Option<String> {
+fn extract_apple_music_asset_script_path(html: &str) -> Option<String> {
+    for marker in ["src=\"/assets/index", "src='/assets/index", "/assets/index"] {
+        if let Some(pos) = html.find(marker) {
+            let rest = &html[pos + marker.len()..];
+            let end = rest.find('"').or_else(|| rest.find('\''))?;
+            let path = format!("/assets/index{}", &rest[..end]);
+            if path.ends_with(".js") {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn extract_apple_music_jwt_like_token(text: &str) -> Option<String> {
+    let mut best: Option<String> = None;
+    let mut start = None;
+
+    let is_token_char = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.';
+
+    for (idx, ch) in text.char_indices().chain(std::iter::once((text.len(), '\0'))) {
+        if ch != '\0' && is_token_char(ch) {
+            if start.is_none() {
+                start = Some(idx);
+            }
+            continue;
+        }
+
+        if let Some(begin) = start.take() {
+            let candidate = &text[begin..idx];
+            let dot_count = candidate.chars().filter(|&c| c == '.').count();
+            if dot_count == 2 && candidate.len() >= 100 {
+                match &best {
+                    Some(existing) if existing.len() >= candidate.len() => {}
+                    _ => best = Some(candidate.to_string()),
+                }
+            }
+        }
+    }
+
+    best
+}
+
+fn fetch_apple_music_developer_token(
+    client: &reqwest::blocking::Client,
+    storefront: &str,
+) -> Option<String> {
+    let browse_url = apple_music_browse_url_for_storefront(storefront);
+    let locale = apple_music_locale_for_storefront(storefront);
     let html = client
-        .get("https://music.apple.com/cn/browse")
+        .get(&browse_url)
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .header("Accept-Language", locale)
         .send()
         .and_then(|r| r.text())
         .ok()?;
-    let js_path = extract_between(&html, "src=\"/assets/index", "\"")?;
-    let js_url = format!("https://music.apple.com/assets/index{}", js_path);
+    let js_path = extract_apple_music_asset_script_path(&html).or_else(|| {
+        extract_between(&html, "src=\"/assets/index", "\"")
+            .map(|suffix| format!("/assets/index{}", suffix))
+    })?;
+    let js_url = if js_path.starts_with("http://") || js_path.starts_with("https://") {
+        js_path
+    } else {
+        format!("https://music.apple.com{}", js_path)
+    };
     let js = client
         .get(&js_url)
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .header("Accept-Language", locale)
         .send()
         .and_then(|r| r.text())
         .ok()?;
     extract_between(&js, "const Oc=\"", "\"")
+        .or_else(|| extract_between(&js, "var Oc=\"", "\""))
+        .or_else(|| extract_apple_music_jwt_like_token(&js))
 }
 
 fn parse_apple_music_playlist_candidates(html: &str) -> Vec<(String, String)> {
@@ -5096,7 +5538,7 @@ fn fetch_online_list_url_with_page(
     page_size: usize,
 ) -> PlaylistSongsResult {
     let kind = parse_online_list_url(input).unwrap_or_else(|e| OnlineListUrlKind::Unsupported(e));
-    let playlist = playlist_from_url_kind(&kind, input);
+    let mut playlist = playlist_from_url_kind(&kind, input);
     let client = create_search_client();
     let songs = match (&kind, client.as_ref()) {
         (OnlineListUrlKind::Playlist(PlaylistSource::Kuwo, id), Some(client)) => {
@@ -5127,7 +5569,13 @@ fn fetch_online_list_url_with_page(
             fetch_kugou_artist_songs(client, id)
         }
         (OnlineListUrlKind::External(source, id), _) => {
-            fetch_external_playlist_songs(*source, id, page, page_size)
+            let result = fetch_external_playlist_songs_with_title(*source, id, page, page_size);
+            if let Some(title) = result.title {
+                if !title.trim().is_empty() {
+                    playlist.name = title;
+                }
+            }
+            result.songs
         }
         _ => Vec::new(),
     };
@@ -6356,6 +6804,10 @@ pub fn search_juhe_background(query: String, page: usize) -> mpsc::Receiver<Sear
     rx
 }
 
+pub fn search_juhe_sync(query: &str, page: usize) -> SearchDownloadResult {
+    search_juhe(query, page)
+}
+
 /// 搜索聚合搜索（搜索所有平台，标记为 Juhe 来源）
 fn search_juhe(query: &str, page: usize) -> SearchDownloadResult {
     log_file!("[Juhe] 搜索开始: query={}, page={}", query, page);
@@ -6679,22 +7131,77 @@ fn get_primary_juhe_lyrics(
             let status = response.status();
             match response.text() {
                 Ok(text) => {
-            log_file!(
+                    log_file!(
                         "[JuheLyric-main] HTTP {} 响应(前200): {}",
                         status.as_u16(),
-                preview_for_log(&text, 200)
-            );
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
-                return extract_juhe_lyric(&value);
-            }
+                        preview_for_log(&text, 200)
+                    );
+                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                        return extract_juhe_lyric(&value);
+                    }
                 }
                 Err(e) => {
-                    log_file!("[JuheLyric-main] 读取响应失败: {}", reqwest_error_detail(&e));
+                    log_file!(
+                        "[JuheLyric-main] 读取响应失败: {}",
+                        reqwest_error_detail(&e)
+                    );
                 }
             }
         }
         Err(e) => {
             log_file!("[JuheLyric-main] 请求失败: {}", reqwest_error_detail(&e));
+        }
+    }
+
+    None
+}
+
+fn extract_netease_lyric(value: &serde_json::Value) -> Option<String> {
+    value
+        .get("lrc")
+        .and_then(|l| l.get("lyric"))
+        .and_then(|l| l.as_str())
+        .filter(|lyric| !lyric.trim().is_empty())
+        .map(|lyric| lyric.to_string())
+}
+
+fn get_netease_lyrics_by_id(client: &reqwest::blocking::Client, song_id: &str) -> Option<String> {
+    let url = format!(
+        "https://music.163.com/api/song/lyric?id={}&lv=1&kv=1&tv=-1",
+        song_id
+    );
+
+    log_file!("[JuheLyric-netease] 请求: {}", url);
+    match client
+        .get(&url)
+        .header("Referer", "https://music.163.com/")
+        .header("User-Agent", "Mozilla/5.0")
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+    {
+        Ok(response) => {
+            let status = response.status();
+            match response.text() {
+                Ok(text) => {
+                    log_file!(
+                        "[JuheLyric-netease] HTTP {} 响应(前200): {}",
+                        status.as_u16(),
+                        preview_for_log(&text, 200)
+                    );
+                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                        return extract_netease_lyric(&value);
+                    }
+                }
+                Err(e) => {
+                    log_file!(
+                        "[JuheLyric-netease] 读取响应失败: {}",
+                        reqwest_error_detail(&e)
+                    );
+                }
+            }
+        }
+        Err(e) => {
+            log_file!("[JuheLyric-netease] 请求失败: {}", reqwest_error_detail(&e));
         }
     }
 
@@ -6726,12 +7233,83 @@ fn get_huibq_lyrics(_client: &reqwest::blocking::Client, song: &OnlineSong) -> O
 /// 获取聚合搜索歌词（仅主域名；其余域名脚本未暴露歌词 action）
 fn get_juhe_lyrics(client: &reqwest::blocking::Client, song: &OnlineSong) -> Option<String> {
     get_primary_juhe_lyrics(client, song)
+        .or_else(|| {
+            if song.juhe_platform == "wy" {
+                get_netease_lyrics_by_id(client, &song.juhe_song_id)
+            } else {
+                None
+            }
+        })
         .or_else(|| get_lerd_lyrics(client, song))
         .or_else(|| get_huibq_lyrics(client, song))
 }
 
+fn normalize_lyric_chinese_text(input: &str) -> String {
+    let opencc = OPENCC_T2S_CACHE.get_or_init(|| OpenCC::from_config(BuiltinConfig::T2s).ok());
+    opencc
+        .as_ref()
+        .map(|converter| converter.convert(input))
+        .unwrap_or_else(|| input.to_string())
+}
+
+fn normalize_lyric_match_text(input: &str) -> String {
+    normalize_lyric_chinese_text(input)
+        .to_lowercase()
+        .chars()
+        .filter(|c| {
+            !c.is_whitespace()
+                && !matches!(
+                    c,
+                    '-' | '_'
+                        | '·'
+                        | '•'
+                        | ','
+                        | '，'
+                        | '.'
+                        | '。'
+                        | '('
+                        | ')'
+                        | '（'
+                        | '）'
+                        | '['
+                        | ']'
+                        | '【'
+                        | '】'
+                        | '"'
+                        | '\''
+                        | '/'
+                        | '\\'
+                        | ':'
+                        | '：'
+                )
+        })
+        .collect()
+}
+
+fn juhe_lyrics_candidate_matches(
+    target_artist: &str,
+    target_title: &str,
+    song: &OnlineSong,
+) -> bool {
+    let target_title_key = normalize_lyric_match_text(target_title);
+    let candidate_title_key = normalize_lyric_match_text(&song.name);
+    if target_title_key.is_empty() || candidate_title_key != target_title_key {
+        return false;
+    }
+
+    let target_artist_key = normalize_lyric_match_text(target_artist);
+    if target_artist_key.is_empty() {
+        return true;
+    }
+
+    let candidate_artist_key = normalize_lyric_match_text(&song.artist);
+    !candidate_artist_key.is_empty()
+        && (candidate_artist_key.contains(&target_artist_key)
+            || target_artist_key.contains(&candidate_artist_key))
+}
+
 /// 通过歌名和歌手名搜索并获取聚合歌词（用于本地歌曲回退歌词下载）
-/// 先搜索匹配歌曲，取第一个结果，再通过其 platform/song_id 获取歌词
+/// 只尝试歌名/歌手匹配的候选，避免同歌手相邻搜索结果歌词串歌。
 pub fn search_and_get_juhe_lyrics_background(
     artist: String,
     title: String,
@@ -6840,6 +7418,40 @@ pub fn search_and_get_juhe_lyrics_background(
             return;
         }
 
+        candidates.retain(|song| {
+            let matched = juhe_lyrics_candidate_matches(&artist, &title, song);
+            if !matched {
+                log_file!(
+                    "[JuheLyrics] 跳过不匹配候选: {} - {}，目标: {} - {}",
+                    song.artist,
+                    song.name,
+                    artist,
+                    title
+                );
+            }
+            matched
+        });
+
+        if candidates.is_empty() {
+            log_file!("[JuheLyrics] 无严格匹配候选: {} - {}", artist, title);
+            let _ = tx.send(JuheLyricsResult {
+                music_path,
+                song: OnlineSong {
+                    name: title,
+                    artist,
+                    id: 0,
+                    hash: String::new(),
+                    duration_ms: None,
+                    source: MusicSource::Juhe,
+                    juhe_platform: String::new(),
+                    juhe_song_id: String::new(),
+                },
+                lyrics: None,
+                error: Some(crate::langs::global_texts().lyrics_fetch_failed.to_string()),
+            });
+            return;
+        }
+
         let mut last_song = candidates.first().cloned().unwrap_or_else(|| OnlineSong {
             name: title.clone(),
             artist: artist.clone(),
@@ -6901,6 +7513,64 @@ pub fn fetch_lyrics_translation_streaming(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn juhe_test_song(name: &str, artist: &str) -> OnlineSong {
+        OnlineSong {
+            name: name.to_string(),
+            artist: artist.to_string(),
+            id: 1,
+            hash: String::new(),
+            duration_ms: None,
+            source: MusicSource::Juhe,
+            juhe_platform: "kg".to_string(),
+            juhe_song_id: "song-id".to_string(),
+        }
+    }
+
+    #[test]
+    fn juhe_lyrics_candidates_require_matching_title() {
+        let matching = juhe_test_song("昨天吹的风", "李宜柏PAULYBLEE");
+        let wrong_title = juhe_test_song("比昨天更想念你", "李宜柏PAULYBLEE");
+        let traditional_match = juhe_test_song("仍留在这里", "邓丽欣");
+        let hk_tw_match = juhe_test_song("爱你到不爱我那天", "李宜柏PAULYBLEE");
+
+        assert!(juhe_lyrics_candidate_matches(
+            "李宜柏PAULYBLEE",
+            "昨天吹的風",
+            &matching
+        ));
+        assert!(!juhe_lyrics_candidate_matches(
+            "李宜柏PAULYBLEE",
+            "昨天吹的風",
+            &wrong_title
+        ));
+        assert!(juhe_lyrics_candidate_matches(
+            "鄧麗欣",
+            "仍留在這裏",
+            &traditional_match
+        ));
+        assert!(juhe_lyrics_candidate_matches(
+            "李宜柏PAULYBLEE",
+            "愛妳到不愛我那天",
+            &hk_tw_match
+        ));
+    }
+
+    #[test]
+    fn extracts_netease_lrc_lyrics() {
+        let value = serde_json::json!({
+            "code": 200,
+            "lrc": {
+                "version": 1,
+                "lyric": "[00:01.00]昨天吹的風\n[00:02.00]下一句"
+            }
+        });
+
+        assert_eq!(
+            extract_netease_lyric(&value).as_deref(),
+            Some("[00:01.00]昨天吹的風\n[00:02.00]下一句")
+        );
+    }
 
     #[test]
     fn parses_supported_playlist_rank_and_artist_urls() {
@@ -6999,13 +7669,20 @@ mod tests {
             Some("6769458811".to_string())
         );
 
-        let url = "https://music.apple.com/hk/album/11%E6%9C%88%E7%9A%84%E8%95%AD%E9%82%A6/536009641";
+        let url =
+            "https://music.apple.com/hk/album/11%E6%9C%88%E7%9A%84%E8%95%AD%E9%82%A6/536009641";
         assert_eq!(apple_music_storefront_from_url(url), Some("hk".to_string()));
-        assert_eq!(apple_music_album_id_from_url(url), Some("536009641".to_string()));
+        assert_eq!(
+            apple_music_album_id_from_url(url),
+            Some("536009641".to_string())
+        );
 
         let url = "https://music.apple.com/us/artist/taylor-swift/159260351/top-songs";
         assert_eq!(apple_music_storefront_from_url(url), Some("us".to_string()));
-        assert_eq!(apple_artist_top_songs_id(url), Some("159260351".to_string()));
+        assert_eq!(
+            apple_artist_top_songs_id(url),
+            Some("159260351".to_string())
+        );
 
         for (url, storefront) in [
             ("https://music.apple.com/cn/new/top-charts/songs", "cn"),
@@ -7016,7 +7693,10 @@ mod tests {
             ("https://music.apple.com/jp/new/top-charts/songs", "jp"),
         ] {
             assert!(apple_music_is_top_charts_songs_url(url));
-            assert_eq!(apple_music_storefront_from_url(url), Some(storefront.to_string()));
+            assert_eq!(
+                apple_music_storefront_from_url(url),
+                Some(storefront.to_string())
+            );
         }
     }
 
@@ -7054,10 +7734,16 @@ mod tests {
         let candidates = parse_kuwo_legacy_rank_text_candidates(html);
         assert_eq!(candidates.len(), 4);
         assert_eq!(candidates[0], ("爱情讯息".to_string(), "郭静".to_string()));
-        assert_eq!(candidates[1], ("爱我还是他".to_string(), "陶喆".to_string()));
+        assert_eq!(
+            candidates[1],
+            ("爱我还是他".to_string(), "陶喆".to_string())
+        );
         assert_eq!(
             candidates[3],
-            ("把回忆拼好给你（正版授权）".to_string(), "苏星婕".to_string())
+            (
+                "把回忆拼好给你（正版授权）".to_string(),
+                "苏星婕".to_string()
+            )
         );
     }
 

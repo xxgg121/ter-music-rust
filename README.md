@@ -1,6 +1,6 @@
 <div align="center">
 
-[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
+[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JP.md) | [한국어](README_KR.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
 
 # 🎵 Ter-Music-Rust - 终端音乐播放器 🎵
 
@@ -8,7 +8,9 @@
 
 一个简洁实用的终端音乐播放器，使用 Rust 实现，支持本地/网络歌曲搜索下载、自动下载歌词显示、评论查看、多语言与主题切换等功能，支持Windows、Linux、MacOS系统。
 
-![preview](preview.gif)
+![preview](preview1.gif)
+
+![preview](preview2.gif)
 
 ![preview1](preview1.png)
 
@@ -255,9 +257,11 @@ cargo run --release -- -o d:\Music
 | `p` | 搜索在线歌单 |
 | `i` | 查看歌曲信息 |
 | `a` | 推荐歌曲点歌 |
+| `Shift+A` | 智能歌单推荐 |
+| `Shift+S` | 相似歌曲推荐 |
 | `f` | 收藏/取消收藏 |
 | `v` | 查看收藏列表 |
-| `m` | 查看目录历史 |
+| `m` | 查看音乐目录 |
 | `h` | 显示帮助信息 |
 | `c` | 查看歌曲评论 |
 | `l` | 切换界面语言 |
@@ -268,6 +272,7 @@ cargo run --release -- -o d:\Music
 | `r` | 推荐歌曲开关 |
 | `y` | 歌词翻译 / 切换双语显示 |
 | `b` | 打开最近播放列表 |
+| `w` | 打开智能歌单历史 |
 | `x` | 导入 M3U 播放列表 |
 | `e` | 导出 M3U 播放列表 |
 | `u` | 进入歌词时间校准模式 |
@@ -295,7 +300,7 @@ cargo run --release -- -o d:\Music
 | `d` | 删除收藏 |
 | `Esc` | 返回播放列表 |
 
-### 目录历史按键
+### 音乐目录按键
 
 | 按键 | 功能 |
 |------|------|
@@ -310,6 +315,7 @@ cargo run --release -- -o d:\Music
 |------|------|
 | `↑/↓` | 选择评论 |
 | `Enter` | 切换列表/详情视图 |
+| `c` | AI 总结评论 |
 | `PgUp/PgDn` | 翻页 |
 | `Esc` | 返回歌词视图 |
 
@@ -321,16 +327,38 @@ cargo run --release -- -o d:\Music
 | `i` | 重新查询歌曲信息 |
 | `Esc` | 返回歌词视图 |
 
-### 歌单搜索按键
+### 智能歌单推荐按键
 
 | 按键 | 功能 |
 |------|------|
-| 输入字符 | 输入歌单关键字 |
+| 输入字符 | 输入智能歌单描述 / 主题 |
+| 预设词条 | 鼠标点击预设主题快速推荐 |
 | `Backspace` | 删除字符 |
-| `Enter` | 搜索/进入歌单/播放下载 |
-| `↑/↓` | 选择歌单或歌曲 |
+| `Enter` | 开始生成推荐歌单 / 播放选中歌曲 |
+| `↑/↓` | 选择推荐歌曲 |
+| 鼠标滚轮 | 上下滚动歌曲列表 |
+| `d` | 删除当前智能歌单历史记录 |
+| `Esc` | 返回播放列表 |
+
+### 智能歌单历史按键
+
+| 按键 | 功能 |
+|------|------|
+| `↑/↓` | 选择历史智能歌单 |
+| `Enter` | 重新进入选中的历史歌单并播放 |
 | `PgUp/PgDn` | 翻页 |
-| `Esc` | 返回上一层/退出搜索 |
+| `d` | 删除选中的历史记录 |
+| `Esc` | 返回播放列表 |
+
+### 最近播放按键
+
+| 按键 | 功能 |
+|------|------|
+| `↑/↓` | 选择最近播放歌曲 |
+| `Enter` | 播放选中歌曲 |
+| `PgUp/PgDn` | 翻页 |
+| `d` | 删除最近播放记录 |
+| `Esc` | 返回播放列表 |
 
 ### 帮助信息按键
 
@@ -729,14 +757,31 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次编译需要下载和编译所有依赖，是正常现象，后续编译会快很多。
 
 ### 下载Release
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605191650473525_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/20260519165110865_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605191653509387_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新日志
+
+## 版本 2.2.0 (2026-05-20)
+
+### 🎉 新功能
+- ✨ **智能歌单推荐**：按 `Shift+A` 进入智能歌单输入模式，输入描述或点击预设后，模型流式推荐 20~30 首主题歌单，一首一首追加到智能歌单推荐播放列表，第一首解析完成后自动开始播放；支持保存为智能歌单历史，按 `W` 可重新进入历史歌单。
+- ✨ **今日推荐歌曲**：今日推荐歌曲改为流式输出，模型每返回一首就立即追加到顶部「今日推荐歌曲」区域，不再需要等待全部生成完成；首歌出现后立即隐藏「正在获取推荐歌曲...」提示，每次推荐 5~10 首，结果不再包含推荐原因或多余字段。
+- ✨ **相似歌曲推荐**：在播放歌曲时按 `Shift+S`，基于当前播放歌曲的风格/流派、语种、年代、BPM、情绪/氛围、和声/编曲特征、相似歌手/歌曲等维度，让模型流式推荐 5~10 首高度相似的歌曲，并显示在顶部「相似歌曲推荐 - 来源歌曲：」区域；点击或左右键选择回车即可下载播放。
+- ✨ **推荐歌曲优化**：改用更加准确的播放行为的偏好preferences.json而不是只依赖播放历史数据history.json，今日推荐歌曲与相似歌曲推荐获取完成后默认不再高亮第一首，等用户首次按方向键或鼠标滚动后再从第一首开始选中。顶部推荐栏在加载和有结果之间平滑切换，避免「正在获取推荐歌曲...」与歌曲名同时显示
+
+- ✨ **`R` 键行为优化**：按 `R` 切换今日推荐开关，开启时自动刷新今日推荐歌曲，关闭时直接关闭顶部推荐区，不再只能开启不能关闭。
+
+
+### 🔧 问题修复
+- 🐞 **Apple Music 歌曲时长缺失**：修复点击预设排行榜/输入 Apple Music 链接导入播放列表时，只有第一首显示时长、其他歌曲时长为 `--:--` 的问题。Apple Music 现按 URL 中 storefront（如 `cn` / `hk` / `tw` / `us` / `kr` / `jp`）调用 `amp-api.music.apple.com` 接口，稳定获取每首歌的 `durationInMillis`。
+- 🐞 **歌单URL导入副标题显示错误**：修复非预设排行榜的在线 URL 导入后，歌单搜索副标题显示为「源名称 + URL/参数」而非真实页面标题的问题。
+- 🐞 **智能歌单结果页回车不能播放**：修复智能歌单推荐播放列表生成完成后，移动光标按回车无法播放选中歌曲、只能重新进入历史歌单才能播放的问题。给智能歌单结果页加了专用回车分支，不再受 `online_searching` 状态影响。
+
+---
 
 ## 版本 2.1.0 (2026-05-17)
 
@@ -746,29 +791,29 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - ✨ **多平台链接识别**：优化URL导入入口对不同链接的识别与处理流程，提升跨平台歌单导入体验。
 
 - ✨ **Apple Music**：
-    `https://music.apple.com/cn/room/*`
-    `https://music.apple.com/cn/album/*/*`
-    `https://music.apple.com/cn/playlist/*/*`
-    `https://music.apple.com/cn/artist/*/*/top-songs`
-    `https://music.apple.com/cn/new/top-charts/songs`
+   - `https://music.apple.com/cn/room/*`
+   - `https://music.apple.com/cn/album/*/*`
+   - `https://music.apple.com/cn/playlist/*/*`
+   - `https://music.apple.com/cn/artist/*/*/top-songs`
+   - `https://music.apple.com/cn/new/top-charts/songs`
 
 - ✨ **Spotify Music**：
-    `https://open.spotify.com/album/*`
-    `https://open.spotify.com/artist/*`
-    `https://open.spotify.com/playlist/*`
-    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+   - `https://open.spotify.com/album/*`
+   - `https://open.spotify.com/artist/*`
+   - `https://open.spotify.com/playlist/*`
+   - `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
 - ✨ **NetEase Music**：
-    `https://music.163.com/#/album?id=*`
-    `https://music.163.com/#/artist?id=*`
-    `https://music.163.com/#/playlist?id=*`
-    `https://music.163.com/#/discover/toplist?id=*`
+   - `https://music.163.com/#/album?id=*`
+   - `https://music.163.com/#/artist?id=*`
+   - `https://music.163.com/#/playlist?id=*`
+   - `https://music.163.com/#/discover/toplist?id=*`
 
 - ✨ **Other Music**：
-    `https://www.kuwo.cn/rankList`
-    `https://www.kuwo.cn/singer_detail/*`
-    `https://www.kuwo.cn/playlist_detail/*`
-    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+   - `https://www.kuwo.cn/rankList`
+   - `https://www.kuwo.cn/singer_detail/*`
+   - `https://www.kuwo.cn/playlist_detail/*`
+   - `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
 
 ---
 

@@ -1,6 +1,6 @@
 <div align="center">
 
-[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
+[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JP.md) | [한국어](README_KR.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
 
 # 🎵 Ter-Music-Rust - Terminal Music Player 🎵
 
@@ -8,7 +8,9 @@
 
 A simple and practical terminal-based music player, implemented in Rust, featuring functions such as local/network song search and download, automatic display of lyrics, comment viewing, language and theme switching, and support for Windows, Linux, and MacOS systems.
 
-![preview](preview.gif)
+![preview](preview1.gif)
+
+![preview](preview2.gif)
 
 ![preview1](preview1.png)
 
@@ -229,7 +231,7 @@ cargo run --release -- -o d:\Music
 
 ## 🎮 Keyboard Shortcuts
 
-### Main View
+### Main View Controls
 
 | Key | Action |
 |------|------|
@@ -251,13 +253,15 @@ cargo run --release -- -o d:\Music
 | `o` | Open music directory |
 | `s` | Search local songs |
 | `n` | Search online songs |
-| `j` | Search Juhe songs |
+| `j` | Search aggregated songs |
 | `p` | Search online playlists |
-| `i` | Song info query |
-| `a` | Recommend songs |
+| `i` | View song information |
+| `a` | Request recommended songs |
+| `Shift+A` | Smart playlist recommendation |
+| `Shift+S` | Similar song recommendation |
 | `f` | Favorite/Unfavorite |
 | `v` | View favorites |
-| `m` | View directory history |
+| `m` | View music directory |
 | `h` | Display help information |
 | `c` | View song comments |
 | `l` | Switch UI language |
@@ -268,12 +272,13 @@ cargo run --release -- -o d:\Music
 | `r` | Toggle recommended songs |
 | `y` | Lyrics translation / Toggle bilingual display |
 | `b` | Open recently played list |
+| `w` | Open smart playlist history |
 | `x` | Import M3U playlist |
 | `e` | Export M3U playlist |
 | `u` | Enter lyric time calibration mode |
-| `q` | Quit |
+| `q` | Quit the music player |
 
-### Search View
+### Song Search Keys
 
 | Key | Action |
 |------|------|
@@ -282,10 +287,10 @@ cargo run --release -- -o d:\Music
 | `Enter` | Search/Play/Download |
 | `↑/↓` | Select result |
 | `PgUp/PgDn` | Page up/down (online search) |
-| `s/n/j` | Switch local/online/juhe search |
+| `s/n/j` | Switch local/online/aggregated search |
 | `Esc` | Exit search |
 
-### Favorites View
+### Favorites List Keys
 
 | Key | Action |
 |------|------|
@@ -294,7 +299,7 @@ cargo run --release -- -o d:\Music
 | `d` | Delete favorite |
 | `Esc` | Back to playlist |
 
-### Directory History View
+### Music Directory Keys
 
 | Key | Action |
 |------|------|
@@ -303,16 +308,17 @@ cargo run --release -- -o d:\Music
 | `d` | Delete record |
 | `Esc` | Back to playlist |
 
-### Comments View
+### Song Comment Keys
 
 | Key | Action |
 |------|------|
 | `↑/↓` | Select comment |
 | `Enter` | Toggle list/detail view |
+| `c` | AI comment summary |
 | `PgUp/PgDn` | Page up/down |
 | `Esc` | Back to lyrics view |
 
-### Song Info View
+### Song Information Keys
 
 | Key | Action |
 |------|------|
@@ -320,18 +326,40 @@ cargo run --release -- -o d:\Music
 | `i` | Re-query song info |
 | `Esc` | Back to lyrics view |
 
-### Playlist Search View
+### Smart Playlist Recommendation Keys
 
 | Key | Action |
 |------|------|
-| Character input | Enter playlist keyword |
+| Character input | Enter smart playlist description / theme |
+| Preset chips | Click a preset theme for instant recommendation |
 | `Backspace` | Delete character |
-| `Enter` | Search/Enter playlist/Play & download |
-| `↑/↓` | Select playlist or song |
-| `PgUp/PgDn` | Page up/down |
-| `Esc` | Back to previous level / Exit search |
+| `Enter` | Start generating recommended playlist / Play selected song |
+| `↑/↓` | Select recommended song |
+| Mouse wheel | Scroll the song list up/down |
+| `d` | Delete current smart playlist history record |
+| `Esc` | Back to playlist |
 
-### Help View
+### Smart Playlist History Keys
+
+| Key | Action |
+|------|------|
+| `↑/↓` | Select historical smart playlist |
+| `Enter` | Re-enter the selected history playlist and play |
+| `PgUp/PgDn` | Page up/down |
+| `d` | Delete selected history record |
+| `Esc` | Back to playlist |
+
+### Recently Played Keys
+
+| Key | Action |
+|------|------|
+| `↑/↓` | Select recently played song |
+| `Enter` | Play selected song |
+| `PgUp/PgDn` | Page up/down |
+| `d` | Delete recently played record |
+| `Esc` | Back to playlist |
+
+### Help Information Keys
 
 
 | Key | Action |
@@ -729,14 +757,31 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 The first build downloads and compiles all dependencies; this is expected. Later builds are much faster.
 
 ### Download Releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605191650473525_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/20260519165110865_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605191653509387_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Changelog
+
+## Version 2.2.0 (2026-05-20)
+
+### 🎉 New Features
+- ✨ **Smart Playlist Recommendation**: Press `Shift+A` to enter smart playlist input mode. After entering a description or clicking a preset, the model streams recommendations of 20~30 themed songs, appending them one by one to the smart playlist recommendation list, and playback starts automatically once the first song is parsed. Smart playlists can be saved as history and reopened with `W`.
+- ✨ **Today's Recommended Songs**: Today's recommendations now stream in. Each song returned by the model is immediately appended to the top "Today's Recommended Songs" area, so you no longer need to wait for the entire batch to finish generating. The "Fetching recommended songs..." hint is hidden as soon as the first song appears. 5~10 songs are recommended each time and the result no longer contains recommendation reasons or extra fields.
+- ✨ **Similar Song Recommendation**: While playing a song, press `Shift+S` to let the model stream 5~10 highly similar songs based on the current song's style/genre, language, era, BPM, mood/atmosphere, harmony/arrangement features, similar artists/songs, etc. They are shown in the top "Similar Songs - Source Song:" area. Click or use left/right keys to select and press Enter to download and play.
+- ✨ **Recommendation Improvements**: Now uses a more accurate playback behavior preference file `preferences.json` instead of relying solely on play history (`history.json`). After today's recommendations and similar song recommendations finish loading, the first song is no longer highlighted by default; it only becomes selected starting from the first item after the user presses an arrow key or scrolls the mouse. The top recommendation bar transitions smoothly between loading and result states, avoiding showing "Fetching recommended songs..." together with song names.
+
+- ✨ **`R` Key Behavior Improvement**: Press `R` to toggle today's recommendations. Turning it on automatically refreshes today's recommendations, and turning it off closes the top recommendation area directly, instead of only being able to turn it on.
+
+
+### 🔧 Bug Fixes
+- 🐞 **Apple Music Song Duration Missing**: Fixed the issue where importing a playlist via a preset chart or Apple Music link only showed the duration of the first song while other songs displayed `--:--`. Apple Music now calls the `amp-api.music.apple.com` endpoint based on the URL's storefront (e.g. `cn` / `hk` / `tw` / `us` / `kr` / `jp`) to reliably obtain each song's `durationInMillis`.
+- 🐞 **Wrong Subtitle for Playlist URL Import**: Fixed the issue where, for non-preset chart online URL imports, the playlist search subtitle showed "source name + URL/parameters" instead of the real page title.
+- 🐞 **Smart Playlist Result Page Enter Not Playing**: Fixed the issue where, after the smart playlist recommendation list finished generating, moving the cursor and pressing Enter could not play the selected song and only re-entering the history playlist allowed playback. A dedicated Enter branch is added for the smart playlist result page, no longer affected by the `online_searching` state.
+
+---
 
 ## Version 2.1.0 (2026-05-17)
 
@@ -746,29 +791,29 @@ The first build downloads and compiles all dependencies; this is expected. Later
 - ✨ **Multi-platform URL Recognition**: Improved URL import entry to recognize and handle links from different music platforms, enhancing cross-platform playlist import experience.
 
 - ✨ **Apple Music**：
-    `https://music.apple.com/cn/room/*`
-    `https://music.apple.com/cn/album/*/*`
-    `https://music.apple.com/cn/playlist/*/*`
-    `https://music.apple.com/cn/artist/*/*/top-songs`
-    `https://music.apple.com/cn/new/top-charts/songs`
+   - `https://music.apple.com/cn/room/*`
+   - `https://music.apple.com/cn/album/*/*`
+   - `https://music.apple.com/cn/playlist/*/*`
+   - `https://music.apple.com/cn/artist/*/*/top-songs`
+   - `https://music.apple.com/cn/new/top-charts/songs`
 
 - ✨ **Spotify Music**：
-    `https://open.spotify.com/album/*`
-    `https://open.spotify.com/artist/*`
-    `https://open.spotify.com/playlist/*`
-    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+   - `https://open.spotify.com/album/*`
+   - `https://open.spotify.com/artist/*`
+   - `https://open.spotify.com/playlist/*`
+   - `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
 - ✨ **NetEase Music**：
-    `https://music.163.com/#/album?id=*`
-    `https://music.163.com/#/artist?id=*`
-    `https://music.163.com/#/playlist?id=*`
-    `https://music.163.com/#/discover/toplist?id=*`
+   - `https://music.163.com/#/album?id=*`
+   - `https://music.163.com/#/artist?id=*`
+   - `https://music.163.com/#/playlist?id=*`
+   - `https://music.163.com/#/discover/toplist?id=*`
 
 - ✨ **Other Music**：
-    `https://www.kuwo.cn/rankList`
-    `https://www.kuwo.cn/singer_detail/*`
-    `https://www.kuwo.cn/playlist_detail/*`
-    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+   - `https://www.kuwo.cn/rankList`
+   - `https://www.kuwo.cn/singer_detail/*`
+   - `https://www.kuwo.cn/playlist_detail/*`
+   - `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
 
 ---
 

@@ -1,6 +1,6 @@
 <div align="center">
 
-[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
+[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JP.md) | [한국어](README_KR.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
 
 # 🎵 Ter-Music-Rust - Reprodutor de música de terminal 🎵
 
@@ -8,7 +8,9 @@
 
 Um player de música para terminal, simples e prático, implementado em Rust. Suporta busca/download local e online, download e exibição automática de letras, visualização de comentários e troca de idioma/tema, com suporte a Windows, Linux e MacOS.
 
-![preview](preview.gif)
+![preview](preview1.gif)
+
+![preview](preview2.gif)
 
 ![preview1](preview1.png)
 
@@ -229,7 +231,7 @@ cargo run --release -- -o d:\Music
 
 ## 🎮 Atalhos de teclado
 
-### Visualização principal
+### Teclas da visualização principal
 
 | Tecla | Ação |
 |------|------|
@@ -251,13 +253,15 @@ cargo run --release -- -o d:\Music
 | `o` | Abrir diretório de músicas |
 | `s` | Pesquisar músicas locais |
 | `n` | Pesquisar músicas online |
-| `j` | Pesquisar músicas Juhe |
+| `j` | Pesquisar músicas agregadas |
 | `p` | Pesquisar listas de reprodução online |
-| `i` | Consultar informações da música |
-| `a` | Recomendar músicas |
+| `i` | Ver informações da música |
+| `a` | Solicitar músicas recomendadas |
+| `Shift+A` | Recomendação de playlist inteligente |
+| `Shift+S` | Recomendação de músicas similares |
 | `f` | Favoritar/Desfavoritar |
 | `v` | Visualizar favoritos |
-| `m` | Visualizar histórico de diretórios |
+| `m` | Visualizar diretório de músicas |
 | `h` | Exibir informações de ajuda |
 | `c` | Visualizar comentários da música |
 | `l` | Trocar idioma da interface |
@@ -268,12 +272,13 @@ cargo run --release -- -o d:\Music
 | `r` | Alternar músicas recomendadas |
 | `y` | Tradução de letras / Alternar exibição bilíngue |
 | `b` | Abrir lista de reproduções recentes |
+| `w` | Abrir histórico de playlists inteligentes |
 | `x` | Importar playlist M3U |
-| `e` | Exportar playlist atual para M3U |
+| `e` | Exportar playlist M3U |
 | `u` | Entrar em modo de calibração de tempo de letras |
-| `q` | Sair |
+| `q` | Sair do reprodutor de música |
 
-### Visualização de pesquisa
+### Teclas de pesquisa de músicas
 
 | Tecla | Ação |
 |------|------|
@@ -282,10 +287,10 @@ cargo run --release -- -o d:\Music
 | `Enter` | Pesquisar/Reproduzir/Baixar |
 | `↑/↓` | Selecionar resultado |
 | `PgUp/PgDn` | Página anterior/próxima (pesquisa online) |
-| `s/n/j` | Alternar pesquisa local/online/juhe |
+| `s/n/j` | Alternar pesquisa local/online/agregada |
 | `Esc` | Sair da pesquisa |
 
-### Visualização de favoritos
+### Teclas da lista de favoritos
 
 | Tecla | Ação |
 |------|------|
@@ -294,7 +299,7 @@ cargo run --release -- -o d:\Music
 | `d` | Excluir favorito |
 | `Esc` | Voltar à lista de reprodução |
 
-### Visualização do histórico de diretórios
+### Teclas do diretório de músicas
 
 | Tecla | Ação |
 |------|------|
@@ -303,16 +308,17 @@ cargo run --release -- -o d:\Music
 | `d` | Excluir registro |
 | `Esc` | Voltar à lista de reprodução |
 
-### Visualização de comentários
+### Teclas de comentários da música
 
 | Tecla | Ação |
 |------|------|
 | `↑/↓` | Selecionar comentário |
 | `Enter` | Alternar visualização de lista/detalhe |
+| `c` | Resumo de comentários por IA |
 | `PgUp/PgDn` | Página anterior/próxima |
 | `Esc` | Voltar à visualização de letras |
 
-### Visualização de informações da música
+### Teclas de informações da música
 
 | Tecla | Ação |
 |------|------|
@@ -320,18 +326,40 @@ cargo run --release -- -o d:\Music
 | `i` | Consultar informações da música novamente |
 | `Esc` | Voltar à visualização de letras |
 
-### Visualização de pesquisa de listas de reprodução
+### Teclas de recomendação de playlist inteligente
 
 | Tecla | Ação |
 |------|------|
-| Entrada de caracteres | Digitar palavra-chave da lista de reprodução |
+| Entrada de caracteres | Digitar descrição / tema da playlist inteligente |
+| Predefinições | Clicar em um tema predefinido para recomendação rápida |
 | `Backspace` | Excluir caractere |
-| `Enter` | Pesquisar/Entrar na lista/Reproduzir e baixar |
-| `↑/↓` | Selecionar lista de reprodução ou música |
-| `PgUp/PgDn` | Página anterior/próxima |
-| `Esc` | Voltar ao nível anterior / Sair da pesquisa |
+| `Enter` | Começar a gerar a playlist recomendada / reproduzir música selecionada |
+| `↑/↓` | Selecionar música recomendada |
+| Roda do mouse | Rolar a lista de músicas para cima/baixo |
+| `d` | Excluir o registro atual do histórico de playlist inteligente |
+| `Esc` | Voltar à lista de reprodução |
 
-### Visualização de ajuda
+### Teclas do histórico de playlist inteligente
+
+| Tecla | Ação |
+|------|------|
+| `↑/↓` | Selecionar playlist inteligente histórica |
+| `Enter` | Reabrir e reproduzir a playlist histórica selecionada |
+| `PgUp/PgDn` | Página anterior/próxima |
+| `d` | Excluir o registro selecionado |
+| `Esc` | Voltar à lista de reprodução |
+
+### Teclas de reproduções recentes
+
+| Tecla | Ação |
+|------|------|
+| `↑/↓` | Selecionar música reproduzida recentemente |
+| `Enter` | Reproduzir a música selecionada |
+| `PgUp/PgDn` | Página anterior/próxima |
+| `d` | Excluir o registro recente |
+| `Esc` | Voltar à lista de reprodução |
+
+### Teclas de ajuda
 
 
 | Tecla | Ação |
@@ -729,14 +757,31 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 A primeira compilação baixa e compila todas as dependências; isso é esperado. Compilações subsequentes são muito mais rápidas.
 
 ### Baixar releases
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605191650473525_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/20260519165110865_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605191653509387_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 Registro de alterações
+
+## Versão 2.2.0 (2026-05-20)
+
+### 🎉 Novas funcionalidades
+- ✨ **Recomendação inteligente de playlist**: pressione `Shift+A` para entrar no modo de entrada de playlist inteligente. Após inserir uma descrição ou clicar em uma predefinição, o modelo recomenda em streaming 20~30 músicas temáticas, adicionando-as uma a uma à lista de recomendações de playlist inteligente; a reprodução começa automaticamente assim que a primeira música é analisada. Playlists inteligentes podem ser salvas como histórico e reabertas com `W`.
+- ✨ **Músicas recomendadas de hoje**: as recomendações de hoje agora funcionam em streaming. Cada música retornada pelo modelo é imediatamente adicionada à área superior «Músicas recomendadas de hoje», eliminando a necessidade de esperar a geração completa. A dica «Obtendo músicas recomendadas...» é ocultada assim que a primeira música aparece. São recomendadas 5~10 músicas por vez e o resultado não contém mais motivos de recomendação ou campos supérfluos.
+- ✨ **Recomendação de músicas semelhantes**: durante a reprodução, pressione `Shift+S` para que o modelo recomende em streaming 5~10 músicas altamente semelhantes, com base em estilo/gênero, idioma, época, BPM, humor/atmosfera, características de harmonia/arranjo, artistas/músicas similares, etc. da música atual. Elas são exibidas na área superior «Músicas semelhantes - Música de origem:». Clique ou use as teclas esquerda/direita para selecionar e pressione Enter para baixar e reproduzir.
+- ✨ **Otimização das recomendações**: agora utiliza um arquivo de preferências de comportamento de reprodução (`preferences.json`) mais preciso em vez de depender apenas do histórico de reprodução (`history.json`). Após o carregamento das recomendações de hoje e das músicas semelhantes, a primeira música não é mais destacada por padrão; a seleção começa pela primeira música apenas depois que o usuário pressiona uma tecla de seta ou rola o mouse pela primeira vez. A barra superior de recomendações alterna suavemente entre o estado de carregamento e o estado com resultados, evitando que «Obtendo músicas recomendadas...» e os nomes das músicas sejam exibidos simultaneamente.
+
+- ✨ **Melhoria do comportamento da tecla `R`**: `R` agora alterna as recomendações de hoje; ao ativá-las, as recomendações de hoje são atualizadas automaticamente, e ao desativá-las, a área superior de recomendações é fechada diretamente, encerrando o comportamento que só permitia ativá-las.
+
+
+### 🔧 Correções de bugs
+- 🐞 **Duração de músicas do Apple Music ausente**: corrigido o problema em que, ao importar uma playlist via parada predefinida ou link do Apple Music, apenas a primeira música exibia sua duração enquanto as demais apresentavam `--:--`. O Apple Music agora chama a API `amp-api.music.apple.com` de acordo com o storefront da URL (por ex., `cn` / `hk` / `tw` / `us` / `kr` / `jp`), obtendo de forma confiável o `durationInMillis` de cada música.
+- 🐞 **Subtítulo incorreto na importação de playlist por URL**: corrigido o problema em que, após importar URLs online que não eram paradas predefinidas, o subtítulo da busca de playlist mostrava «nome da fonte + URL/parâmetros» em vez do título real da página.
+- 🐞 **Enter não reproduz na página de resultados da playlist inteligente**: corrigido o problema em que, após a geração da lista de recomendações de playlist inteligente, mover o cursor e pressionar Enter não reproduzia a música selecionada e a reprodução só funcionava reabrindo a playlist do histórico. Foi adicionada uma ramificação Enter dedicada à página de resultados da playlist inteligente, que não é mais afetada pelo estado `online_searching`.
+
+---
 
 ## Versão 2.1.0 (2026-05-17)
 
@@ -746,29 +791,29 @@ A primeira compilação baixa e compila todas as dependências; isso é esperado
 - ✨ **Reconhecimento de URL multiplataforma**: melhoria no reconhecimento e processamento de links de diferentes plataformas musicais na importação por URL.
 
 - ✨ **Apple Music**：
-    `https://music.apple.com/cn/room/*`
-    `https://music.apple.com/cn/album/*/*`
-    `https://music.apple.com/cn/playlist/*/*`
-    `https://music.apple.com/cn/artist/*/*/top-songs`
-    `https://music.apple.com/cn/new/top-charts/songs`
+   - `https://music.apple.com/cn/room/*`
+   - `https://music.apple.com/cn/album/*/*`
+   - `https://music.apple.com/cn/playlist/*/*`
+   - `https://music.apple.com/cn/artist/*/*/top-songs`
+   - `https://music.apple.com/cn/new/top-charts/songs`
 
 - ✨ **Spotify Music**：
-    `https://open.spotify.com/album/*`
-    `https://open.spotify.com/artist/*`
-    `https://open.spotify.com/playlist/*`
-    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+   - `https://open.spotify.com/album/*`
+   - `https://open.spotify.com/artist/*`
+   - `https://open.spotify.com/playlist/*`
+   - `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
 - ✨ **NetEase Music**：
-    `https://music.163.com/#/album?id=*`
-    `https://music.163.com/#/artist?id=*`
-    `https://music.163.com/#/playlist?id=*`
-    `https://music.163.com/#/discover/toplist?id=*`
+   - `https://music.163.com/#/album?id=*`
+   - `https://music.163.com/#/artist?id=*`
+   - `https://music.163.com/#/playlist?id=*`
+   - `https://music.163.com/#/discover/toplist?id=*`
 
 - ✨ **Other Music**：
-    `https://www.kuwo.cn/rankList`
-    `https://www.kuwo.cn/singer_detail/*`
-    `https://www.kuwo.cn/playlist_detail/*`
-    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+   - `https://www.kuwo.cn/rankList`
+   - `https://www.kuwo.cn/singer_detail/*`
+   - `https://www.kuwo.cn/playlist_detail/*`
+   - `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
 
 ---
 

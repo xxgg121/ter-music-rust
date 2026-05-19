@@ -1,15 +1,16 @@
 <div align="center">
 
-[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
+[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JP.md) | [한국어](README_KR.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
 
 # 🎵 Ter-Music-Rust - 터미널 음악 플레이어 🎵
 
 </div>
 
-
 Rust로 구현된 간결하고 실용적인 터미널 기반 음악 플레이어입니다. 로컬/온라인 곡 검색 및 다운로드, 가사 자동 다운로드 및 표시, 댓글 보기, 언어/테마 전환 기능을 제공하며 Windows, Linux, MacOS를 지원합니다。
 
-![preview](preview.gif)
+![preview](preview1.gif)
+
+![preview](preview2.gif)
 
 ![preview1](preview1.png)
 
@@ -232,7 +233,7 @@ cargo run --release -- -o d:\Music
 
 ## 🎮 단축키
 
-### 메인 화면
+### 메인 화면 제어 키
 
 | 키 | 동작 |
 |------|------|
@@ -254,13 +255,15 @@ cargo run --release -- -o d:\Music
 | `o` | 음악 디렉터리 열기 |
 | `s` | 로컬 곡 검색 |
 | `n` | 온라인 곡 검색 |
-| `j` | 폴리머 검색 |
+| `j` | 통합 곡 검색 |
 | `p` | 온라인 플레이리스트 검색 |
-| `i` | 곡 정보 조회 |
-| `a` | 추천곡 |
+| `i` | 곡 정보 보기 |
+| `a` | 추천곡 요청 |
+| `Shift+A` | 스마트 재생목록 추천 |
+| `Shift+S` | 유사 곡 추천 |
 | `f` | 즐겨찾기/해제 |
 | `v` | 즐겨찾기 목록 |
-| `m` | 디렉터리 기록 |
+| `m` | 음악 디렉터리 보기 |
 | `h` | 도움말 정보 표시 |
 | `c` | 곡 댓글 보기 |
 | `l` | UI 언어 전환 |
@@ -268,15 +271,16 @@ cargo run --release -- -o d:\Music
 | `k` | API 엔드포인트 설정 |
 | `g` | GitHub Token 설정 |
 | `z` | 데스크톱 가사 표시 전환 |
-| `r` | 추천 곡 토글 |
+| `r` | 추천 곡 켜기/끄기 |
 | `y` | 가사 번역 / 이중 언어 표시 전환 |
 | `b` | 최근 재생 목록 열기 |
+| `w` | 스마트 재생목록 기록 열기 |
 | `x` | M3U 재생 목록 가져오기 |
-| `e` | 현재 재생 목록을 M3U로 내보내기 |
+| `e` | M3U 재생 목록 내보내기 |
 | `u` | 가사 시간 보정 모드 진입 |
-| `q` | 종료 |
+| `q` | 음악 프로그램 종료 |
 
-### 검색 화면
+### 곡 검색 키
 
 | 키 | 동작 |
 |------|------|
@@ -288,7 +292,7 @@ cargo run --release -- -o d:\Music
 | `s/n/j` | 로컬/온라인/통합 검색 전환 |
 | `Esc` | 검색 종료 |
 
-### 즐겨찾기 화면
+### 즐겨찾기 목록 키
 
 | 키 | 동작 |
 |------|------|
@@ -297,7 +301,7 @@ cargo run --release -- -o d:\Music
 | `d` | 즐겨찾기 삭제 |
 | `Esc` | 재생목록으로 복귀 |
 
-### 디렉터리 기록 화면
+### 음악 디렉터리 키
 
 | 키 | 동작 |
 |------|------|
@@ -306,16 +310,17 @@ cargo run --release -- -o d:\Music
 | `d` | 기록 삭제 |
 | `Esc` | 재생목록으로 복귀 |
 
-### 댓글 화면
+### 곡 댓글 키
 
 | 키 | 동작 |
 |------|------|
 | `↑/↓` | 댓글 선택 |
 | `Enter` | 목록/상세 보기 전환 |
+| `c` | AI 댓글 요약 |
 | `PgUp/PgDn` | 페이지 이동 |
 | `Esc` | 가사 화면으로 복귀 |
 
-### 곡 정보 화면
+### 곡 정보 키
 
 | 키 | 동작 |
 |------|------|
@@ -323,18 +328,40 @@ cargo run --release -- -o d:\Music
 | `i` | 곡 정보 재조회 |
 | `Esc` | 가사 화면으로 복귀 |
 
-### 플레이리스트 검색 화면
+### 스마트 재생목록 추천 키
 
 | 키 | 동작 |
 |------|------|
-| 문자 입력 | 플레이리스트 검색 키워드 입력 |
+| 문자 입력 | 스마트 재생목록 설명 / 테마 입력 |
+| 프리셋 | 마우스로 프리셋 테마 클릭하여 즉시 추천 |
 | `Backspace` | 문자 삭제 |
-| `Enter` | 검색/플레이리스트 진입/재생 다운로드 |
-| `↑/↓` | 플레이리스트 또는 곡 선택 |
-| `PgUp/PgDn` | 페이지 이동 |
-| `Esc` | 이전 단계로 복귀/검색 종료 |
+| `Enter` | 추천 재생목록 생성 시작 / 선택 곡 재생 |
+| `↑/↓` | 추천 곡 선택 |
+| 마우스 휠 | 곡 목록을 위/아래로 스크롤 |
+| `d` | 현재 스마트 재생목록 기록 삭제 |
+| `Esc` | 재생목록으로 복귀 |
 
-### 도움말 화면
+### 스마트 재생목록 기록 키
+
+| 키 | 동작 |
+|------|------|
+| `↑/↓` | 기록된 스마트 재생목록 선택 |
+| `Enter` | 선택한 기록 재생목록을 다시 열어 재생 |
+| `PgUp/PgDn` | 페이지 이동 |
+| `d` | 선택한 기록 삭제 |
+| `Esc` | 재생목록으로 복귀 |
+
+### 최근 재생 키
+
+| 키 | 동작 |
+|------|------|
+| `↑/↓` | 최근 재생한 곡 선택 |
+| `Enter` | 선택 곡 재생 |
+| `PgUp/PgDn` | 페이지 이동 |
+| `d` | 최근 재생 기록 삭제 |
+| `Esc` | 재생목록으로 복귀 |
+
+### 도움말 정보 키
 
 
 | 키 | 동작 |
@@ -732,14 +759,31 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 첫 빌드에서는 모든 의존성을 다운로드하고 컴파일하므로 시간이 걸리는 것이 정상입니다. 이후 빌드는 훨씬 빨라집니다.
 
 ### Release 다운로드
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605191650473525_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/20260519165110865_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605191653509387_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 업데이트 로그
+
+## 버전 2.2.0 (2026-05-20)
+
+### 🎉 새로운 기능
+- ✨ **스마트 플레이리스트 추천**: `Shift+A`를 눌러 스마트 플레이리스트 입력 모드에 진입하고, 설명을 입력하거나 프리셋을 클릭하면 모델이 주제별 플레이리스트 20~30곡을 스트리밍으로 추천하여 스마트 플레이리스트 추천 목록에 한 곡씩 추가합니다. 첫 곡의 파싱이 완료되면 자동으로 재생이 시작됩니다. 스마트 플레이리스트 히스토리로 저장할 수 있으며, `W`를 누르면 히스토리 플레이리스트를 다시 열 수 있습니다.
+- ✨ **오늘의 추천 곡**: 오늘의 추천 곡이 스트리밍 출력으로 변경되었습니다. 모델이 한 곡을 반환할 때마다 즉시 상단의 "오늘의 추천 곡" 영역에 추가되므로, 전체 생성이 완료될 때까지 기다릴 필요가 없습니다. 첫 곡이 표시되면 "추천 곡을 가져오는 중..." 안내를 즉시 숨기고, 매번 5~10곡을 추천하며, 결과에는 더 이상 추천 이유나 불필요한 필드가 포함되지 않습니다.
+- ✨ **유사 곡 추천**: 곡 재생 중 `Shift+S`를 누르면 현재 재생 중인 곡의 스타일/장르, 언어, 연대, BPM, 분위기/감정, 화성/편곡 특징, 유사 아티스트/곡 등의 차원을 기반으로 모델이 매우 유사한 5~10곡을 스트리밍으로 추천하여 상단의 "유사 곡 추천 - 원본 곡:" 영역에 표시합니다. 클릭하거나 좌우 키로 선택한 후 Enter를 누르면 다운로드 및 재생이 가능합니다.
+- ✨ **추천 최적화**: 재생 이력 데이터(`history.json`)에만 의존하지 않고 보다 정확한 재생 행동 선호 정보(`preferences.json`)를 사용하도록 변경했습니다. 오늘의 추천 곡과 유사 곡 추천이 로드 완료된 후 기본적으로 첫 곡을 하이라이트하지 않으며, 사용자가 처음으로 방향키를 누르거나 마우스를 스크롤한 후에야 첫 곡부터 선택이 시작됩니다. 상단 추천 표시줄은 로딩 중과 결과 상태 간을 부드럽게 전환하여 "추천 곡을 가져오는 중..."과 곡 이름이 동시에 표시되는 것을 방지합니다.
+
+- ✨ **`R` 키 동작 개선**: `R`로 오늘의 추천 켜기/끄기를 전환할 수 있으며, 켜면 오늘의 추천이 자동으로 새로 고쳐지고, 끄면 상단 추천 영역이 바로 닫힙니다. 더 이상 켜기만 가능하고 끄기는 불가능했던 동작이 개선되었습니다.
+
+
+### 🔧 버그 수정
+- 🐞 **Apple Music 곡 길이 누락**: 프리셋 차트를 클릭하거나 Apple Music 링크를 입력하여 플레이리스트를 가져올 때 첫 곡만 길이가 표시되고 다른 곡의 길이가 `--:--`로 표시되는 문제를 수정했습니다. Apple Music은 이제 URL의 storefront(예: `cn` / `hk` / `tw` / `us` / `kr` / `jp`)에 따라 `amp-api.music.apple.com` API를 호출하여 각 곡의 `durationInMillis`를 안정적으로 가져옵니다.
+- 🐞 **플레이리스트 URL 가져오기 부제목 오류**: 프리셋 차트가 아닌 온라인 URL을 가져온 후 플레이리스트 검색 부제목이 실제 페이지 제목이 아닌 "소스 이름 + URL/매개변수"로 표시되는 문제를 수정했습니다.
+- 🐞 **스마트 플레이리스트 결과 페이지에서 Enter 키로 재생 불가**: 스마트 플레이리스트 추천 목록 생성이 완료된 후 커서를 이동하고 Enter를 눌러도 선택한 곡을 재생할 수 없고, 히스토리 플레이리스트를 다시 열어야만 재생되는 문제를 수정했습니다. 스마트 플레이리스트 결과 페이지에 전용 Enter 분기를 추가하여 더 이상 `online_searching` 상태의 영향을 받지 않습니다.
+
+---
 
 ## 버전 2.1.0 (2026-05-17)
 
@@ -749,29 +793,29 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - ✨ **멀티 플랫폼 URL 인식**: URL 가져오기 입력창에서 다양한 플랫폼 링크의 인식 및 처리 흐름을 개선하여 크로스 플랫폼 플레이리스트 가져오기 경험을 향상시켰습니다.
 
 - ✨ **Apple Music**：
-    `https://music.apple.com/cn/room/*`
-    `https://music.apple.com/cn/album/*/*`
-    `https://music.apple.com/cn/playlist/*/*`
-    `https://music.apple.com/cn/artist/*/*/top-songs`
-    `https://music.apple.com/cn/new/top-charts/songs`
+   - `https://music.apple.com/cn/room/*`
+   - `https://music.apple.com/cn/album/*/*`
+   - `https://music.apple.com/cn/playlist/*/*`
+   - `https://music.apple.com/cn/artist/*/*/top-songs`
+   - `https://music.apple.com/cn/new/top-charts/songs`
 
 - ✨ **Spotify Music**：
-    `https://open.spotify.com/album/*`
-    `https://open.spotify.com/artist/*`
-    `https://open.spotify.com/playlist/*`
-    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+   - `https://open.spotify.com/album/*`
+   - `https://open.spotify.com/artist/*`
+   - `https://open.spotify.com/playlist/*`
+   - `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
 - ✨ **NetEase Music**：
-    `https://music.163.com/#/album?id=*`
-    `https://music.163.com/#/artist?id=*`
-    `https://music.163.com/#/playlist?id=*`
-    `https://music.163.com/#/discover/toplist?id=*`
+   - `https://music.163.com/#/album?id=*`
+   - `https://music.163.com/#/artist?id=*`
+   - `https://music.163.com/#/playlist?id=*`
+   - `https://music.163.com/#/discover/toplist?id=*`
 
 - ✨ **Other Music**：
-    `https://www.kuwo.cn/rankList`
-    `https://www.kuwo.cn/singer_detail/*`
-    `https://www.kuwo.cn/playlist_detail/*`
-    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+   - `https://www.kuwo.cn/rankList`
+   - `https://www.kuwo.cn/singer_detail/*`
+   - `https://www.kuwo.cn/playlist_detail/*`
+   - `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
 
 ---
 

@@ -1,6 +1,6 @@
 <div align="center">
 
-[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
+[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JP.md) | [한국어](README_KR.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
 
 # 🎵 Ter-Music-Rust - 終端音樂播放器 🎵
 
@@ -8,7 +8,9 @@
 
 一個簡潔實用的終端音樂播放器，使用 Rust 實現，支持本地/網絡歌曲搜尋下載、自動下載歌詞顯示、評論檢視、多語言與主題切換等功能，支持 Windows、Linux、MacOS 系統。
 
-![preview](preview.gif)
+![preview](preview1.gif)
+
+![preview](preview2.gif)
 
 ![preview1](preview1.png)
 
@@ -229,7 +231,7 @@ cargo run --release -- -o d:\Music
 
 ## 🎮 鍵盤快速鍵
 
-### 主檢視
+### 主介面控制鍵
 
 | 按鍵 | 動作 |
 |------|------|
@@ -253,11 +255,13 @@ cargo run --release -- -o d:\Music
 | `n` | 搜尋線上歌曲 |
 | `j` | 搜尋聚合歌曲 |
 | `p` | 搜尋線上播放清單 |
-| `i` | 歌曲資訊查詢 |
+| `i` | 查看歌曲資訊 |
 | `a` | 推薦歌曲點歌 |
+| `Shift+A` | 智能歌單推薦 |
+| `Shift+S` | 相似歌曲推薦 |
 | `f` | 收藏/取消收藏 |
 | `v` | 檢視收藏 |
-| `m` | 檢視目錄歷史 |
+| `m` | 檢視音樂目錄 |
 | `h` | 顯示說明資訊 |
 | `c` | 檢視歌曲評論 |
 | `l` | 切換 UI 語言 |
@@ -268,12 +272,13 @@ cargo run --release -- -o d:\Music
 | `r` | 推薦歌曲開關 |
 | `y` | 歌詞翻譯 / 切換雙語顯示 |
 | `b` | 打開最近播放列表 |
+| `w` | 打開智能歌單歷史 |
 | `x` | 匯入 M3U 播放清單 |
-| `e` | 匯出當前播放列表為 M3U |
+| `e` | 匯出 M3U 播放清單 |
 | `u` | 進入歌詞時間校準模式 |
-| `q` | 退出 |
+| `q` | 退出音樂程式 |
 
-### 搜尋檢視
+### 歌曲搜尋按鍵
 
 | 按鍵 | 動作 |
 |------|------|
@@ -285,7 +290,7 @@ cargo run --release -- -o d:\Music
 | `s/n/j` | 切換本機/線上/聚合搜尋 |
 | `Esc` | 退出搜尋 |
 
-### 收藏檢視
+### 收藏列表按鍵
 
 | 按鍵 | 動作 |
 |------|------|
@@ -294,7 +299,7 @@ cargo run --release -- -o d:\Music
 | `d` | 刪除收藏 |
 | `Esc` | 返回播放清單 |
 
-### 目錄歷史檢視
+### 音樂目錄按鍵
 
 | 按鍵 | 動作 |
 |------|------|
@@ -303,16 +308,17 @@ cargo run --release -- -o d:\Music
 | `d` | 刪除記錄 |
 | `Esc` | 返回播放清單 |
 
-### 評論檢視
+### 歌曲評論按鍵
 
 | 按鍵 | 動作 |
 |------|------|
 | `↑/↓` | 選擇評論 |
 | `Enter` | 切換列表/詳情檢視 |
+| `c` | AI 評論總結 |
 | `PgUp/PgDn` | 上/下翻頁 |
 | `Esc` | 返回歌詞檢視 |
 
-### 歌曲資訊檢視
+### 歌曲資訊按鍵
 
 | 按鍵 | 動作 |
 |------|------|
@@ -320,18 +326,40 @@ cargo run --release -- -o d:\Music
 | `i` | 重新查詢歌曲資訊 |
 | `Esc` | 返回歌詞檢視 |
 
-### 播放清單搜尋檢視
+### 智能歌單推薦按鍵
 
 | 按鍵 | 動作 |
 |------|------|
-| 字元輸入 | 輸入播放清單關鍵字 |
+| 字元輸入 | 輸入智能歌單描述 / 主題 |
+| 預設詞條 | 滑鼠點擊預設主題快速推薦 |
 | `Backspace` | 刪除字元 |
-| `Enter` | 搜尋/進入播放清單/播放並下載 |
-| `↑/↓` | 選擇播放清單或歌曲 |
-| `PgUp/PgDn` | 上/下翻頁 |
-| `Esc` | 返回上一層 / 退出搜尋 |
+| `Enter` | 開始產生推薦歌單 / 播放選中歌曲 |
+| `↑/↓` | 選擇推薦歌曲 |
+| 滑鼠滾輪 | 上下捲動歌曲清單 |
+| `d` | 刪除當前智能歌單歷史記錄 |
+| `Esc` | 返回播放清單 |
 
-### 說明檢視
+### 智能歌單歷史按鍵
+
+| 按鍵 | 動作 |
+|------|------|
+| `↑/↓` | 選擇歷史智能歌單 |
+| `Enter` | 重新進入選中的歷史歌單並播放 |
+| `PgUp/PgDn` | 上/下翻頁 |
+| `d` | 刪除選中的歷史記錄 |
+| `Esc` | 返回播放清單 |
+
+### 最近播放按鍵
+
+| 按鍵 | 動作 |
+|------|------|
+| `↑/↓` | 選擇最近播放歌曲 |
+| `Enter` | 播放選中歌曲 |
+| `PgUp/PgDn` | 上/下翻頁 |
+| `d` | 刪除最近播放記錄 |
+| `Esc` | 返回播放清單 |
+
+### 說明資訊按鍵
 
 
 | 按鍵 | 動作 |
@@ -731,13 +759,30 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 首次建置會下載並編譯所有依賴；這是正常現象。後續建置會快得多。
 
 ### 下載發行版
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605191650473525_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/20260519165110865_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605191653509387_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 ## 📝 更新日誌
+
+## 版本 2.2.0 (2026-05-20)
+
+### 🎉 新功能
+- ✨ **智慧歌單推薦**：按 `Shift+A` 進入智慧歌單輸入模式，輸入描述或點擊預設後，模型串流推薦 20~30 首主題歌單，一首一首追加到智慧歌單推薦播放列表，第一首解析完成後自動開始播放；支援儲存為智慧歌單歷史，按 `W` 可重新進入歷史歌單。
+- ✨ **今日推薦歌曲**：今日推薦歌曲改為串流輸出，模型每回傳一首就立即追加到頂部「今日推薦歌曲」區域,不再需要等待全部生成完成；首歌出現後立即隱藏「正在取得推薦歌曲...」提示，每次推薦 5~10 首，結果不再包含推薦原因或多餘欄位。
+- ✨ **相似歌曲推薦**：在播放歌曲時按 `Shift+S`,基於目前播放歌曲的風格/流派、語種、年代、BPM、情緒/氛圍、和聲/編曲特徵、相似歌手/歌曲等維度,讓模型串流推薦 5~10 首高度相似的歌曲，並顯示在頂部「相似歌曲推薦 - 來源歌曲：」區域;點擊或左右鍵選擇按 Enter 即可下載播放。
+- ✨ **推薦歌曲最佳化**：改用更加精準的播放行為偏好 preferences.json 而不是只依賴播放歷史資料 history.json,今日推薦歌曲與相似歌曲推薦取得完成後預設不再高亮第一首,等使用者首次按方向鍵或滑鼠捲動後再從第一首開始選中。頂部推薦欄在載入與有結果之間平滑切換,避免「正在取得推薦歌曲...」與歌曲名同時顯示。
+
+- ✨ **`R` 鍵行為最佳化**:按 `R` 切換今日推薦開關,開啟時自動重新整理今日推薦歌曲,關閉時直接關閉頂部推薦區,不再只能開啟不能關閉。
+
+
+### 🔧 問題修復
+- 🐞 **Apple Music 歌曲時長缺失**:修復點擊預設排行榜/輸入 Apple Music 連結匯入播放列表時,只有第一首顯示時長、其他歌曲時長為 `--:--` 的問題。Apple Music 現按 URL 中 storefront(如 `cn` / `hk` / `tw` / `us` / `kr` / `jp`)呼叫 `amp-api.music.apple.com` 介面,穩定取得每首歌的 `durationInMillis`。
+- 🐞 **歌單 URL 匯入副標題顯示錯誤**:修復非預設排行榜的線上 URL 匯入後,歌單搜尋副標題顯示為「來源名稱 + URL/參數」而非真實頁面標題的問題。
+- 🐞 **智慧歌單結果頁回車不能播放**:修復智慧歌單推薦播放列表產生完成後,移動游標按 Enter 無法播放選中歌曲、只能重新進入歷史歌單才能播放的問題。為智慧歌單結果頁加了專用回車分支,不再受 `online_searching` 狀態影響。
+
+---
 
 ## 版本 2.1.0 (2026-05-17)
 
@@ -747,29 +792,29 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - ✨ **多平台連結識別**：優化 URL 匯入入口對不同連結的識別與處理流程，提升跨平台歌單匯入體驗。
 
 - ✨ **Apple Music**：
-    `https://music.apple.com/cn/room/*`
-    `https://music.apple.com/cn/album/*/*`
-    `https://music.apple.com/cn/playlist/*/*`
-    `https://music.apple.com/cn/artist/*/*/top-songs`
-    `https://music.apple.com/cn/new/top-charts/songs`
+   - `https://music.apple.com/cn/room/*`
+   - `https://music.apple.com/cn/album/*/*`
+   - `https://music.apple.com/cn/playlist/*/*`
+   - `https://music.apple.com/cn/artist/*/*/top-songs`
+   - `https://music.apple.com/cn/new/top-charts/songs`
 
 - ✨ **Spotify Music**：
-    `https://open.spotify.com/album/*`
-    `https://open.spotify.com/artist/*`
-    `https://open.spotify.com/playlist/*`
-    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+   - `https://open.spotify.com/album/*`
+   - `https://open.spotify.com/artist/*`
+   - `https://open.spotify.com/playlist/*`
+   - `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
 - ✨ **NetEase Music**：
-    `https://music.163.com/#/album?id=*`
-    `https://music.163.com/#/artist?id=*`
-    `https://music.163.com/#/playlist?id=*`
-    `https://music.163.com/#/discover/toplist?id=*`
+   - `https://music.163.com/#/album?id=*`
+   - `https://music.163.com/#/artist?id=*`
+   - `https://music.163.com/#/playlist?id=*`
+   - `https://music.163.com/#/discover/toplist?id=*`
 
 - ✨ **Other Music**：
-    `https://www.kuwo.cn/rankList`
-    `https://www.kuwo.cn/singer_detail/*`
-    `https://www.kuwo.cn/playlist_detail/*`
-    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+   - `https://www.kuwo.cn/rankList`
+   - `https://www.kuwo.cn/singer_detail/*`
+   - `https://www.kuwo.cn/playlist_detail/*`
+   - `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
 
 ---
 

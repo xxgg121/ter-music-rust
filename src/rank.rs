@@ -18,7 +18,7 @@ pub const PRESET_RANKS: &[PresetRank] = &[
     },
     PresetRank {
         name: "每周热门台湾",
-        url: "https://music.apple.com/cn/playlist/%E6%AF%8F%E5%91%A8%E7%83%AD%E9%97%A8-100-%E9%A6%96-%E5%8A%A0%E6%8B%BF%E5%A4%A7/pl.cb6262ec61184f689970faeb9fdc2464",
+        url: "https://music.apple.com/tw/playlist/top-100-%E5%8F%B0%E7%81%A3/pl.741ff34016704547853b953ec5181d83",
     },
     PresetRank {
         name: "每周热门美国",

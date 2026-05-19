@@ -70,6 +70,104 @@ struct PlayHistoryRecord {
     play_count: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct WeightedPreference {
+    value: String,
+    weight: i64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct UserPreferenceProfile {
+    #[serde(default)]
+    recent_keywords: Vec<WeightedPreference>,
+    #[serde(default)]
+    frequent_keywords: Vec<WeightedPreference>,
+    #[serde(default)]
+    favorite_songs: Vec<WeightedPreference>,
+    #[serde(default)]
+    skipped_songs: HashMap<String, u64>,
+    #[serde(default)]
+    completed_songs: HashMap<String, u64>,
+    #[serde(default)]
+    preferred_artists: Vec<WeightedPreference>,
+    #[serde(default)]
+    preferred_languages: Vec<WeightedPreference>,
+    #[serde(default)]
+    preferred_years: Vec<WeightedPreference>,
+    #[serde(default)]
+    preferred_styles: Vec<WeightedPreference>,
+    #[serde(default)]
+    updated_at: String,
+}
+
+impl UserPreferenceProfile {
+    fn touch(&mut self) {
+        self.updated_at = Local::now().to_rfc3339();
+    }
+
+    fn add_weight(list: &mut Vec<WeightedPreference>, value: &str, delta: i64) {
+        let value = value.trim();
+        if value.is_empty() || delta == 0 {
+            return;
+        }
+        if let Some(item) = list
+            .iter_mut()
+            .find(|item| item.value.eq_ignore_ascii_case(value))
+        {
+            item.weight = (item.weight + delta).max(0);
+        } else if delta > 0 {
+            list.push(WeightedPreference {
+                value: value.to_string(),
+                weight: delta,
+            });
+        }
+        list.retain(|item| item.weight > 0 && !item.value.trim().is_empty());
+        list.sort_by(|a, b| b.weight.cmp(&a.weight).then_with(|| a.value.cmp(&b.value)));
+        list.truncate(80);
+    }
+
+    fn add_count(map: &mut HashMap<String, u64>, key: &str) {
+        let key = key.trim();
+        if key.is_empty() {
+            return;
+        }
+        *map.entry(key.to_string()).or_insert(0) += 1;
+    }
+
+    fn weighted_text(list: &[WeightedPreference], limit: usize) -> String {
+        list.iter()
+            .take(limit)
+            .map(|item| format!("{}({})", item.value, item.weight))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SmartPlaylistHistoryItem {
+    query: String,
+    created_at: String,
+    songs: Vec<SmartPlaylistHistorySong>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SmartPlaylistHistorySong {
+    name: String,
+    artist: String,
+    reason: String,
+    #[serde(default)]
+    duration_ms: Option<i64>,
+    source: String,
+    juhe_platform: String,
+    juhe_song_id: String,
+}
+
+#[derive(Debug, Clone)]
+struct SmartPlaylistHistoryRow {
+    title: String,
+    record: SmartPlaylistHistoryItem,
+}
+
 #[derive(Debug, Clone)]
 enum SearchHistoryItem {
     ClearAll,
@@ -89,6 +187,119 @@ struct AiRecommendPresetItem {
     query: String,
     start_col: usize,
     end_col: usize,
+}
+
+struct AiPlaylistResolvedSong {
+    index: usize,
+    candidate: AiGeneratedSong,
+    song: Option<OnlineSong>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AiGeneratedSong {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    artist: String,
+    #[serde(default)]
+    reason: String,
+    #[serde(default)]
+    search_query: String,
+}
+
+impl AiGeneratedSong {
+    fn display_name(&self) -> String {
+        if self.artist.trim().is_empty() {
+            self.title.trim().to_string()
+        } else {
+            format!("{} - {}", self.title.trim(), self.artist.trim())
+        }
+    }
+
+    fn effective_search_query(&self) -> String {
+        let query = self.search_query.trim();
+        if !query.is_empty() {
+            query.to_string()
+        } else {
+            Self::recommendation_query_from_parts(&self.title, &self.artist)
+        }
+    }
+
+    fn recommendation_query_from_parts(title: &str, artist: &str) -> String {
+        let title = title.trim();
+        let artist = artist.trim();
+        if title.is_empty() {
+            artist.to_string()
+        } else if artist.is_empty() {
+            title.to_string()
+        } else {
+            format!("{} {}", title, artist)
+        }
+    }
+}
+
+fn strip_recommendation_reason_suffix(text: &str) -> String {
+    let mut cleaned = text.trim().to_string();
+    let markers = [
+        "推荐原因",
+        "推荐理由",
+        "原因",
+        "理由",
+        "reason",
+        "because",
+    ];
+    for marker in markers {
+        if let Some(pos) = cleaned.to_lowercase().find(marker) {
+            if pos > 0 {
+                cleaned = cleaned[..pos]
+                    .trim_end_matches(|c: char| c == ':' || c == '：' || c == '-' || c == '—')
+                    .trim()
+                    .to_string();
+            }
+        }
+    }
+    cleaned
+}
+
+fn recommendation_list_display_name(song: &AiGeneratedSong) -> String {
+    let title = strip_recommendation_reason_suffix(&song.title);
+    let artist = strip_recommendation_reason_suffix(&song.artist);
+    if artist.trim().is_empty() {
+        title
+    } else if title.trim().is_empty() {
+        artist
+    } else {
+        format!("{} - {}", title.trim(), artist.trim())
+    }
+}
+
+fn is_daily_recommendation_metadata_line(line: &str) -> bool {
+    let lower = line.trim().to_ascii_lowercase();
+    lower.is_empty()
+        || lower.starts_with('{')
+        || lower.starts_with('}')
+        || lower.starts_with('[')
+        || lower.starts_with(']')
+        || lower.starts_with("\"")
+        || lower.contains("search_query")
+        || lower.contains("reason")
+        || lower.contains("推荐原因")
+        || lower.contains("推荐理由")
+        || lower.contains("title\"")
+        || lower.contains("artist\"")
+        || lower.contains("标题")
+        || lower.contains("歌手：")
+}
+
+fn log_ui_event(message: impl AsRef<str>) {
+    let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
+    let line = format!("[{}] {}\n", timestamp, message.as_ref());
+    let log_path = crate::config::get_daily_log_path();
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, line.as_bytes()));
 }
 
 const DEFAULT_GITHUB_TOKEN: &str = "github_xxxxxx";
@@ -287,6 +498,18 @@ pub struct UserInterface {
     recent_play_selected_index: usize,
     /// 最近播放列表的滚动偏移
     recent_play_scroll_offset: usize,
+    /// 智能歌单历史模式
+    smart_playlist_history_mode: bool,
+    /// 智能歌单历史列表
+    smart_playlist_history_list: Vec<SmartPlaylistHistoryRow>,
+    /// 智能歌单历史选中索引
+    smart_playlist_history_selected_index: usize,
+    /// 智能歌单历史滚动偏移
+    smart_playlist_history_scroll_offset: usize,
+    /// 智能歌单结果是否需要返回历史列表
+    smart_playlist_history_return_to_history: bool,
+    /// 当前智能歌单历史对应的原始记录索引
+    smart_playlist_history_active_index: Option<usize>,
     /// 搜索历史记录
     search_history: Vec<String>,
     /// 搜索历史列表中的选中索引
@@ -396,6 +619,12 @@ pub struct UserInterface {
     recommand: bool,
     /// 推荐歌曲列表
     recommendations: Vec<String>,
+    /// 结构化 AI 推荐候选（与 recommendations 同步，用于搜索与理由展示）
+    ai_generated_recommendations: Vec<AiGeneratedSong>,
+    /// AI 歌单生成候选对应的理由（按在线结果歌曲归一化键索引）
+    ai_playlist_song_reasons: HashMap<String, String>,
+    /// 当前左侧在线结果是否来自智能歌单
+    ai_playlist_results_mode: bool,
     /// 推荐歌曲点击区域
     recommendation_items: Vec<RecommendationItem>,
     /// 推荐歌曲当前选中项
@@ -404,6 +633,10 @@ pub struct UserInterface {
     main_focus: MainFocus,
     /// 推荐歌曲生成中
     recommendations_loading: bool,
+    /// 顶部推荐区是否处于「相似歌曲推荐」模式
+    similar_recommendation_mode: bool,
+    /// 相似歌曲推荐的来源歌曲显示名
+    similar_recommendation_source: Option<String>,
     /// 推荐歌曲流式返回临时内容
     recommendations_content: String,
     /// 推荐歌曲 AI 返回接收器
@@ -424,6 +657,28 @@ pub struct UserInterface {
     ai_recommend_input_value: String,
     /// AI 自然语言推荐当前请求需求
     ai_recommend_current_query: Option<String>,
+    /// 当前智能歌单结果标题
+    ai_playlist_results_title: Option<String>,
+    /// 当前 AI 输入/请求是否为“生成歌单并播放”模式
+    ai_playlist_mode: bool,
+    /// AI 歌单候选聚合搜索接收器
+    ai_playlist_resolve_rx: Option<std::sync::mpsc::Receiver<AiPlaylistResolvedSong>>,
+    /// AI 歌单候选聚合搜索发送器
+    ai_playlist_resolve_tx: Option<std::sync::mpsc::Sender<AiPlaylistResolvedSong>>,
+    /// 智能歌单生成流式返回临时内容，避免覆盖今日推荐内容
+    ai_playlist_content: String,
+    /// 智能歌单流式候选列表（用于逐行展示）
+    ai_playlist_candidates: Vec<AiGeneratedSong>,
+    /// 智能歌单已解析可播放歌曲列表
+    ai_playlist_playable_songs: Vec<OnlineSong>,
+    /// 智能歌单流式接收缓存
+    ai_playlist_stream_content: String,
+    /// 智能歌单流式解析游标
+    ai_playlist_stream_cursor: usize,
+    /// 智能歌单是否已经启动首曲播放
+    ai_playlist_started_playing: bool,
+    /// 智能歌单历史是否已记录
+    ai_playlist_history_recorded: bool,
     /// AI 自然语言推荐预设点击区域
     ai_recommend_preset_items: Vec<AiRecommendPresetItem>,
     /// 当前目录增量扫描接收器
@@ -526,6 +781,12 @@ impl UserInterface {
             recent_play_list: Vec::new(),
             recent_play_selected_index: 0,
             recent_play_scroll_offset: 0,
+            smart_playlist_history_mode: false,
+            smart_playlist_history_list: Vec::new(),
+            smart_playlist_history_selected_index: 0,
+            smart_playlist_history_scroll_offset: 0,
+            smart_playlist_history_return_to_history: false,
+            smart_playlist_history_active_index: None,
             search_history: Vec::new(),
             search_history_selected_index: 0,
             search_history_scroll_offset: 0,
@@ -580,10 +841,15 @@ impl UserInterface {
             desktop_lyrics: DesktopLyricsHandle::new(),
             recommand: false,
             recommendations: Vec::new(),
+            ai_generated_recommendations: Vec::new(),
+            ai_playlist_song_reasons: HashMap::new(),
+            ai_playlist_results_mode: false,
             recommendation_items: Vec::new(),
             recommendation_selected_index: None,
             main_focus: MainFocus::Playlist,
             recommendations_loading: false,
+            similar_recommendation_mode: false,
+            similar_recommendation_source: None,
             recommendations_content: String::new(),
             recommendations_rx: None,
             recommendation_search_rx: None,
@@ -594,6 +860,17 @@ impl UserInterface {
             ai_recommend_input_mode: false,
             ai_recommend_input_value: String::new(),
             ai_recommend_current_query: None,
+            ai_playlist_results_title: None,
+            ai_playlist_mode: false,
+            ai_playlist_resolve_rx: None,
+            ai_playlist_resolve_tx: None,
+            ai_playlist_content: String::new(),
+            ai_playlist_candidates: Vec::new(),
+            ai_playlist_playable_songs: Vec::new(),
+            ai_playlist_stream_content: String::new(),
+            ai_playlist_stream_cursor: 0,
+            ai_playlist_started_playing: false,
+            ai_playlist_history_recorded: false,
             ai_recommend_preset_items: Vec::new(),
             incremental_scan_rx: None,
             last_incremental_scan: Instant::now(),
@@ -763,6 +1040,10 @@ impl UserInterface {
         crate::config::get_app_config_dir().join("history.json")
     }
 
+    fn preferences_path() -> std::path::PathBuf {
+        crate::config::get_app_config_dir().join("preferences.json")
+    }
+
     fn load_play_history() -> Vec<PlayHistoryRecord> {
         let path = Self::history_path();
         std::fs::read_to_string(path)
@@ -781,6 +1062,164 @@ impl UserInterface {
         }
     }
 
+    fn load_user_preferences() -> UserPreferenceProfile {
+        let path = Self::preferences_path();
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<UserPreferenceProfile>(&text).ok())
+            .unwrap_or_default()
+    }
+
+    fn save_user_preferences(profile: &UserPreferenceProfile) {
+        let path = Self::preferences_path();
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(json) = serde_json::to_string_pretty(profile) {
+            let _ = std::fs::write(path, json);
+        }
+    }
+
+    fn song_identity_key(name: &str, path: &str) -> String {
+        let normalized = Self::normalize_song_key(name);
+        if !normalized.is_empty() {
+            normalized
+        } else {
+            path.trim().to_ascii_lowercase()
+        }
+    }
+
+    fn song_keywords(name: &str) -> Vec<String> {
+        let cleaned = Self::sanitize_single_line_text(name).replace(
+            ['_', '-', '–', '—', '|', '/', '：', ':', '(', ')', '[', ']'],
+            " ",
+        );
+        let mut keywords = Vec::new();
+        for token in cleaned.split_whitespace() {
+            let token = token
+                .trim_matches(|ch: char| ch.is_ascii_punctuation())
+                .trim();
+            if token.chars().count() >= 2
+                && !token.eq_ignore_ascii_case("mp3")
+                && !token.eq_ignore_ascii_case("flac")
+                && !token.eq_ignore_ascii_case("wav")
+                && !token.eq_ignore_ascii_case("m4a")
+            {
+                keywords.push(token.to_string());
+            }
+            if keywords.len() >= 8 {
+                break;
+            }
+        }
+        keywords
+    }
+
+    fn infer_artist_from_name(name: &str) -> Option<String> {
+        let cleaned = Self::sanitize_single_line_text(name);
+        let separators = [" - ", " — ", " – ", " | ", " ｜ ", " / ", "：", ":"];
+        for separator in separators {
+            if let Some(index) = cleaned.find(separator) {
+                let right = cleaned[index + separator.len()..].trim();
+                if !right.is_empty() {
+                    return Some(right.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    fn infer_language_tag(name: &str) -> Option<String> {
+        let has_cjk = name
+            .chars()
+            .any(|ch| ('\u{4e00}'..='\u{9fff}').contains(&ch));
+        let has_kana = name
+            .chars()
+            .any(|ch| ('\u{3040}'..='\u{30ff}').contains(&ch));
+        let has_hangul = name
+            .chars()
+            .any(|ch| ('\u{ac00}'..='\u{d7af}').contains(&ch));
+        if has_hangul {
+            Some("Korean".to_string())
+        } else if has_kana {
+            Some("Japanese".to_string())
+        } else if has_cjk {
+            Some("Chinese".to_string())
+        } else if name.chars().any(|ch| ch.is_ascii_alphabetic()) {
+            Some("English/Latin".to_string())
+        } else {
+            None
+        }
+    }
+
+    fn update_preference_song_traits(profile: &mut UserPreferenceProfile, name: &str, weight: i64) {
+        for keyword in Self::song_keywords(name) {
+            UserPreferenceProfile::add_weight(&mut profile.recent_keywords, &keyword, weight);
+            if weight > 0 {
+                UserPreferenceProfile::add_weight(&mut profile.frequent_keywords, &keyword, weight);
+            }
+        }
+        if let Some(artist) = Self::infer_artist_from_name(name) {
+            UserPreferenceProfile::add_weight(&mut profile.preferred_artists, &artist, weight);
+        }
+        if let Some(language) = Self::infer_language_tag(name) {
+            UserPreferenceProfile::add_weight(&mut profile.preferred_languages, &language, weight);
+        }
+    }
+
+    fn record_effective_play_preference(name: &str, path: &std::path::Path) {
+        let path_text = path.to_string_lossy();
+        let key = Self::song_identity_key(name, &path_text);
+        let mut profile = Self::load_user_preferences();
+        UserPreferenceProfile::add_count(&mut profile.completed_songs, &key);
+        Self::update_preference_song_traits(&mut profile, name, 2);
+        profile.touch();
+        Self::save_user_preferences(&profile);
+    }
+
+    fn record_manual_transition_preference(&mut self) {
+        let current = {
+            let player = self.audio_player.lock().unwrap();
+            let (elapsed, total) = player.get_progress();
+            (player.get_current_file(), elapsed, total)
+        };
+        let (Some(file), elapsed, total) = current else {
+            return;
+        };
+        let short_play = elapsed < Duration::from_secs(20)
+            || total
+                .filter(|total| total.as_secs() > 0)
+                .map(|total| elapsed.as_secs_f64() / total.as_secs_f64() < 0.2)
+                .unwrap_or(false);
+        let key = Self::song_identity_key(&file.name, &file.path.to_string_lossy());
+        let mut profile = Self::load_user_preferences();
+        if short_play {
+            UserPreferenceProfile::add_count(&mut profile.skipped_songs, &key);
+            Self::update_preference_song_traits(&mut profile, &file.name, -1);
+        } else {
+            UserPreferenceProfile::add_count(&mut profile.completed_songs, &key);
+            Self::update_preference_song_traits(&mut profile, &file.name, 2);
+        }
+        profile.touch();
+        Self::save_user_preferences(&profile);
+    }
+
+    fn record_favorite_preference(name: &str, path: &std::path::Path, added: bool) {
+        let path_text = path.to_string_lossy();
+        let key = Self::song_identity_key(name, &path_text);
+        let mut profile = Self::load_user_preferences();
+        UserPreferenceProfile::add_weight(
+            &mut profile.favorite_songs,
+            &format!("{} | {}", name.trim(), path_text),
+            if added { 5 } else { -5 },
+        );
+        if added {
+            UserPreferenceProfile::add_count(&mut profile.completed_songs, &key);
+        }
+        Self::update_preference_song_traits(&mut profile, name, if added { 3 } else { -3 });
+        profile.touch();
+        Self::save_user_preferences(&profile);
+    }
+
     fn record_play_history(&self, name: &str, path: &std::path::Path) {
         let path_text = path.to_string_lossy().to_string();
         let mut records = Self::load_play_history();
@@ -797,6 +1236,10 @@ impl UserInterface {
             });
         }
         Self::save_play_history(&records);
+        let mut profile = Self::load_user_preferences();
+        Self::update_preference_song_traits(&mut profile, name, 1);
+        profile.touch();
+        Self::save_user_preferences(&profile);
     }
 
     fn recent_history_for_recommendation() -> Vec<PlayHistoryRecord> {
@@ -818,6 +1261,163 @@ impl UserInterface {
                     .to_string()
             })
             .unwrap_or_else(|_| last_played.to_string())
+    }
+
+    fn smart_playlist_history_path() -> std::path::PathBuf {
+        crate::config::get_app_config_dir().join("playlist.json")
+    }
+
+    fn load_smart_playlist_history() -> Vec<SmartPlaylistHistoryItem> {
+        let path = Self::smart_playlist_history_path();
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Vec<SmartPlaylistHistoryItem>>(&text).ok())
+            .unwrap_or_default()
+    }
+
+    fn save_smart_playlist_history(records: &[SmartPlaylistHistoryItem]) {
+        let path = Self::smart_playlist_history_path();
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(json) = serde_json::to_string_pretty(records) {
+            let _ = std::fs::write(path, json);
+        }
+    }
+
+    fn music_source_key(source: crate::search::MusicSource) -> &'static str {
+        match source {
+            crate::search::MusicSource::Kuwo => "kuwo",
+            crate::search::MusicSource::NetEase => "netease",
+            crate::search::MusicSource::Kugou => "kugou",
+            crate::search::MusicSource::Juhe => "juhe",
+        }
+    }
+
+    fn music_source_from_key(source: &str) -> crate::search::MusicSource {
+        match source {
+            "kuwo" => crate::search::MusicSource::Kuwo,
+            "netease" => crate::search::MusicSource::NetEase,
+            "kugou" => crate::search::MusicSource::Kugou,
+            _ => crate::search::MusicSource::Juhe,
+        }
+    }
+
+    fn record_smart_playlist_history(&self, query: &str, songs: &[(OnlineSong, String)]) {
+        if songs.is_empty() {
+            return;
+        }
+        let mut records = Self::load_smart_playlist_history();
+        let record = SmartPlaylistHistoryItem {
+            query: query.trim().to_string(),
+            created_at: Local::now().to_rfc3339(),
+            songs: songs
+                .iter()
+                .map(|(song, reason)| SmartPlaylistHistorySong {
+                    name: song.name.clone(),
+                    artist: song.artist.clone(),
+                    reason: reason.clone(),
+                    duration_ms: song.duration_ms,
+                    source: Self::music_source_key(song.source).to_string(),
+                    juhe_platform: song.juhe_platform.clone(),
+                    juhe_song_id: song.juhe_song_id.clone(),
+                })
+                .collect(),
+        };
+        records.insert(0, record);
+        records.truncate(50);
+        Self::save_smart_playlist_history(&records);
+    }
+
+    fn history_song_to_online_song(song: &SmartPlaylistHistorySong) -> OnlineSong {
+        OnlineSong {
+            name: song.name.clone(),
+            artist: song.artist.clone(),
+            id: 0,
+            hash: String::new(),
+            duration_ms: song.duration_ms,
+            source: Self::music_source_from_key(&song.source),
+            juhe_platform: song.juhe_platform.clone(),
+            juhe_song_id: song.juhe_song_id.clone(),
+        }
+    }
+
+    fn smart_playlist_history_title(
+        record: &SmartPlaylistHistoryItem,
+        t: &crate::langs::LangTexts,
+    ) -> String {
+        let time = Self::format_history_time(&record.created_at);
+        let query = if record.query.trim().is_empty() {
+            t.smart_playlist_default_query.to_string()
+        } else {
+            record.query.trim().to_string()
+        };
+        t.fmt_smart_playlist_history_item
+            .replacen("{}", &query, 1)
+            .replacen("{}", &record.songs.len().to_string(), 1)
+            .replacen("{}", &time, 1)
+    }
+
+    fn open_smart_playlist_history_mode(&mut self) {
+        let records = Self::load_smart_playlist_history();
+        let texts = self.t();
+        self.smart_playlist_history_list = records
+            .into_iter()
+            .map(|record| SmartPlaylistHistoryRow {
+                title: Self::smart_playlist_history_title(&record, texts),
+                record,
+            })
+            .collect();
+        self.smart_playlist_history_selected_index = 0;
+        self.smart_playlist_history_scroll_offset = 0;
+        self.smart_playlist_history_mode = true;
+        self.recent_play_mode = false;
+        self.smart_playlist_history_return_to_history = false;
+        self.smart_playlist_history_active_index = None;
+    }
+
+    fn play_smart_playlist_history_selected(&mut self) {
+        let Some(row) = self
+            .smart_playlist_history_list
+            .get(self.smart_playlist_history_selected_index)
+            .cloned()
+        else {
+            return;
+        };
+        let mut songs = Vec::new();
+        self.ai_playlist_song_reasons.clear();
+        for item in row.record.songs {
+            let song = Self::history_song_to_online_song(&item);
+            let key = Self::normalize_song_key(&format!("{} {}", song.name, song.artist));
+            if !key.is_empty() && !item.reason.trim().is_empty() {
+                self.ai_playlist_song_reasons.insert(key, item.reason);
+            }
+            songs.push(song);
+        }
+        if songs.is_empty() {
+            //self.update_status("智能歌单历史为空");
+            return;
+        }
+        self.smart_playlist_history_mode = false;
+        self.smart_playlist_history_return_to_history = true;
+        self.smart_playlist_history_active_index = Some(self.smart_playlist_history_selected_index);
+        self.search_mode = true;
+        self.online_search_mode = true;
+        self.juhe_search_mode = true;
+        self.playlist_search_mode = false;
+        self.current_playlist = None;
+        self.online_search_results = songs;
+        self.ai_playlist_results_mode = true;
+        self.ai_playlist_results_title = Some(row.record.query.clone());
+        self.main_focus = MainFocus::Playlist;
+        self.online_selected_index = 0;
+        self.online_scroll_offset = 0;
+        self.search_input_focused = false;
+        //self.update_status("已载入智能歌单历史，开始播放第一首");
+        if let Some(song) = self.resolved_online_song_at(0) {
+            self.online_auto_skip_times.clear();
+            self.start_download_song(song);
+        }
     }
 
     fn clear_lyrics_translation_state(&mut self) {
@@ -855,8 +1455,46 @@ impl UserInterface {
         })
     }
 
+    fn format_preference_map(map: &HashMap<String, u64>, limit: usize) -> String {
+        let mut items = map.iter().collect::<Vec<_>>();
+        items.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+        items
+            .into_iter()
+            .take(limit)
+            .map(|(key, count)| format!("{}({})", key, count))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    fn current_song_for_recommendation(&self) -> String {
+        let current = self
+            .audio_player
+            .lock()
+            .unwrap()
+            .get_current_file()
+            .map(|file| file.name)
+            .unwrap_or_default();
+        if current.trim().is_empty() {
+            "None".to_string()
+        } else {
+            current
+        }
+    }
+
+    fn fill_template(template: &str, values: &[&str]) -> String {
+        let mut out = template.to_string();
+        for value in values {
+            out = out.replacen("{}", value, 1);
+        }
+        out
+    }
+
     fn build_recommendation_prompt(&mut self, history: &[PlayHistoryRecord]) -> String {
-        let history_text = history
+        let mut recent_history = history.to_vec();
+        recent_history.sort_by(|a, b| b.last_played.cmp(&a.last_played));
+        recent_history.truncate(15);
+
+        let high_frequency_text = history
             .iter()
             .map(|record| {
                 format!(
@@ -866,10 +1504,48 @@ impl UserInterface {
             })
             .collect::<Vec<_>>()
             .join("\n");
+        let recent_history_text = recent_history
+            .iter()
+            .map(|record| format!("{} | last={}", record.name, record.last_played))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let profile = Self::load_user_preferences();
+        let favorite_text = UserPreferenceProfile::weighted_text(&profile.favorite_songs, 20);
+        let artist_text = UserPreferenceProfile::weighted_text(&profile.preferred_artists, 20);
+        let language_text = UserPreferenceProfile::weighted_text(&profile.preferred_languages, 10);
+        let style_text = UserPreferenceProfile::weighted_text(&profile.preferred_styles, 10);
+        let frequent_keywords =
+            UserPreferenceProfile::weighted_text(&profile.frequent_keywords, 24);
+        let recent_keywords = UserPreferenceProfile::weighted_text(&profile.recent_keywords, 24);
+        let skipped_text = Self::format_preference_map(&profile.skipped_songs, 20);
+        let completed_text = Self::format_preference_map(&profile.completed_songs, 20);
+        let current_song = self.current_song_for_recommendation();
+        let updated_at = if profile.updated_at.is_empty() {
+            "never"
+        } else {
+            &profile.updated_at
+        };
+        let profile_text = Self::fill_template(
+            self.t().recommendation_profile_prompt_template,
+            &[
+                updated_at,
+                &current_song,
+                &high_frequency_text,
+                &recent_history_text,
+                &favorite_text,
+                &completed_text,
+                &skipped_text,
+                &artist_text,
+                &language_text,
+                &style_text,
+                &frequent_keywords,
+                &recent_keywords,
+            ],
+        );
         format!(
-            "{}{}",
+            "{}\n\n{}",
             self.t().recommendation_prompt_template,
-            history_text
+            profile_text
         )
     }
 
@@ -879,6 +1555,11 @@ impl UserInterface {
         }
         let history = Self::recent_history_for_recommendation();
         if history.is_empty() {
+            self.apply_local_recommendation_fallback();
+            return;
+        }
+        if self.resolved_api_key().is_none() {
+            self.apply_local_recommendation_fallback();
             return;
         }
         let prompt = Self::build_recommendation_prompt(self, &history);
@@ -887,17 +1568,235 @@ impl UserInterface {
             api_key: self.resolved_api_key().unwrap_or_default(),
             api_model: self.api_model.clone(),
         };
-        self.recommendations.clear();
         self.recommendations_content.clear();
+        self.ai_playlist_content.clear();
+        self.ai_generated_recommendations.clear();
+        self.recommendations.clear();
+        self.recommendation_selected_index = None;
+        self.recommendation_scroll_offset = 0;
         self.recommendations_loading = true;
+        self.similar_recommendation_mode = false;
+        self.similar_recommendation_source = None;
         self.recommendations_rx = Some(crate::search::fetch_song_info_streaming(prompt, config));
         self.main_focus = MainFocus::Recommendation;
     }
 
-    fn parse_recommendations(text: &str) -> Vec<String> {
-        let mut out = Vec::new();
-        for line in text.lines() {
-            let name = line
+    fn ai_playlist_generation_active(&self) -> bool {
+        self.ai_playlist_mode
+            && (self.recommendations_rx.is_some()
+                || self.ai_playlist_resolve_rx.is_some()
+                || self.recommendations_loading)
+    }
+
+    fn ai_playlist_context_active(&self) -> bool {
+        self.ai_playlist_results_mode || self.ai_playlist_generation_active()
+    }
+
+    fn set_recommendations_enabled_from_hotkey(&mut self, enabled: bool) {
+        if self.ai_playlist_generation_active() {
+            return;
+        }
+        self.recommand = enabled;
+        if enabled {
+            self.recommendations_loading = false;
+            self.recommendations_rx = None;
+            self.recommendations_content.clear();
+            self.recommendation_selected_index = None;
+            self.similar_recommendation_mode = false;
+            self.similar_recommendation_source = None;
+            self.start_recommendations_if_enabled();
+        } else {
+            self.recommendations_loading = false;
+            self.recommendations_rx = None;
+            self.recommendation_selected_index = None;
+            self.similar_recommendation_mode = false;
+            self.similar_recommendation_source = None;
+            if self.main_focus == MainFocus::Recommendation {
+                self.main_focus = MainFocus::Playlist;
+            }
+        }
+    }
+
+    fn candidate_preference_score(song: &AiGeneratedSong, profile: &UserPreferenceProfile) -> i64 {
+        let display = song.display_name();
+        let normalized = Self::normalize_song_key(&format!(
+            "{} {} {}",
+            song.title, song.artist, song.search_query
+        ));
+        let mut score = 0i64;
+        for artist in profile.preferred_artists.iter().take(20) {
+            let key = Self::normalize_song_key(&artist.value);
+            if !key.is_empty() && normalized.contains(&key) {
+                score += artist.weight * 4;
+            }
+        }
+        for keyword in profile
+            .frequent_keywords
+            .iter()
+            .chain(profile.recent_keywords.iter())
+            .take(48)
+        {
+            let key = Self::normalize_song_key(&keyword.value);
+            if !key.is_empty() && normalized.contains(&key) {
+                score += keyword.weight;
+            }
+        }
+        if let Some(language) = Self::infer_language_tag(&display) {
+            if let Some(item) = profile
+                .preferred_languages
+                .iter()
+                .find(|item| item.value == language)
+            {
+                score += item.weight;
+            }
+        }
+        if profile.skipped_songs.contains_key(&normalized) {
+            score -= 100;
+        }
+        if let Some(count) = profile.completed_songs.get(&normalized) {
+            score -= (*count as i64).saturating_mul(8);
+        }
+        for favorite in profile.favorite_songs.iter().take(20) {
+            let key = Self::normalize_song_key(&favorite.value);
+            if !key.is_empty() && normalized.contains(&key) {
+                score -= 20;
+            }
+        }
+        score
+    }
+
+    fn sort_recommendations_by_preferences(candidates: &mut Vec<AiGeneratedSong>) {
+        if candidates.is_empty() {
+            return;
+        }
+        let profile = Self::load_user_preferences();
+        candidates.sort_by(|a, b| {
+            let score_a = Self::candidate_preference_score(a, &profile);
+            let score_b = Self::candidate_preference_score(b, &profile);
+            score_b
+                .cmp(&score_a)
+                .then_with(|| a.display_name().cmp(&b.display_name()))
+        });
+    }
+
+    fn local_recommendation_candidates(history: &[PlayHistoryRecord]) -> Vec<AiGeneratedSong> {
+        let profile = Self::load_user_preferences();
+        let mut candidates = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        let mut push_candidate = |title: String, reason: String| {
+            let title = Self::sanitize_single_line_text(&title).trim().to_string();
+            if title.is_empty() {
+                return;
+            }
+            let key = Self::normalize_song_key(&title);
+            if key.is_empty() || !seen.insert(key) {
+                return;
+            }
+            candidates.push(AiGeneratedSong {
+                title: title.clone(),
+                artist: String::new(),
+                reason,
+                search_query: title,
+            });
+        };
+
+        for artist in profile.preferred_artists.iter().take(10) {
+            push_candidate(artist.value.clone(), "local preferred artist".to_string());
+        }
+        for keyword in profile.frequent_keywords.iter().take(12) {
+            push_candidate(keyword.value.clone(), "local frequent keyword".to_string());
+        }
+        for favorite in profile.favorite_songs.iter().take(8) {
+            let title = favorite
+                .value
+                .split('|')
+                .next()
+                .unwrap_or(&favorite.value)
+                .trim();
+            push_candidate(title.to_string(), "local favorite song".to_string());
+        }
+        for record in history.iter().take(20) {
+            push_candidate(record.name.clone(), "local play history".to_string());
+        }
+
+        Self::sort_recommendations_by_preferences(&mut candidates);
+        candidates.truncate(10);
+        candidates
+    }
+
+    fn apply_local_recommendation_fallback(&mut self) {
+        let history = Self::recent_history_for_recommendation();
+        self.ai_generated_recommendations = Self::local_recommendation_candidates(&history);
+        self.recommendations = self
+            .ai_generated_recommendations
+            .iter()
+            .map(recommendation_list_display_name)
+            .filter(|name| !name.is_empty())
+            .collect();
+        self.recommendations_loading = false;
+        self.recommendations_rx = None;
+        if !self.recommendations.is_empty() && !self.ai_playlist_results_mode {
+            self.main_focus = MainFocus::Recommendation;
+        }
+    }
+
+    fn append_streamed_recommendation_candidates(
+        &mut self,
+        candidates: Vec<AiGeneratedSong>,
+    ) {
+        if candidates.is_empty() {
+            return;
+        }
+        let remaining = 10usize.saturating_sub(self.ai_generated_recommendations.len());
+        if remaining == 0 {
+            return;
+        }
+        let mut seen = self
+            .ai_generated_recommendations
+            .iter()
+            .map(|song| {
+                Self::normalize_song_key(&format!(
+                    "{} {} {}",
+                    song.title, song.artist, song.search_query
+                ))
+            })
+            .collect::<std::collections::HashSet<_>>();
+        for candidate in candidates.into_iter().take(remaining) {
+            let key = Self::normalize_song_key(&format!(
+                "{} {} {}",
+                candidate.title, candidate.artist, candidate.search_query
+            ));
+            if key.is_empty() || !seen.insert(key) {
+                continue;
+            }
+            self.ai_generated_recommendations.push(candidate.clone());
+            let display = recommendation_list_display_name(&candidate);
+            if !display.is_empty() {
+                self.recommendations.push(display);
+            }
+            if self.ai_generated_recommendations.len() >= 10 {
+                break;
+            }
+        }
+    }
+
+    fn parse_streamed_daily_recommendations(text: &str, limit: usize) -> Vec<AiGeneratedSong> {
+        let mut out = Self::parse_streamed_daily_recommendation_json_objects(text, limit);
+        if !out.is_empty() {
+            return out;
+        }
+
+        // 只解析以换行结尾的完整行，避免流式中途的“歌曲名 - 歌”
+        // 被当作完整候选追加进列表。
+        let last_newline = match text.rfind('\n') {
+            Some(idx) => idx,
+            None => return Vec::new(),
+        };
+        let complete_text = &text[..last_newline];
+
+        for raw_line in complete_text.lines() {
+            let mut line = raw_line
                 .trim()
                 .trim_start_matches(|ch: char| {
                     ch.is_ascii_digit()
@@ -908,18 +1807,470 @@ impl UserInterface {
                         || ch == '*'
                 })
                 .trim()
+                .trim_matches(',')
                 .trim_matches('"')
                 .trim_matches('“')
                 .trim_matches('”')
                 .to_string();
-            if !name.is_empty() && !out.iter().any(|existing| existing == &name) {
-                out.push(name);
+            line = strip_recommendation_reason_suffix(&line);
+            if is_daily_recommendation_metadata_line(&line) || !line.contains('-') {
+                continue;
             }
-            if out.len() >= 10 {
+            let (title, artist) = Self::split_recommendation_display_name(&line);
+            if title.is_empty() || artist.is_empty() {
+                continue;
+            }
+            out.push(AiGeneratedSong {
+                title: title.clone(),
+                artist: artist.clone(),
+                reason: String::new(),
+                search_query: AiGeneratedSong::recommendation_query_from_parts(&title, &artist),
+            });
+            if out.len() >= limit {
                 break;
             }
         }
+
+        let mut deduped = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for song in out {
+            let key = Self::normalize_song_key(&format!(
+                "{} {} {}",
+                song.title, song.artist, song.search_query
+            ));
+            if !key.is_empty() && seen.insert(key) {
+                deduped.push(song);
+            }
+        }
+        deduped
+    }
+
+    fn parse_streamed_daily_recommendation_json_objects(
+        text: &str,
+        limit: usize,
+    ) -> Vec<AiGeneratedSong> {
+        let mut out = Vec::new();
+        let mut depth = 0usize;
+        let mut start = None;
+        let mut in_string = false;
+        let mut escaped = false;
+
+        for (idx, ch) in text.char_indices() {
+            if in_string {
+                if escaped {
+                    escaped = false;
+                } else if ch == '\\' {
+                    escaped = true;
+                } else if ch == '"' {
+                    in_string = false;
+                }
+                continue;
+            }
+
+            match ch {
+                '"' => in_string = true,
+                '{' => {
+                    if depth == 0 {
+                        start = Some(idx);
+                    }
+                    depth += 1;
+                }
+                '}' => {
+                    if depth == 0 {
+                        continue;
+                    }
+                    depth -= 1;
+                    if depth == 0 {
+                        if let Some(begin) = start.take() {
+                            let end = idx + ch.len_utf8();
+                            if let Ok(mut song) =
+                                serde_json::from_str::<AiGeneratedSong>(&text[begin..end])
+                            {
+                                song.title = Self::sanitize_single_line_text(&song.title)
+                                    .trim()
+                                    .to_string();
+                                song.artist = Self::sanitize_single_line_text(&song.artist)
+                                    .trim()
+                                    .to_string();
+                                song.search_query = Self::sanitize_single_line_text(
+                                    &song.search_query,
+                                )
+                                .trim()
+                                .to_string();
+                                song.reason.clear();
+                                if !song.title.is_empty() || !song.search_query.is_empty() {
+                                    out.push(song);
+                                    if out.len() >= limit {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut deduped = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for song in out {
+            let key = Self::normalize_song_key(&format!(
+                "{} {} {}",
+                song.title, song.artist, song.search_query
+            ));
+            if !key.is_empty() && seen.insert(key) {
+                deduped.push(song);
+            }
+        }
+        deduped
+    }
+
+    fn parse_recommendations(text: &str) -> Vec<String> {
+        Self::parse_generated_recommendations(text, 10)
+            .into_iter()
+            .map(|song| recommendation_list_display_name(&song))
+            .filter(|name| !name.is_empty())
+            .collect()
+    }
+
+    fn parse_generated_recommendations(text: &str, limit: usize) -> Vec<AiGeneratedSong> {
+        fn normalize_candidate_key(title: &str, artist: &str, query: &str) -> String {
+            let raw = if !title.trim().is_empty() || !artist.trim().is_empty() {
+                format!("{} {}", title.trim(), artist.trim())
+            } else {
+                query.trim().to_string()
+            };
+            UserInterface::normalize_song_key(&raw)
+        }
+
+        let trimmed = text.trim();
+        let json_text = if trimmed.starts_with("```") {
+            let without_start = trimmed
+                .trim_start_matches("```json")
+                .trim_start_matches("```JSON")
+                .trim_start_matches("```")
+                .trim();
+            without_start.trim_end_matches("```").trim()
+        } else {
+            trimmed
+        };
+
+        let mut out: Vec<AiGeneratedSong> = serde_json::from_str::<Vec<AiGeneratedSong>>(json_text)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|mut song| {
+                song.title = Self::sanitize_single_line_text(&song.title)
+                    .trim()
+                    .to_string();
+                song.artist = Self::sanitize_single_line_text(&song.artist)
+                    .trim()
+                    .to_string();
+                song.reason = Self::sanitize_single_line_text(&song.reason)
+                    .trim()
+                    .to_string();
+                song.search_query = Self::sanitize_single_line_text(&song.search_query)
+                    .trim()
+                    .to_string();
+                if song.title.is_empty() && song.search_query.is_empty() {
+                    None
+                } else {
+                    Some(song)
+                }
+            })
+            .collect();
+
+        if out.is_empty() {
+            for line in text.lines() {
+                let name = line
+                    .trim()
+                    .trim_start_matches(|ch: char| {
+                        ch.is_ascii_digit()
+                            || ch == '.'
+                            || ch == '-'
+                            || ch == '、'
+                            || ch == '•'
+                            || ch == '*'
+                    })
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('“')
+                    .trim_matches('”')
+                    .to_string();
+                if name.is_empty() {
+                    continue;
+                }
+                let query = Self::recommendation_search_query(&name);
+                let (title, artist) = Self::split_recommendation_display_name(&name);
+                out.push(AiGeneratedSong {
+                    title,
+                    artist,
+                    reason: String::new(),
+                    search_query: query,
+                });
+                if out.len() >= limit {
+                    break;
+                }
+            }
+        }
+
+        let mut deduped = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for song in out {
+            let key = normalize_candidate_key(&song.title, &song.artist, &song.search_query);
+            if !key.is_empty() && seen.insert(key) {
+                deduped.push(song);
+            }
+            if deduped.len() >= limit {
+                break;
+            }
+        }
+        deduped
+    }
+
+    fn parse_ai_playlist_stream_new_items(&mut self) -> Vec<AiGeneratedSong> {
+        let text = self.ai_playlist_stream_content.as_str();
+        let bytes = text.as_bytes();
+        let mut idx = self.ai_playlist_stream_cursor.min(bytes.len());
+        let mut out = Vec::new();
+
+        while idx < bytes.len() {
+            while idx < bytes.len() && bytes[idx] != b'{' {
+                idx += 1;
+            }
+            if idx >= bytes.len() {
+                break;
+            }
+
+            let start = idx;
+            let mut depth = 0usize;
+            let mut in_string = false;
+            let mut escaped = false;
+            let mut end = None;
+
+            while idx < bytes.len() {
+                let ch = bytes[idx] as char;
+                if in_string {
+                    if escaped {
+                        escaped = false;
+                    } else if ch == '\\' {
+                        escaped = true;
+                    } else if ch == '"' {
+                        in_string = false;
+                    }
+                } else if ch == '"' {
+                    in_string = true;
+                } else if ch == '{' {
+                    depth += 1;
+                } else if ch == '}' {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        end = Some(idx + 1);
+                        break;
+                    }
+                }
+                idx += 1;
+            }
+
+            let Some(end) = end else {
+                break;
+            };
+            let object_text = &text[start..end];
+            if let Ok(mut song) = serde_json::from_str::<AiGeneratedSong>(object_text) {
+                song.title = Self::sanitize_single_line_text(&song.title)
+                    .trim()
+                    .to_string();
+                song.artist = Self::sanitize_single_line_text(&song.artist)
+                    .trim()
+                    .to_string();
+                song.reason = Self::sanitize_single_line_text(&song.reason)
+                    .trim()
+                    .to_string();
+                song.search_query = Self::sanitize_single_line_text(&song.search_query)
+                    .trim()
+                    .to_string();
+                let key = Self::normalize_song_key(&format!(
+                    "{} {} {}",
+                    song.title, song.artist, song.search_query
+                ));
+                if !key.is_empty()
+                    && !self.ai_playlist_candidates.iter().any(|candidate| {
+                        Self::normalize_song_key(&format!(
+                            "{} {} {}",
+                            candidate.title, candidate.artist, candidate.search_query
+                        )) == key
+                    })
+                {
+                    self.ai_playlist_candidates.push(song.clone());
+                    out.push(song);
+                }
+            }
+            idx = end;
+            self.ai_playlist_stream_cursor = idx;
+        }
+
         out
+    }
+
+    fn ai_playlist_candidate_placeholder(candidate: &AiGeneratedSong) -> OnlineSong {
+        OnlineSong::unresolved_juhe_candidate(candidate.title.clone(), candidate.artist.clone())
+    }
+
+    fn smart_playlist_loading_line(&self) -> String {
+        self.t()
+            .smart_playlist_loading
+            .rsplit_once('：')
+            .or_else(|| self.t().smart_playlist_loading.rsplit_once(':'))
+            .map(|(_, text)| text.trim().to_string())
+            .filter(|text| !text.is_empty())
+            .unwrap_or_else(|| self.t().smart_playlist_loading.to_string())
+    }
+
+    fn smart_playlist_results_display_title(&self) -> String {
+        self.ai_playlist_results_title
+            .as_deref()
+            .map(|playlist_title| {
+                format!(
+                    "{} - {}",
+                    self.t().smart_playlist_results_title,
+                    playlist_title
+                )
+            })
+            .unwrap_or_else(|| self.t().smart_playlist_results_title.to_string())
+    }
+
+    fn append_ai_playlist_candidate(&mut self, candidate: AiGeneratedSong) {
+        let key = Self::normalize_song_key(&format!("{} {}", candidate.title, candidate.artist));
+        if !key.is_empty() && !candidate.reason.trim().is_empty() {
+            self.ai_playlist_song_reasons
+                .insert(key, candidate.reason.clone());
+        }
+        let loading_line = self.smart_playlist_loading_line();
+        if self.online_search_results.len() == 1
+            && self.online_search_results[0].name == loading_line
+        {
+            self.online_search_results.clear();
+        }
+        let index = self.online_search_results.len();
+        self.online_search_results
+            .push(Self::ai_playlist_candidate_placeholder(&candidate));
+        if let Some(layout) = self.playlist_layout {
+            self.online_scroll_offset = self
+                .online_search_results
+                .len()
+                .saturating_sub(layout.visible_count.max(1));
+        }
+        self.resolve_ai_playlist_candidate(index, candidate);
+    }
+
+    fn resolve_ai_playlist_candidate(&self, index: usize, candidate: AiGeneratedSong) {
+        let Some(tx) = self.ai_playlist_resolve_tx.as_ref().cloned() else {
+            return;
+        };
+        std::thread::spawn(move || {
+            let query = candidate.effective_search_query();
+            let song = if query.trim().is_empty() {
+                None
+            } else {
+                crate::search::search_juhe_sync(&query, 1)
+                    .songs
+                    .into_iter()
+                    .next()
+            };
+            let _ = tx.send(AiPlaylistResolvedSong {
+                index,
+                candidate,
+                song,
+            });
+        });
+    }
+
+    fn maybe_start_ai_playlist_first_song(&mut self) {
+        if !self.ai_playlist_results_mode {
+            return;
+        }
+        if self.ai_playlist_started_playing
+            || self.online_downloading
+            || self.online_search_results.is_empty()
+        {
+            return;
+        }
+        if let Some(song) = self.resolved_online_song_at(0) {
+            self.ai_playlist_started_playing = true;
+            self.online_searching = false;
+            self.online_selected_index = 0;
+            self.online_auto_skip_times.clear();
+            self.start_download_song(song);
+        }
+    }
+
+    fn finish_ai_playlist_stream_if_ready(&mut self, disconnected: bool) {
+        if self.recommendations_rx.is_some() {
+            return;
+        }
+        if let Some(query) = self.ai_recommend_current_query.clone() {
+            if !self.ai_playlist_history_recorded && !self.ai_playlist_playable_songs.is_empty() {
+                let results: Vec<(OnlineSong, String)> = self
+                    .ai_playlist_playable_songs
+                    .iter()
+                    .cloned()
+                    .map(|song| {
+                        let key =
+                            Self::normalize_song_key(&format!("{} {}", song.name, song.artist));
+                        let reason = self
+                            .ai_playlist_song_reasons
+                            .get(&key)
+                            .cloned()
+                            .unwrap_or_default();
+                        (song, reason)
+                    })
+                    .collect();
+                self.record_smart_playlist_history(&query, &results);
+                self.ai_playlist_history_recorded = true;
+            }
+        }
+        if disconnected {
+            self.ai_playlist_resolve_rx = None;
+            self.ai_playlist_resolve_tx = None;
+            if self.ai_playlist_results_mode {
+                self.online_searching = false;
+            }
+        }
+        if self.ai_playlist_resolve_rx.is_none() && self.recommendations_rx.is_none() {
+            self.recommendations_loading = false;
+            if self.ai_playlist_results_mode {
+                self.online_searching = false;
+            }
+            self.ai_playlist_mode = false;
+            self.ai_recommend_current_query = None;
+            self.ai_playlist_candidates.clear();
+            self.ai_playlist_stream_content.clear();
+            self.ai_playlist_stream_cursor = 0;
+            self.ai_playlist_song_reasons.shrink_to_fit();
+            if self.ai_playlist_results_mode {
+                self.search_input_focused = false;
+                self.main_focus = MainFocus::Playlist;
+            }
+        }
+    }
+
+    fn split_recommendation_display_name(text: &str) -> (String, String) {
+        let cleaned = Self::sanitize_single_line_text(text).trim().to_string();
+        let separators = [" - ", " — ", " – ", " | ", " ｜ ", " / ", "：", ":"];
+        for separator in separators {
+            if let Some(index) = cleaned.find(separator) {
+                let title = cleaned[..index].trim().to_string();
+                let artist = cleaned[index + separator.len()..].trim().to_string();
+                if !title.is_empty() && !artist.is_empty() {
+                    return (title, artist);
+                }
+            }
+        }
+        (cleaned, String::new())
+    }
+
+    fn build_ai_playlist_prompt(&self, query: &str) -> String {
+        self.t().ai_playlist_prompt_template.replace("{}", query)
     }
 
     fn recommendation_search_query(text: &str) -> String {
@@ -940,35 +2291,129 @@ impl UserInterface {
     }
 
     fn check_recommendation_result(&mut self) {
+        let mut ai_playlist_stream_delta = String::new();
+        let mut streamed_recommendation_candidates = Vec::new();
+        let mut ai_playlist_stream_finished = false;
+        let mut ai_playlist_stream_error = false;
         if let Some(ref rx) = self.recommendations_rx {
             loop {
                 match rx.try_recv() {
                     Ok(chunk) => {
+                        let was_ai_playlist = self.ai_playlist_mode;
                         if chunk.error.is_some() {
                             self.recommendations_loading = false;
                             self.recommendations_rx = None;
+                            self.ai_playlist_mode = false;
+                            if was_ai_playlist {
+                                ai_playlist_stream_error = true;
+                            }
+                            if !was_ai_playlist {
+                                self.apply_local_recommendation_fallback();
+                            }
                             break;
                         }
-                        self.recommendations_content.push_str(&chunk.delta);
+                        if was_ai_playlist {
+                            ai_playlist_stream_delta.push_str(&chunk.delta);
+                        } else {
+                            self.recommendations_content.push_str(&chunk.delta);
+                            let candidates = Self::parse_streamed_daily_recommendations(
+                                &self.recommendations_content,
+                                10,
+                            );
+                            streamed_recommendation_candidates.extend(candidates);
+                        }
                         if chunk.done {
                             self.recommendations_loading = false;
                             self.recommendations_rx = None;
-                            self.recommendations =
-                                Self::parse_recommendations(&self.recommendations_content);
-                            self.recommendation_selected_index = None;
-                            self.main_focus = MainFocus::Recommendation;
-                            self.ai_recommend_current_query = None;
+                            if was_ai_playlist {
+                                ai_playlist_stream_finished = true;
+                                self.ai_playlist_mode = false;
+                                self.online_searching = self.ai_playlist_resolve_rx.is_some();
+                                break;
+                            }
+                            let source_text = if was_ai_playlist {
+                                self.ai_playlist_content.as_str()
+                            } else {
+                                self.recommendations_content.as_str()
+                            };
+                            let limit = if was_ai_playlist { 30 } else { 10 };
+                            let mut generated_recommendations =
+                                Self::parse_generated_recommendations(source_text, limit);
+                            if was_ai_playlist {
+                                self.start_ai_playlist_resolve(generated_recommendations);
+                            } else {
+                                generated_recommendations.truncate(10);
+                                Self::sort_recommendations_by_preferences(
+                                    &mut generated_recommendations,
+                                );
+                                if self.ai_generated_recommendations.is_empty() {
+                                    self.ai_generated_recommendations = generated_recommendations;
+                                    self.recommendations = self
+                                        .ai_generated_recommendations
+                                        .iter()
+                                        .map(recommendation_list_display_name)
+                                        .filter(|name| !name.is_empty())
+                                        .collect();
+                                }
+                                if self.recommendations.is_empty() {
+                                    self.recommendations =
+                                        Self::parse_recommendations(&self.recommendations_content);
+                                    if self.recommendations.is_empty() {
+                                        self.apply_local_recommendation_fallback();
+                                    }
+                                }
+                                if !self.recommendations.is_empty() {
+                                    let mut ranked = self
+                                        .ai_generated_recommendations
+                                        .iter()
+                                        .cloned()
+                                        .collect::<Vec<_>>();
+                                    Self::sort_recommendations_by_preferences(&mut ranked);
+                                    self.ai_generated_recommendations = ranked;
+                                    self.recommendations = self
+                                        .ai_generated_recommendations
+                                        .iter()
+                                        .map(recommendation_list_display_name)
+                                        .filter(|name| !name.is_empty())
+                                        .collect();
+                                }
+                                if !self.ai_playlist_results_mode {
+                                    self.main_focus = MainFocus::Recommendation;
+                                }
+                                self.ai_recommend_current_query = None;
+                            }
                             break;
                         }
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => break,
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        let was_ai_playlist = self.ai_playlist_mode;
                         self.recommendations_loading = false;
                         self.recommendations_rx = None;
+                        self.ai_playlist_mode = false;
+                        if !was_ai_playlist {
+                            self.apply_local_recommendation_fallback();
+                        }
                         break;
                     }
                 }
             }
+        }
+
+        if !ai_playlist_stream_delta.is_empty() {
+            self.ai_playlist_content.push_str(&ai_playlist_stream_delta);
+            self.ai_playlist_stream_content
+                .push_str(&ai_playlist_stream_delta);
+            for candidate in self.parse_ai_playlist_stream_new_items() {
+                self.append_ai_playlist_candidate(candidate);
+            }
+        }
+        self.append_streamed_recommendation_candidates(streamed_recommendation_candidates);
+        if ai_playlist_stream_error {
+            self.ai_playlist_mode = false;
+        }
+        if ai_playlist_stream_finished {
+            self.finish_ai_playlist_stream_if_ready(false);
         }
 
         if let Some(ref rx) = self.recommendation_search_rx {
@@ -985,6 +2430,44 @@ impl UserInterface {
                     self.recommendation_search_rx = None;
                 }
             }
+        }
+
+        let mut resolve_messages = Vec::new();
+        let mut resolve_disconnected = false;
+        if let Some(ref rx) = self.ai_playlist_resolve_rx {
+            loop {
+                match rx.try_recv() {
+                    Ok(result) => {
+                        resolve_messages.push(result);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        resolve_disconnected = true;
+                        break;
+                    }
+                }
+            }
+        }
+        for result in resolve_messages {
+            if let Some(song) = result.song {
+                let key = Self::normalize_song_key(&format!("{} {}", song.name, song.artist));
+                if !key.is_empty() && !result.candidate.reason.trim().is_empty() {
+                    self.ai_playlist_song_reasons
+                        .insert(key, result.candidate.reason.clone());
+                }
+                if result.index < self.online_search_results.len() {
+                    self.online_search_results[result.index] = song.clone();
+                }
+                self.ai_playlist_playable_songs.push(song);
+                self.maybe_start_ai_playlist_first_song();
+            }
+        }
+        if resolve_disconnected || (!self.ai_playlist_mode && self.recommendations_rx.is_none()) {
+            self.finish_ai_playlist_stream_if_ready(resolve_disconnected);
+        }
+
+        if self.ai_playlist_mode && self.ai_playlist_started_playing {
+            self.main_focus = MainFocus::Playlist;
         }
     }
 
@@ -1067,7 +2550,12 @@ impl UserInterface {
         };
         let selected = self.recommendations.get(selected_index).cloned();
         if let Some(display_name) = selected {
-            let search_query = Self::recommendation_search_query(&display_name);
+            let search_query = self
+                .ai_generated_recommendations
+                .get(selected_index)
+                .map(|song| song.effective_search_query())
+                .filter(|query| !query.trim().is_empty())
+                .unwrap_or_else(|| Self::recommendation_search_query(&display_name));
             if !self.recommendation_downloading
                 || self.recommendation_downloading_name.as_ref() != Some(&display_name)
             {
@@ -1077,42 +2565,216 @@ impl UserInterface {
     }
 
     fn open_ai_recommend_input_mode(&mut self) {
+        if self.ai_playlist_generation_active() {
+            return;
+        }
         self.recommand = true;
         self.ai_recommend_input_mode = true;
+        self.ai_playlist_mode = false;
         self.ai_recommend_input_value.clear();
         self.ai_recommend_current_query = None;
         self.cached_lyrics_title = None;
     }
 
-    fn start_ai_recommend_query_with(&mut self, query: String) {
+    fn start_ai_recommend_query_with_source(&mut self, query: String, source: &str) {
+        if self.ai_playlist_generation_active() {
+            return;
+        }
         let query = query.trim().to_string();
         if query.is_empty() {
             return;
         }
         let prompt = self.t().ai_recommend_prompt_template.replace("{}", &query);
+        log_ui_event(format!(
+            "[Recommend][Prompt] 今日推荐歌曲{} query={} prompt:\n{}",
+            source, query, prompt
+        ));
         let config = crate::search::AiQueryConfig {
             api_base_url: self.api_base_url.clone(),
             api_key: self.resolved_api_key().unwrap_or_default(),
             api_model: self.api_model.clone(),
         };
         self.recommand = true;
+        if !self.ai_playlist_results_mode {
+            self.recommendation_selected_index = None;
+        }
+        self.ai_playlist_content.clear();
+        self.recommendation_items.clear();
+        if !self.ai_playlist_results_mode {
+            self.recommendation_selected_index = None;
+        }
+        self.recommendations_content.clear();
+        self.ai_playlist_content.clear();
         self.recommendations.clear();
+        self.ai_generated_recommendations.clear();
+        self.recommendations_loading = true;
+        self.recommendation_scroll_offset = 0;
+        self.ai_recommend_current_query = Some(query.clone());
+        self.similar_recommendation_mode = false;
+        self.similar_recommendation_source = None;
+        self.recommendations_rx = Some(crate::search::fetch_song_info_streaming(prompt, config));
+        self.ai_recommend_input_mode = false;
+        self.ai_recommend_input_value.clear();
+        self.ai_playlist_mode = false;
+        if !self.ai_playlist_results_mode {
+            self.main_focus = MainFocus::Recommendation;
+        }
+        self.save_config_now();
+    }
+
+    fn open_ai_playlist_input_mode(&mut self) {
+        self.open_ai_recommend_input_mode();
+        self.ai_playlist_mode = true;
+    }
+
+    fn current_playing_song_display_name(&self) -> Option<String> {
+        let player = self.audio_player.lock().unwrap();
+        let file = player.get_current_file()?;
+        let name = file.name.trim();
+        if name.is_empty() {
+            None
+        } else {
+            Some(name.to_string())
+        }
+    }
+
+    fn start_similar_song_recommendation(&mut self) {
+        if self.ai_playlist_generation_active() {
+            return;
+        }
+        let Some(source_name) = self.current_playing_song_display_name() else {
+            return;
+        };
+
+        let prompt = self
+            .t()
+            .similar_recommendation_prompt_template
+            .replace("{}", &source_name);
+
+        log_ui_event(format!(
+            "[Recommend][Prompt] 相似歌曲推荐 source={} prompt:\n{}",
+            source_name, prompt
+        ));
+
+        let config = crate::search::AiQueryConfig {
+            api_base_url: self.api_base_url.clone(),
+            api_key: self.resolved_api_key().unwrap_or_default(),
+            api_model: self.api_model.clone(),
+        };
+
+        self.recommand = true;
+        if !self.ai_playlist_results_mode {
+            self.recommendation_selected_index = None;
+        }
+        self.ai_playlist_content.clear();
+        self.recommendation_items.clear();
+        self.recommendations_content.clear();
+        self.recommendations.clear();
+        self.ai_generated_recommendations.clear();
+        self.recommendations_loading = true;
+        self.recommendation_scroll_offset = 0;
+        self.ai_recommend_current_query = Some(source_name.clone());
+        self.similar_recommendation_mode = true;
+        self.similar_recommendation_source = Some(source_name);
+        self.recommendations_rx = Some(crate::search::fetch_song_info_streaming(prompt, config));
+        self.ai_recommend_input_mode = false;
+        self.ai_recommend_input_value.clear();
+        self.ai_playlist_mode = false;
+        if !self.ai_playlist_results_mode {
+            self.main_focus = MainFocus::Recommendation;
+        }
+        self.save_config_now();
+    }
+
+    fn start_ai_playlist_query_with_source(&mut self, query: String, source: &str) {
+        let query = query.trim().to_string();
+        if query.is_empty() {
+            return;
+        }
+        let prompt = self.build_ai_playlist_prompt(&query);
+        log_ui_event(format!(
+            "[Recommend][Prompt] 智能歌单推荐{} query={} prompt:\n{}",
+            source, query, prompt
+        ));
+        let config = crate::search::AiQueryConfig {
+            api_base_url: self.api_base_url.clone(),
+            api_key: self.resolved_api_key().unwrap_or_default(),
+            api_model: self.api_model.clone(),
+        };
+        self.recommand = true;
         self.recommendation_items.clear();
         self.recommendation_selected_index = None;
         self.recommendations_content.clear();
+        self.ai_playlist_content.clear();
+        self.ai_playlist_stream_content.clear();
+        self.ai_playlist_stream_cursor = 0;
+        self.ai_playlist_candidates.clear();
+        self.ai_playlist_playable_songs.clear();
+        self.ai_playlist_song_reasons.clear();
+        self.ai_playlist_started_playing = false;
+        self.ai_playlist_history_recorded = false;
+        self.online_search_results.clear();
+        self.online_selected_index = 0;
+        self.online_scroll_offset = 0;
         self.recommendations_loading = true;
         self.recommendation_scroll_offset = 0;
         self.ai_recommend_current_query = Some(query.clone());
         self.recommendations_rx = Some(crate::search::fetch_song_info_streaming(prompt, config));
         self.ai_recommend_input_mode = false;
         self.ai_recommend_input_value.clear();
-        self.main_focus = MainFocus::Recommendation;
+        self.ai_playlist_mode = true;
+        self.search_mode = true;
+        self.online_search_mode = true;
+        self.juhe_search_mode = true;
+        self.playlist_search_mode = false;
+        self.current_playlist = None;
+        self.ai_playlist_results_mode = true;
+        self.ai_playlist_results_title = Some(query.clone());
+        self.ai_playlist_resolve_rx = None;
+        self.ai_playlist_resolve_tx = None;
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.ai_playlist_resolve_tx = Some(tx);
+        self.ai_playlist_resolve_rx = Some(rx);
+        self.online_search_results
+            .push(OnlineSong::unresolved_juhe_candidate(
+                self.smart_playlist_loading_line(),
+                String::new(),
+            ));
+        self.main_focus = MainFocus::Playlist;
+        //self.update_status("智能歌单推荐中...");
         self.save_config_now();
+    }
+
+    fn start_ai_playlist_resolve(&mut self, candidates: Vec<AiGeneratedSong>) {
+        if candidates.is_empty() {
+            self.recommendations_loading = false;
+            self.ai_playlist_mode = false;
+            //self.update_status("智能歌单推荐未返回可解析歌曲，请调整描述后重试");
+            return;
+        }
+        self.online_searching = true;
+        self.recommendations_loading = true;
+        self.online_search_results.clear();
+        self.online_selected_index = 0;
+        self.online_scroll_offset = 0;
+        self.ai_playlist_candidates = candidates.clone();
+        self.ai_playlist_content.clear();
+        self.ai_playlist_stream_content.clear();
+        self.ai_playlist_stream_cursor = 0;
+        self.ai_playlist_song_reasons.clear();
+        self.ai_playlist_started_playing = false;
+        self.ai_playlist_history_recorded = false;
+        self.ai_playlist_resolve_rx = None;
+        self.ai_playlist_resolve_tx = None;
+
+        if let Some(first) = candidates.into_iter().next() {
+            self.append_ai_playlist_candidate(first);
+        }
     }
 
     fn start_ai_recommend_query(&mut self) {
         let query = self.ai_recommend_input_value.clone();
-        self.start_ai_recommend_query_with(query);
+        self.start_ai_recommend_query_with_source(query, "输入描述");
     }
 
     fn song_info_lines(&self, width: u16) -> Vec<String> {
@@ -1387,8 +3049,22 @@ impl UserInterface {
     fn get_help_tip_text(&self) -> String {
         if self.ai_recommend_input_mode {
             self.t().ai_recommend_input_hint.to_string()
+        } else if self.smart_playlist_history_mode {
+            if self.terminal_width >= 60 {
+                self.t().tip_smart_playlist_history_wide.to_string()
+            } else {
+                self.t().tip_smart_playlist_history_narrow.to_string()
+            }
+        } else if self.recent_play_mode {
+            if self.terminal_width >= 60 {
+                "快捷按键：↑↓选择 | Up/Down上下滚动 | Enter播放 | d删除记录 | PgUp/PgDn翻页 | Esc返回".to_string()
+            } else {
+                "快捷按键：↑↓选择 Enter播放 d删除 Esc返回".to_string()
+            }
         } else if self.search_mode {
-            if self.online_search_mode {
+            if self.ai_playlist_results_mode {
+                self.t().tip_smart_playlist_results.to_string()
+            } else if self.online_search_mode {
                 let search_label = if self.playlist_search_mode {
                     self.t().search_playlist.to_string()
                 } else if self.juhe_search_mode {
@@ -1781,11 +3457,19 @@ impl UserInterface {
     fn open_recent_play_mode(&mut self) {
         let mut records = Self::load_play_history();
         records.sort_by(|a, b| b.last_played.cmp(&a.last_played));
-        records.truncate(50);
+        //records.truncate(50);
         self.recent_play_list = records;
         self.recent_play_selected_index = 0;
         self.recent_play_scroll_offset = 0;
         self.recent_play_mode = true;
+    }
+
+    fn online_list_context_active(&self) -> bool {
+        self.search_mode
+            && (self.online_search_mode
+                || self.juhe_search_mode
+                || self.playlist_search_mode
+                || self.ai_playlist_results_mode)
     }
 
     /// 启动歌词翻译
@@ -1967,11 +3651,14 @@ impl UserInterface {
         frame.render_widget(block, area);
 
         if self.ai_recommend_input_mode {
-            let prompt = self
-                .t()
-                .recommendation_title
-                .trim_end_matches(':')
-                .trim_end_matches("：");
+            let prompt = if self.ai_playlist_mode {
+                self.t().smart_playlist_results_title
+            } else {
+                self.t()
+                    .recommendation_title
+                    .trim_end_matches(':')
+                    .trim_end_matches("：")
+            };
             let input_line = format!("{}> {}", prompt, self.ai_recommend_input_value);
             let input_style = self
                 .tui_style(self.theme_colors.song_playing)
@@ -2000,25 +3687,43 @@ impl UserInterface {
                 Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), 1),
             );
         } else if self.recommand {
-            let mut text = if self.recommendations_loading {
-                format!(
-                    "{}{}",
-                    self.t().recommendation_title,
-                    self.t().recommendation_loading
-                )
-            } else if self.recommendations.is_empty() {
-                format!(
-                    "{}{}",
-                    self.t().recommendation_title,
-                    self.t().recommendation_no_data
-                )
+            let recommendation_loading = self.recommendations_loading && !self.ai_playlist_mode;
+            let show_loading = recommendation_loading && self.recommendations.is_empty();
+            let recommendation_title: String = if self.similar_recommendation_mode {
+                let source = self
+                    .similar_recommendation_source
+                    .clone()
+                    .unwrap_or_default();
+                if source.is_empty() {
+                    self.t().similar_recommendation_title.to_string()
+                } else {
+                    self.t()
+                        .fmt_similar_recommendation_title_with_source
+                        .replace("{}", &source)
+                }
             } else {
                 self.t().recommendation_title.to_string()
+            };
+            let mut text = if show_loading {
+                format!("{}{}", recommendation_title, self.t().recommendation_loading)
+            } else if self.recommendations.is_empty() {
+                format!("{}{}", recommendation_title, self.t().recommendation_no_data)
+            } else {
+                recommendation_title.clone()
             };
             if let Some(selected_index) = self.recommendation_selected_index {
                 if selected_index >= self.recommendations.len() {
                     self.recommendation_selected_index = None;
                 }
+            }
+            if show_loading {
+                self.recommendation_items.clear();
+                self.recommendation_scroll_offset = 0;
+                frame.render_widget(
+                    Paragraph::new(text).style(self.tui_style(self.theme_colors.info_text)),
+                    Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), 1),
+                );
+                return;
             }
             let mut spans = Vec::new();
             spans.push(Span::styled(
@@ -2068,9 +3773,15 @@ impl UserInterface {
                     ));
                     col += term_display_width(&progress_text);
                 }
+                let search_query = self
+                    .ai_generated_recommendations
+                    .get(idx)
+                    .map(|song| song.effective_search_query())
+                    .filter(|query| !query.trim().is_empty())
+                    .unwrap_or_else(|| Self::recommendation_search_query(name));
                 self.recommendation_items.push(RecommendationItem {
                     name: name.clone(),
-                    search_query: Self::recommendation_search_query(name),
+                    search_query,
                     start_col,
                     end_col: name_end_col,
                 });
@@ -2101,6 +3812,8 @@ impl UserInterface {
             self.render_dir_history(frame, area, visible_count);
         } else if self.favorites_mode {
             self.render_favorites(frame, area, visible_count);
+        } else if self.smart_playlist_history_mode {
+            self.render_smart_playlist_history(frame, area, visible_count);
         } else if self.recent_play_mode {
             self.render_recent_play(frame, area, visible_count);
         } else if self.search_mode {
@@ -2304,6 +4017,63 @@ impl UserInterface {
         }
     }
 
+    fn render_smart_playlist_history(
+        &mut self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        visible_count: usize,
+    ) {
+        let view = self.smart_playlist_history_view(visible_count);
+        let items: Vec<ListItem> = if let Some(hint) = view.empty_hint {
+            vec![ListItem::new(hint).style(self.tui_style(self.theme_colors.info_text))]
+        } else {
+            view.rows
+                .into_iter()
+                .map(|row| ListItem::new(row.text).style(self.selection_style(row.selected)))
+                .collect()
+        };
+        self.render_list(frame, area, &view.title, items);
+    }
+
+    fn smart_playlist_history_view(&mut self, visible_count: usize) -> SelectableListView {
+        let display_count = visible_count.max(1);
+        Self::clamp_selected_and_scroll(
+            &mut self.smart_playlist_history_selected_index,
+            &mut self.smart_playlist_history_scroll_offset,
+            self.smart_playlist_history_list.len(),
+            display_count,
+        );
+        let rows = self
+            .smart_playlist_history_list
+            .iter()
+            .enumerate()
+            .skip(self.smart_playlist_history_scroll_offset)
+            .take(display_count)
+            .map(|(idx, row)| SelectableTextRow {
+                text: format!(
+                    "{} {:02}. {}",
+                    if idx == self.smart_playlist_history_selected_index {
+                        ">"
+                    } else {
+                        " "
+                    },
+                    idx + 1,
+                    row.title
+                ),
+                selected: idx == self.smart_playlist_history_selected_index,
+            })
+            .collect();
+        SelectableListView {
+            title: self.t().smart_playlist_history_title.to_string(),
+            rows,
+            empty_hint: if self.smart_playlist_history_list.is_empty() {
+                Some(self.t().smart_playlist_history_empty_hint)
+            } else {
+                None
+            },
+        }
+    }
+
     fn render_recent_play(&mut self, frame: &mut Frame<'_>, area: Rect, visible_count: usize) {
         let view = self.recent_play_view(visible_count);
         let items = if let Some(hint) = view.empty_hint {
@@ -2335,8 +4105,9 @@ impl UserInterface {
                 let play_time = Self::format_history_time(&record.last_played);
                 SelectableTextRow {
                     text: format!(
-                        "{} {}  [{} | {}x]",
+                        "{} {:02}. {}  [{} | {}x]",
                         if selected { ">" } else { " " },
+                        idx + 1,
                         record.name,
                         play_time,
                         record.play_count
@@ -2357,29 +4128,43 @@ impl UserInterface {
     }
 
     fn render_search_results(&mut self, frame: &mut Frame<'_>, area: Rect, visible_count: usize) {
-        let result_visible = visible_count.saturating_sub(1);
+        let hide_search_input = self.hide_search_input_in_search_results();
+        let result_visible = if hide_search_input {
+            visible_count
+        } else {
+            visible_count.saturating_sub(1)
+        };
         let view = self.search_results_view(result_visible);
 
         let block = render::panel_block(&view.title, self.theme_colors);
         let inner = render::inner_area(area);
 
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Min(0)])
-            .split(inner);
+        let chunks = if hide_search_input {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(0), Constraint::Min(0)])
+                .split(inner)
+        } else {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(1), Constraint::Min(0)])
+                .split(inner)
+        };
 
-        let input_line = if self.search_history_visible() {
-            format!("> {}", self.t().search_history_input_label)
-        } else {
-            format!("> {}", self.search_query)
-        };
-        let input_style = if self.search_input_focused {
-            self.tui_style(self.theme_colors.song_playing)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            TuiStyle::default().fg(TuiColor::DarkGray)
-        };
-        frame.render_widget(Paragraph::new(input_line).style(input_style), chunks[0]);
+        if !hide_search_input {
+            let input_line = if self.search_history_visible() {
+                format!("> {}", self.t().search_history_input_label)
+            } else {
+                format!("> {}", self.search_query)
+            };
+            let input_style = if self.search_input_focused {
+                self.tui_style(self.theme_colors.song_playing)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                TuiStyle::default().fg(TuiColor::DarkGray)
+            };
+            frame.render_widget(Paragraph::new(input_line).style(input_style), chunks[0]);
+        }
 
         let items: Vec<ListItem> = if let Some(hint_str) = view.empty_hint {
             vec![ListItem::new(hint_str).style(self.tui_style(self.theme_colors.info_text))]
@@ -2583,6 +4368,56 @@ impl UserInterface {
                     })
                     .collect()
             } else {
+                if self.ai_playlist_results_mode {
+                    if self.recommendations_loading && self.ai_playlist_mode {
+                        self.online_selected_index = self
+                            .online_selected_index
+                            .min(self.online_search_results.len().saturating_sub(1));
+                        self.online_scroll_offset = self
+                            .online_search_results
+                            .len()
+                            .saturating_sub(visible_count.max(1));
+                    } else {
+                        Self::clamp_selected_and_scroll(
+                            &mut self.online_selected_index,
+                            &mut self.online_scroll_offset,
+                            self.online_search_results.len(),
+                            visible_count.max(1),
+                        );
+                    }
+                    return SearchResultsView {
+                        title: self.smart_playlist_results_display_title(),
+                        rows: self
+                            .online_search_results
+                            .iter()
+                            .enumerate()
+                            .skip(self.online_scroll_offset)
+                            .take(visible_count)
+                            .map(|(idx, song)| {
+                                let selected = idx == self.online_selected_index;
+                                let text = if song.name == self.smart_playlist_loading_line() {
+                                    format!("> {}", song.name)
+                                } else {
+                                    let duration = song
+                                        .duration_ms
+                                        .map(format_duration_ms)
+                                        .unwrap_or_else(|| "--:--".to_string());
+                                    let prefix = if selected { ">" } else { " " };
+                                    format!(
+                                        "{} {:02}. {} - {} [{}]",
+                                        prefix,
+                                        idx + 1,
+                                        song.name,
+                                        song.artist,
+                                        duration
+                                    )
+                                };
+                                SelectableTextRow { text, selected }
+                            })
+                            .collect(),
+                        empty_hint: None,
+                    };
+                }
                 Self::clamp_selected_and_scroll(
                     &mut self.online_selected_index,
                     &mut self.online_scroll_offset,
@@ -2607,9 +4442,11 @@ impl UserInterface {
                         } else {
                             String::new()
                         };
+                        let marker = if selected { ">" } else { " " };
                         let text = format!(
-                            "{} {} - {} [{}]{download}",
-                            if selected { ">" } else { " " },
+                            "{} {:02}. {} - {} [{}]{download}",
+                            marker,
+                            idx + 1,
                             song.name,
                             song.artist,
                             duration
@@ -2634,7 +4471,12 @@ impl UserInterface {
                 .filter_map(|(result_idx, &orig_idx)| {
                     files.get(orig_idx).map(|file| {
                         let selected = result_idx == self.search_selected_index;
-                        let text = format!("{} {}", if selected { ">" } else { " " }, file.name);
+                        let text = format!(
+                            "{} {:02}. {}",
+                            if selected { ">" } else { " " },
+                            result_idx + 1,
+                            file.name
+                        );
                         SelectableTextRow { text, selected }
                     })
                 })
@@ -2643,7 +4485,9 @@ impl UserInterface {
 
         let empty_hint = if rows.is_empty() {
             Some(if self.online_search_mode {
-                if self.online_searching {
+                if self.ai_playlist_results_mode && self.recommendations_loading {
+                    self.t().querying_song_info
+                } else if self.online_searching {
                     self.t().querying_song_info
                 } else if self.juhe_search_mode {
                     self.t().juhe_enter_hint
@@ -2660,9 +4504,13 @@ impl UserInterface {
         } else {
             None
         };
-        let title = if self.online_search_mode && self.playlist_search_mode {
-            self.active_preset_rank_title
-                .as_deref()
+        let title = if self.ai_playlist_results_mode && self.online_search_mode {
+            self.smart_playlist_results_display_title()
+        } else if self.online_search_mode && self.playlist_search_mode {
+            self.current_playlist
+                .as_ref()
+                .map(|playlist| playlist.name.as_str())
+                .or(self.active_preset_rank_title.as_deref())
                 .map(|rank_title| format!("{} - {}", title, rank_title))
                 .unwrap_or(title)
         } else {
@@ -2694,6 +4542,15 @@ impl UserInterface {
         } else {
             self.render_lyrics_panel(frame, area);
         }
+    }
+
+    fn current_ai_playlist_reason(&self) -> Option<String> {
+        if !(self.ai_playlist_results_mode && self.search_mode && self.online_search_mode) {
+            return None;
+        }
+        let song = self.online_search_results.get(self.online_selected_index)?;
+        let key = Self::normalize_song_key(&format!("{} {}", song.name, song.artist));
+        self.ai_playlist_song_reasons.get(&key).cloned()
     }
 
     fn render_api_input_panel(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -3017,13 +4874,17 @@ impl UserInterface {
             .as_ref()
             .map(|file| format!("{}{}", self.t().lyrics_label_with_song, file.name))
             .unwrap_or_else(|| self.t().lyrics_label_no_song.to_string());
+        let ai_reason = self.current_ai_playlist_reason();
+        let reason_prefix = self.t().smart_playlist_reason_prefix;
+        let reason_prefix_count = ai_reason.as_ref().map(|_| 1).unwrap_or(0);
+        let lyrics_visible_count = visible_count.saturating_sub(reason_prefix_count).max(1);
 
         let mut line_times = Vec::new();
 
         // 双语歌词模式
         if self.bilingual_lyrics_mode {
             if let Some(translated) = &self.current_translated_lyrics {
-                let pair_count = visible_count.div_ceil(2).max(1);
+                let pair_count = lyrics_visible_count.div_ceil(2).max(1);
                 let (_, visible, highlight_idx) =
                     translated.get_visible_lines(adjusted_time, pair_count);
                 let text_width = visible_width.saturating_sub(2).max(1);
@@ -3032,6 +4893,16 @@ impl UserInterface {
                 return LyricsPanelView {
                     title: format!("{} {}", title, self.t().lyrics_translation_label),
                     rows: {
+                        if let Some(reason) = &ai_reason {
+                            rows.push(HighlightedTextRow {
+                                text: truncate_to_width(
+                                    &format!("{}{}", reason_prefix, reason),
+                                    visible_width.saturating_sub(1),
+                                ),
+                                highlighted: false,
+                            });
+                            line_times.push(Duration::ZERO);
+                        }
                         for (idx, line) in visible.iter().enumerate() {
                             let is_highlighted = Some(idx) == highlight_idx;
                             let prefix = if is_highlighted { "> " } else { "  " };
@@ -3079,21 +4950,29 @@ impl UserInterface {
 
         let rows = if let Some(lyrics) = &self.current_lyrics {
             let (_, visible, highlight_idx) =
-                lyrics.get_visible_lines(adjusted_time, visible_count);
-            visible
-                .iter()
-                .enumerate()
-                .map(|(idx, lyric)| {
-                    line_times.push(lyric.time);
-                    let is_highlighted = Some(idx) == highlight_idx;
-                    let prefix = if is_highlighted { "> " } else { "  " };
-                    let text = format!("{}{}", prefix, lyric.text);
-                    HighlightedTextRow {
-                        text,
-                        highlighted: is_highlighted,
-                    }
-                })
-                .collect::<Vec<_>>()
+                lyrics.get_visible_lines(adjusted_time, lyrics_visible_count);
+            let mut rows = Vec::new();
+            if let Some(reason) = &ai_reason {
+                rows.push(HighlightedTextRow {
+                    text: truncate_to_width(
+                        &format!("{}{}", reason_prefix, reason),
+                        visible_width.saturating_sub(1),
+                    ),
+                    highlighted: false,
+                });
+                line_times.push(Duration::ZERO);
+            }
+            rows.extend(visible.iter().enumerate().map(|(idx, lyric)| {
+                line_times.push(lyric.time);
+                let is_highlighted = Some(idx) == highlight_idx;
+                let prefix = if is_highlighted { "> " } else { "  " };
+                let text = format!("{}{}", prefix, lyric.text);
+                HighlightedTextRow {
+                    text,
+                    highlighted: is_highlighted,
+                }
+            }));
+            rows
         } else {
             let message = if self.lyrics_downloading || self.juhe_lyrics_loading {
                 self.t().downloading_lyrics
@@ -3102,10 +4981,22 @@ impl UserInterface {
             } else {
                 self.t().select_song_for_lyrics
             };
-            vec![HighlightedTextRow {
+            let mut rows = Vec::new();
+            if let Some(reason) = &ai_reason {
+                rows.push(HighlightedTextRow {
+                    text: truncate_to_width(
+                        &format!("{}{}", reason_prefix, reason),
+                        visible_width.saturating_sub(1),
+                    ),
+                    highlighted: false,
+                });
+                line_times.push(Duration::ZERO);
+            }
+            rows.push(HighlightedTextRow {
                 text: message.to_string(),
                 highlighted: false,
-            }]
+            });
+            rows
         };
 
         LyricsPanelView {
@@ -3579,6 +5470,79 @@ impl UserInterface {
             return Ok(());
         }
 
+        // 智能歌单历史模式下的键盘处理
+        if self.smart_playlist_history_mode {
+            let visible_count = self
+                .playlist_layout
+                .map(|layout| layout.visible_count)
+                .unwrap_or_else(|| (self.terminal_height as usize).saturating_sub(12).max(1))
+                .max(1);
+            match code {
+                KeyCode::Esc => {
+                    self.smart_playlist_history_mode = false;
+                    self.smart_playlist_history_selected_index = 0;
+                    self.smart_playlist_history_scroll_offset = 0;
+                    self.smart_playlist_history_return_to_history = false;
+                    self.smart_playlist_history_active_index = None;
+                }
+                KeyCode::Enter => {
+                    self.play_smart_playlist_history_selected();
+                }
+                KeyCode::Up => {
+                    if self.smart_playlist_history_selected_index > 0 {
+                        self.smart_playlist_history_selected_index -= 1;
+                        Self::adjust_scroll_offset(
+                            self.smart_playlist_history_selected_index,
+                            &mut self.smart_playlist_history_scroll_offset,
+                            visible_count,
+                        );
+                    }
+                }
+                KeyCode::Down => {
+                    if self.smart_playlist_history_selected_index
+                        < self.smart_playlist_history_list.len().saturating_sub(1)
+                    {
+                        self.smart_playlist_history_selected_index += 1;
+                        Self::adjust_scroll_offset(
+                            self.smart_playlist_history_selected_index,
+                            &mut self.smart_playlist_history_scroll_offset,
+                            visible_count,
+                        );
+                    }
+                }
+                KeyCode::Char('d') | KeyCode::Char('D') => {
+                    self.delete_selected_smart_playlist_history();
+                }
+                KeyCode::PageUp => {
+                    self.smart_playlist_history_selected_index = self
+                        .smart_playlist_history_selected_index
+                        .saturating_sub(visible_count);
+                    Self::clamp_selected_and_scroll(
+                        &mut self.smart_playlist_history_selected_index,
+                        &mut self.smart_playlist_history_scroll_offset,
+                        self.smart_playlist_history_list.len(),
+                        visible_count,
+                    );
+                }
+                KeyCode::PageDown => {
+                    let len = self.smart_playlist_history_list.len();
+                    if len > 0 {
+                        self.smart_playlist_history_selected_index =
+                            (self.smart_playlist_history_selected_index + visible_count)
+                                .min(len - 1);
+                        Self::clamp_selected_and_scroll(
+                            &mut self.smart_playlist_history_selected_index,
+                            &mut self.smart_playlist_history_scroll_offset,
+                            len,
+                            visible_count,
+                        );
+                    }
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
+
         // 最近播放模式下的键盘处理
         if self.recent_play_mode {
             match code {
@@ -3602,9 +5566,50 @@ impl UserInterface {
                         self.recent_play_selected_index += 1;
                     }
                 }
+                KeyCode::Char('d') | KeyCode::Char('D') => {
+                    self.delete_selected_recent_play_record();
+                }
+                KeyCode::PageUp => {
+                    self.recent_play_selected_index =
+                        self.recent_play_selected_index.saturating_sub(20);
+                    self.recent_play_scroll_offset =
+                        self.recent_play_scroll_offset.saturating_sub(20);
+                }
+                KeyCode::PageDown => {
+                    let len = self.recent_play_list.len();
+                    if len > 0 {
+                        self.recent_play_selected_index =
+                            (self.recent_play_selected_index + 20).min(len - 1);
+                        let max_offset = len.saturating_sub(20);
+                        self.recent_play_scroll_offset =
+                            (self.recent_play_scroll_offset + 20).min(max_offset);
+                    }
+                }
                 _ => {}
             }
             return Ok(());
+        }
+
+        if self.search_mode && self.ai_playlist_results_mode {
+            match code {
+                KeyCode::Enter => {
+                    if !self.online_downloading {
+                        if let Some(song) = self.resolved_online_song_at(self.online_selected_index)
+                        {
+                            self.search_input_focused = false;
+                            self.main_focus = MainFocus::Playlist;
+                            self.online_auto_skip_times.clear();
+                            self.start_download_song(song);
+                        }
+                    }
+                    return Ok(());
+                }
+                KeyCode::Char('d') | KeyCode::Char('D') => {
+                    self.delete_selected_ai_playlist_song();
+                    return Ok(());
+                }
+                _ => {}
+            }
         }
 
         if self.search_mode && self.handle_search_input(code) {
@@ -3697,6 +5702,7 @@ impl UserInterface {
                     self.activate_selected_recommendation();
                 } else {
                     // 播放选中的歌曲
+                    self.record_manual_transition_preference();
                     self.play_song_by_index(self.selected_index);
                 }
             }
@@ -3740,6 +5746,7 @@ impl UserInterface {
                     self.help_mode = false;
                 } else {
                     // 停止播放
+                    self.record_manual_transition_preference();
                     self.audio_player.lock().unwrap().stop();
                     self.clear_lyrics_translation_state();
                     self.update_status(self.t().state_stopped_msg);
@@ -3818,7 +5825,10 @@ impl UserInterface {
                 // 打开文件夹
                 self.open_folder();
             }
-            KeyCode::Char('s') | KeyCode::Char('S') => {
+            KeyCode::Char('s') => {
+                if self.ai_playlist_context_active() {
+                    return Ok(());
+                }
                 // 歌单详情页中禁用 s，避免误切换到搜索模式
                 if self.search_mode
                     && self.online_search_mode
@@ -3841,7 +5851,14 @@ impl UserInterface {
                     self.search_history_scroll_offset = 0;
                 }
             }
+            KeyCode::Char('S') => {
+                // Shift+S：基于当前播放歌曲推荐相似歌曲
+                self.start_similar_song_recommendation();
+            }
             KeyCode::Char('n') | KeyCode::Char('N') => {
+                if self.ai_playlist_context_active() {
+                    return Ok(());
+                }
                 // 歌单详情页中禁用 n，避免误切换到搜索模式
                 if self.search_mode
                     && self.online_search_mode
@@ -3860,6 +5877,7 @@ impl UserInterface {
                     self.playlist_search_mode = false;
                     self.search_query.clear();
                     self.online_search_results.clear();
+                    self.clear_ai_playlist_results_state();
                     self.clear_lazy_online_page_state();
                     self.online_selected_index = 0;
                     self.online_scroll_offset = 0;
@@ -3871,6 +5889,9 @@ impl UserInterface {
                 }
             }
             KeyCode::Char('j') | KeyCode::Char('J') => {
+                if self.ai_playlist_context_active() {
+                    return Ok(());
+                }
                 // 歌单详情页中禁用 j，避免误切换到搜索模式
                 if self.search_mode
                     && self.online_search_mode
@@ -3889,6 +5910,7 @@ impl UserInterface {
                     self.playlist_search_mode = false;
                     self.search_query.clear();
                     self.online_search_results.clear();
+                    self.clear_ai_playlist_results_state();
                     self.clear_lazy_online_page_state();
                     self.online_selected_index = 0;
                     self.online_scroll_offset = 0;
@@ -3900,6 +5922,9 @@ impl UserInterface {
                 }
             }
             KeyCode::Char('p') | KeyCode::Char('P') => {
+                if self.ai_playlist_context_active() {
+                    return Ok(());
+                }
                 // 进入歌单搜索模式（先显示歌单，Enter进入歌单歌曲）
                 self.clear_online_download_state();
                 self.search_mode = true;
@@ -3910,6 +5935,7 @@ impl UserInterface {
                 self.playlist_search_mode = true;
                 self.search_query.clear();
                 self.online_search_results.clear();
+                self.clear_ai_playlist_results_state();
                 self.clear_lazy_online_page_state();
                 self.playlist_search_results.clear();
                 self.current_playlist = None;
@@ -4038,9 +6064,11 @@ impl UserInterface {
                         let path_str = file.path.to_string_lossy().to_string();
                         if let Some(pos) = self.favorites.iter().position(|p| *p == path_str) {
                             self.favorites.remove(pos);
+                            Self::record_favorite_preference(&file.name, &file.path, false);
                             //self.update_status(&format!("已从收藏移除: {}", file.name));
                         } else {
                             self.favorites.push(path_str);
+                            Self::record_favorite_preference(&file.name, &file.path, true);
                             //self.update_status(&format!("已添加到收藏: {}", file.name));
                         }
                         self.save_config_now();
@@ -4049,6 +6077,9 @@ impl UserInterface {
             }
             KeyCode::Char('v') | KeyCode::Char('V') => {
                 // 显示收藏列表
+                if self.online_list_context_active() {
+                    return Ok(());
+                }
                 self.favorites_mode = true;
                 self.help_mode = false;
                 self.favorites_selected_index = 0;
@@ -4056,6 +6087,9 @@ impl UserInterface {
             }
             KeyCode::Char('m') | KeyCode::Char('M') => {
                 // 显示音乐目录
+                if self.online_list_context_active() {
+                    return Ok(());
+                }
                 self.dir_history_mode = true;
                 self.help_mode = false;
                 self.dir_history_selected_index = 0;
@@ -4082,12 +6116,14 @@ impl UserInterface {
                 self.save_config_now();
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {
-                self.recommand = true;
-                self.start_recommendations_if_enabled();
+                self.set_recommendations_enabled_from_hotkey(!self.recommand);
                 self.save_config_now();
             }
-            KeyCode::Char('a') | KeyCode::Char('A') => {
+            KeyCode::Char('a') => {
                 self.open_ai_recommend_input_mode();
+            }
+            KeyCode::Char('A') => {
+                self.open_ai_playlist_input_mode();
             }
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 // 切换歌词翻译/双语显示
@@ -4095,7 +6131,14 @@ impl UserInterface {
             }
             KeyCode::Char('b') | KeyCode::Char('B') => {
                 // 打开最近播放列表
+                if self.online_list_context_active() {
+                    return Ok(());
+                }
                 self.open_recent_play_mode();
+            }
+            KeyCode::Char('w') | KeyCode::Char('W') => {
+                // 打开智能歌单历史
+                self.open_smart_playlist_history_mode();
             }
             KeyCode::Char('x') | KeyCode::Char('X') => {
                 // 导入 M3U 播放列表
@@ -4153,7 +6196,7 @@ impl UserInterface {
                 }
                 self.ab_loop_stage = None;
             }
-            KeyCode::Char('q') | KeyCode::Char('Q') => {
+            KeyCode::Char('q') => {
                 // 退出
                 *self.should_quit.lock().unwrap() = true;
             }
@@ -4256,9 +6299,7 @@ impl UserInterface {
     }
 
     fn display_search_history_label(query: &str) -> String {
-        query
-            .replace("https://", "")
-            .replace("http://", "")
+        query.replace("https://", "").replace("http://", "")
     }
 
     fn search_history_visible_row_count(&self, available_rows: usize) -> usize {
@@ -4281,6 +6322,10 @@ impl UserInterface {
             && self.online_search_mode
             && self.playlist_search_mode
             && self.current_playlist.is_none()
+            && !self.online_searching
+            && self.playlist_songs_rx.is_none()
+            && self.online_list_url_import_source.is_none()
+            && self.online_list_url_source.is_none()
     }
 
     fn move_search_history_selection(&mut self, delta: isize) {
@@ -4493,18 +6538,24 @@ impl UserInterface {
         }
         self.clear_lazy_online_page_state();
         self.online_list_url_import_pending_play = false;
+        self.clear_ai_playlist_results_state();
         self.add_search_history(self.search_query.clone());
         self.online_search_mode = true;
         self.online_searching = true;
         self.clear_online_download_state();
         // 翻页也先清空旧结果，避免旧页内容短暂可见
         self.online_search_results.clear();
+        self.clear_ai_playlist_results_state();
         self.playlist_search_results.clear();
         self.online_selected_index = 0;
         self.online_scroll_offset = 0;
 
         let query = self.search_query.clone();
         let page = self.online_search_page;
+        log_ui_event(format!(
+            "[Search][UI] 启动在线搜索: query={}, page={}, playlist_search={}, juhe={}",
+            query, page, self.playlist_search_mode, self.juhe_search_mode
+        ));
         if self.playlist_search_mode {
             let rx = crate::search::search_playlist_background(query, page);
             self.playlist_search_rx = Some(rx);
@@ -4553,6 +6604,143 @@ impl UserInterface {
         });
     }
 
+    fn delete_selected_recent_play_record(&mut self) {
+        if self.recent_play_selected_index >= self.recent_play_list.len() {
+            return;
+        }
+        self.recent_play_list
+            .remove(self.recent_play_selected_index);
+        Self::save_play_history(&self.recent_play_list);
+        if self.recent_play_selected_index >= self.recent_play_list.len() {
+            self.recent_play_selected_index = self.recent_play_list.len().saturating_sub(1);
+        }
+        self.recent_play_scroll_offset = self
+            .recent_play_scroll_offset
+            .min(self.recent_play_list.len().saturating_sub(20));
+        //self.update_status("已删除最近播放记录");
+    }
+
+    fn delete_selected_smart_playlist_history(&mut self) {
+        if self.smart_playlist_history_selected_index >= self.smart_playlist_history_list.len() {
+            return;
+        }
+        self.smart_playlist_history_list
+            .remove(self.smart_playlist_history_selected_index);
+        let records = self
+            .smart_playlist_history_list
+            .iter()
+            .map(|row| row.record.clone())
+            .collect::<Vec<_>>();
+        Self::save_smart_playlist_history(&records);
+        if self.smart_playlist_history_selected_index >= self.smart_playlist_history_list.len() {
+            self.smart_playlist_history_selected_index =
+                self.smart_playlist_history_list.len().saturating_sub(1);
+        }
+        self.smart_playlist_history_scroll_offset = self.smart_playlist_history_scroll_offset.min(
+            self.smart_playlist_history_list.len().saturating_sub(
+                self.playlist_layout
+                    .map(|layout| layout.visible_count)
+                    .unwrap_or(20),
+            ),
+        );
+        //self.update_status("已删除智能歌单历史记录");
+    }
+
+    fn delete_selected_ai_playlist_song(&mut self) {
+        if !(self.ai_playlist_results_mode
+            && self.online_selected_index < self.online_search_results.len())
+        {
+            return;
+        }
+        let song = self
+            .online_search_results
+            .remove(self.online_selected_index);
+        let key = Self::normalize_song_key(&format!("{} {}", song.name, song.artist));
+        self.ai_playlist_song_reasons.remove(&key);
+        if self.online_selected_index >= self.online_search_results.len() {
+            self.online_selected_index = self.online_search_results.len().saturating_sub(1);
+        }
+        self.online_scroll_offset = self
+            .online_scroll_offset
+            .min(self.online_search_results.len().saturating_sub(20));
+        if let Some(active_index) = self.smart_playlist_history_active_index {
+            if active_index < self.smart_playlist_history_list.len() {
+                let texts = self.t();
+                let songs = self
+                    .online_search_results
+                    .iter()
+                    .map(|song| {
+                        let key =
+                            Self::normalize_song_key(&format!("{} {}", song.name, song.artist));
+                        SmartPlaylistHistorySong {
+                            name: song.name.clone(),
+                            artist: song.artist.clone(),
+                            reason: self
+                                .ai_playlist_song_reasons
+                                .get(&key)
+                                .cloned()
+                                .unwrap_or_default(),
+                            duration_ms: song.duration_ms,
+                            source: Self::music_source_key(song.source).to_string(),
+                            juhe_platform: song.juhe_platform.clone(),
+                            juhe_song_id: song.juhe_song_id.clone(),
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if songs.is_empty() {
+                    self.smart_playlist_history_list.remove(active_index);
+                    self.smart_playlist_history_active_index = None;
+                } else {
+                    let title = {
+                        let row = &mut self.smart_playlist_history_list[active_index];
+                        row.record.songs = songs;
+                        Self::smart_playlist_history_title(&row.record, texts)
+                    };
+                    self.smart_playlist_history_list[active_index].title = title;
+                    self.smart_playlist_history_active_index = Some(active_index);
+                }
+                let records = self
+                    .smart_playlist_history_list
+                    .iter()
+                    .map(|row| row.record.clone())
+                    .collect::<Vec<_>>();
+                Self::save_smart_playlist_history(&records);
+            }
+        }
+        //self.update_status("已从智能歌单移除歌曲");
+    }
+
+    fn return_from_ai_playlist_results_to_history(&mut self) {
+        self.clear_ai_playlist_results_state();
+        self.search_mode = false;
+        self.online_search_mode = false;
+        self.juhe_search_mode = false;
+        self.playlist_search_mode = false;
+        self.current_playlist = None;
+        self.online_search_results.clear();
+        self.online_selected_index = 0;
+        self.online_scroll_offset = 0;
+        self.main_focus = MainFocus::Playlist;
+        self.smart_playlist_history_mode = true;
+        self.smart_playlist_history_return_to_history = false;
+    }
+
+    fn clear_ai_playlist_results_state(&mut self) {
+        self.ai_playlist_song_reasons.clear();
+        self.ai_playlist_results_mode = false;
+        self.ai_playlist_results_title = None;
+    }
+
+    fn hide_search_input_in_search_results(&self) -> bool {
+        self.ai_playlist_results_mode
+            || (self.playlist_search_mode
+                && (self.current_playlist.is_some()
+                    || self.playlist_songs_rx.is_some()
+                    || self.online_list_url_import_mode
+                    || self.online_list_url_import_source.is_some()
+                    || self.online_list_url_source.is_some()))
+    }
+
     fn clear_lazy_online_page_state(&mut self) {
         self.lazy_online_all_results.clear();
         self.lazy_online_page = 0;
@@ -4562,6 +6750,20 @@ impl UserInterface {
         self.online_list_url_import_source = None;
         self.online_list_url_page = 1;
         self.online_list_url_import_mode = false;
+    }
+
+    fn preset_rank_title_for_url(input: &str) -> Option<String> {
+        crate::rank::PRESET_RANKS
+            .iter()
+            .find(|rank| rank.url == input)
+            .map(|rank| rank.name.to_string())
+    }
+
+    fn apply_active_preset_rank_title(&self, mut playlist: OnlinePlaylist) -> OnlinePlaylist {
+        if let Some(title) = self.active_preset_rank_title.as_ref() {
+            playlist.name = title.clone();
+        }
+        playlist
     }
 
     fn can_remote_page_online_list_url(input: &str) -> bool {
@@ -4610,7 +6812,7 @@ impl UserInterface {
             self.online_list_url_page = page;
             self.online_list_url_page_rx = None;
             self.clear_online_download_state();
-            self.current_playlist = Some(result.playlist);
+            self.current_playlist = Some(self.apply_active_preset_rank_title(result.playlist));
             self.online_search_results = result.songs;
             self.online_selected_index = 0;
             self.online_scroll_offset = 0;
@@ -4658,6 +6860,8 @@ impl UserInterface {
             return;
         }
 
+        self.active_preset_rank_title = Self::preset_rank_title_for_url(&input);
+
         if save_history {
             self.add_search_history(input.clone());
         }
@@ -4701,7 +6905,8 @@ impl UserInterface {
             self.playlist_songs_rx = None;
             if self.current_playlist.is_none() {
                 if let Some(result) = self.online_list_url_import_cache.get(&input) {
-                    self.current_playlist = Some(result.playlist.clone());
+                    self.current_playlist =
+                        Some(self.apply_active_preset_rank_title(result.playlist.clone()));
                 }
             }
             self.lazy_online_all_results = cached_results;
@@ -4723,7 +6928,7 @@ impl UserInterface {
         } {
             self.online_searching = false;
             self.playlist_songs_rx = None;
-            self.current_playlist = Some(result.playlist);
+            self.current_playlist = Some(self.apply_active_preset_rank_title(result.playlist));
             if remote_page {
                 self.online_search_results = result.songs;
                 self.online_selected_index = 0;
@@ -4779,9 +6984,15 @@ impl UserInterface {
                 Ok(result) => {
                     self.online_searching = false;
                     self.online_search_rx = None;
+                    self.clear_ai_playlist_results_state();
                     self.online_search_results = result.songs;
+                    log_ui_event(format!(
+                        "[Search][UI] 在线搜索结果返回: count={}",
+                        self.online_search_results.len()
+                    ));
                     self.online_selected_index = 0;
                     self.online_scroll_offset = 0;
+                    self.search_input_focused = false;
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
@@ -4851,7 +7062,8 @@ impl UserInterface {
                             result.clone(),
                         );
                     }
-                    self.current_playlist = Some(result.playlist);
+                    self.current_playlist =
+                        Some(self.apply_active_preset_rank_title(result.playlist));
                     self.online_search_results = result.songs;
                     self.online_selected_index = 0;
                     self.online_scroll_offset = 0;
@@ -4873,8 +7085,13 @@ impl UserInterface {
                     self.online_searching = false;
                     self.playlist_search_rx = None;
                     self.playlist_search_results = result.playlists;
+                    log_ui_event(format!(
+                        "[Search][UI] 歌单搜索结果返回: count={}",
+                        self.playlist_search_results.len()
+                    ));
                     self.online_selected_index = 0;
                     self.online_scroll_offset = 0;
+                    self.search_input_focused = false;
                     if self.playlist_search_results.is_empty() {
                         self.update_status(self.t().no_playlist_result);
                     }
@@ -4900,7 +7117,8 @@ impl UserInterface {
                                 result.clone(),
                             );
                         }
-                        self.current_playlist = Some(result.playlist);
+                        self.current_playlist =
+                            Some(self.apply_active_preset_rank_title(result.playlist));
                         self.online_search_results = result.songs;
                         self.online_selected_index = 0;
                         self.online_scroll_offset = 0;
@@ -4927,7 +7145,8 @@ impl UserInterface {
                         self.online_list_url_import_cache
                             .insert(input, result.clone());
                     }
-                    self.current_playlist = Some(result.playlist);
+                    self.current_playlist =
+                        Some(self.apply_active_preset_rank_title(result.playlist));
                     let url_import_mode = self.online_list_url_import_mode;
                     self.lazy_online_all_results.clear();
                     self.lazy_online_page = 0;
@@ -5485,7 +7704,11 @@ impl UserInterface {
                         .find(|item| click_offset >= item.start_col && click_offset < item.end_col)
                         .map(|item| item.query.clone())
                     {
-                        self.start_ai_recommend_query_with(query);
+                        if self.ai_playlist_mode {
+                            self.start_ai_playlist_query_with_source(query, "预设");
+                        } else {
+                            self.start_ai_recommend_query_with_source(query, "预设");
+                        }
                     }
                     return Ok(());
                 }
@@ -5566,13 +7789,81 @@ impl UserInterface {
                     return Ok(());
                 }
 
+                // 智能歌单历史模式：鼠标点击选择并播放智能歌单，空白区域不穿透
+                if self.smart_playlist_history_mode {
+                    if let Some(layout) = self.playlist_layout {
+                        if col < layout.left_width as usize && row >= layout.start_row {
+                            let click_row = (row - layout.start_row) as usize;
+                            let visible_count = layout.visible_count;
+                            if click_row < visible_count {
+                                let clicked_index =
+                                    self.smart_playlist_history_scroll_offset + click_row;
+                                if clicked_index < self.smart_playlist_history_list.len() {
+                                    self.smart_playlist_history_selected_index = clicked_index;
+                                    self.play_smart_playlist_history_selected();
+                                }
+                            }
+                        }
+                    }
+                    return Ok(());
+                }
+
+                // 收藏列表模式优先于底层搜索结果，避免点击穿透到搜索/智能歌单列表
+                if self.favorites_mode {
+                    if let Some(layout) = self.playlist_layout {
+                        if col < layout.left_width as usize && row >= layout.start_row {
+                            let click_row = (row - layout.start_row) as usize;
+                            if click_row < layout.visible_count {
+                                let clicked_index = self.favorites_scroll_offset + click_row;
+                                if clicked_index < self.favorites.len() {
+                                    let orig_idx = self.get_fav_orig_index(clicked_index);
+                                    if let Some(idx) = orig_idx {
+                                        self.selected_index = idx;
+                                        self.favorites_mode = false;
+                                        self.favorites_selected_index = 0;
+                                        self.favorites_scroll_offset = 0;
+                                        self.play_song_by_index(idx);
+                                    } else {
+                                        let fav_path = self.favorites[clicked_index].clone();
+                                        let parent_dir = std::path::Path::new(&fav_path)
+                                            .parent()
+                                            .map(|p| p.to_string_lossy().to_string());
+                                        if let Some(dir) = parent_dir {
+                                            self.favorites_mode = false;
+                                            self.favorites_selected_index = 0;
+                                            self.favorites_scroll_offset = 0;
+                                            self.load_directory_and_play(&dir, &fav_path);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return Ok(());
+                }
+
+                // 最近播放模式优先于底层搜索结果，避免点击穿透到搜索/智能歌单列表
+                if self.recent_play_mode {
+                    if let Some(layout) = self.playlist_layout {
+                        if col < layout.left_width as usize && row >= layout.start_row {
+                            let click_row = (row - layout.start_row) as usize;
+                            if click_row < layout.visible_count {
+                                let clicked_index = self.recent_play_scroll_offset + click_row;
+                                if clicked_index < self.recent_play_list.len() {
+                                    self.recent_play_selected_index = clicked_index;
+                                    self.play_recent_selected();
+                                }
+                            }
+                        }
+                    }
+                    return Ok(());
+                }
+
                 // 搜索模式：鼠标点击选择/播放搜索结果
                 if self.search_mode {
                     // 点击搜索栏时，切回输入框焦点。搜索结果紧跟在输入行之后，不能拦截第一条结果。
                     let left_width = (self.terminal_width as f32 * 0.50) as usize;
-                    let in_playlist_detail = self.online_search_mode
-                        && self.playlist_search_mode
-                        && self.current_playlist.is_some();
+                    let hide_search_input = self.hide_search_input_in_search_results();
                     if let Some(rank) = self.preset_rank_at_position(col as u16, row) {
                         if let Some(idx) = crate::rank::PRESET_RANKS
                             .iter()
@@ -5608,7 +7899,7 @@ impl UserInterface {
                             }
                         }
                     }
-                    if !in_playlist_detail && row == 4 && col < left_width {
+                    if !hide_search_input && row == 4 && col < left_width {
                         self.search_input_focused = true;
                         return Ok(());
                     }
@@ -5616,8 +7907,14 @@ impl UserInterface {
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize && row >= layout.start_row {
                             let click_row = (row - layout.start_row) as usize;
-                            if click_row >= 1 && click_row < layout.visible_count {
-                                let result_row = click_row - 1;
+                            if click_row < layout.visible_count {
+                                let result_row = if hide_search_input {
+                                    click_row
+                                } else if click_row >= 1 {
+                                    click_row - 1
+                                } else {
+                                    return Ok(());
+                                };
                                 if self.online_search_mode {
                                     self.search_input_focused = false;
                                     if self.playlist_search_mode && self.current_playlist.is_none()
@@ -5756,6 +8053,25 @@ impl UserInterface {
                     return Ok(());
                 }
 
+                // 智能歌单历史模式：鼠标点击选择并播放智能歌单，空白区域不穿透
+                if self.smart_playlist_history_mode {
+                    if let Some(layout) = self.playlist_layout {
+                        if col < layout.left_width as usize && row >= layout.start_row {
+                            let click_row = (row - layout.start_row) as usize;
+                            let visible_count = layout.visible_count;
+                            if click_row < visible_count {
+                                let clicked_index =
+                                    self.smart_playlist_history_scroll_offset + click_row;
+                                if clicked_index < self.smart_playlist_history_list.len() {
+                                    self.smart_playlist_history_selected_index = clicked_index;
+                                    self.play_smart_playlist_history_selected();
+                                }
+                            }
+                        }
+                    }
+                    return Ok(());
+                }
+
                 // 最近播放模式：鼠标点击选择并播放歌曲
                 if self.recent_play_mode {
                     if let Some(layout) = self.playlist_layout {
@@ -5842,6 +8158,21 @@ impl UserInterface {
                 }
             }
             MouseEventKind::ScrollUp => {
+                if self.smart_playlist_history_mode {
+                    if let Some(layout) = self.playlist_layout {
+                        if col < layout.left_width as usize
+                            && self.smart_playlist_history_selected_index > 0
+                        {
+                            self.smart_playlist_history_selected_index -= 1;
+                            Self::adjust_scroll_offset(
+                                self.smart_playlist_history_selected_index,
+                                &mut self.smart_playlist_history_scroll_offset,
+                                layout.visible_count.max(1),
+                            );
+                        }
+                    }
+                    return Ok(());
+                }
                 // 所有模式：歌词区域滚轮向上 -> 跳转到上一句歌词
                 if self.lyric_time_at_position(col, row).is_some() {
                     self.seek_by_lyric_wheel(-1);
@@ -5853,6 +8184,48 @@ impl UserInterface {
                     self.recommendation_scroll_offset =
                         self.recommendation_scroll_offset.saturating_sub(3);
                     return Ok(());
+                }
+
+                if self.favorites_mode {
+                    if let Some(layout) = self.playlist_layout {
+                        if col < layout.left_width as usize {
+                            if self.favorites_scroll_offset > 0 {
+                                self.favorites_scroll_offset -= 1;
+                                let total_len = self.favorites.len();
+                                if total_len > 0 {
+                                    let view_start = self.favorites_scroll_offset;
+                                    let view_end = self
+                                        .favorites_scroll_offset
+                                        .saturating_add(layout.visible_count)
+                                        .saturating_sub(1)
+                                        .min(total_len - 1);
+                                    if self.favorites_selected_index < view_start {
+                                        self.favorites_selected_index = view_start;
+                                    } else if self.favorites_selected_index > view_end {
+                                        self.favorites_selected_index = view_end;
+                                    }
+                                }
+                            }
+                            return Ok(());
+                        }
+                    }
+                }
+
+                if self.recent_play_mode {
+                    if let Some(layout) = self.playlist_layout {
+                        if col < layout.left_width as usize {
+                            let total_len = self.recent_play_list.len();
+                            if total_len > 0 && self.recent_play_selected_index > 0 {
+                                self.recent_play_selected_index -= 1;
+                                Self::adjust_scroll_offset(
+                                    self.recent_play_selected_index,
+                                    &mut self.recent_play_scroll_offset,
+                                    layout.visible_count.max(1),
+                                );
+                            }
+                            return Ok(());
+                        }
+                    }
                 }
 
                 if self.song_info_mode {
@@ -5965,21 +8338,15 @@ impl UserInterface {
                     }
                 } else if self.recent_play_mode {
                     if let Some(layout) = self.playlist_layout {
-                        if col < layout.left_width as usize && self.recent_play_scroll_offset > 0 {
-                            self.recent_play_scroll_offset -= 1;
+                        if col < layout.left_width as usize {
                             let total_len = self.recent_play_list.len();
-                            if total_len > 0 {
-                                let view_start = self.recent_play_scroll_offset;
-                                let view_end = self
-                                    .recent_play_scroll_offset
-                                    .saturating_add(layout.visible_count)
-                                    .saturating_sub(1)
-                                    .min(total_len - 1);
-                                if self.recent_play_selected_index < view_start {
-                                    self.recent_play_selected_index = view_start;
-                                } else if self.recent_play_selected_index > view_end {
-                                    self.recent_play_selected_index = view_end;
-                                }
+                            if total_len > 0 && self.recent_play_selected_index > 0 {
+                                self.recent_play_selected_index -= 1;
+                                Self::adjust_scroll_offset(
+                                    self.recent_play_selected_index,
+                                    &mut self.recent_play_scroll_offset,
+                                    layout.visible_count.max(1),
+                                );
                             }
                         }
                     }
@@ -5987,31 +8354,39 @@ impl UserInterface {
                     // 正常模式：在播放列表区域滚轮向上 → 列表上移
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize && self.scroll_offset > 0 {
-                            self.scroll_offset -= 1;
-
-                            // 保持选中项处于当前可见区域，避免 draw 时被自动回拉
                             let total_len = {
                                 let playlist = self.playlist.lock().unwrap();
                                 playlist.len()
                             };
-                            if total_len > 0 {
-                                let view_start = self.scroll_offset;
-                                let view_end = self
-                                    .scroll_offset
-                                    .saturating_add(layout.visible_count)
-                                    .saturating_sub(1)
-                                    .min(total_len - 1);
-                                if self.selected_index < view_start {
-                                    self.selected_index = view_start;
-                                } else if self.selected_index > view_end {
-                                    self.selected_index = view_end;
-                                }
+                            if total_len > 0 && self.selected_index > 0 {
+                                self.selected_index -= 1;
+                                Self::adjust_scroll_offset(
+                                    self.selected_index,
+                                    &mut self.scroll_offset,
+                                    layout.visible_count.max(1),
+                                );
                             }
                         }
                     }
                 }
             }
             MouseEventKind::ScrollDown => {
+                if self.smart_playlist_history_mode {
+                    if let Some(layout) = self.playlist_layout {
+                        if col < layout.left_width as usize {
+                            let max_idx = self.smart_playlist_history_list.len().saturating_sub(1);
+                            if self.smart_playlist_history_selected_index < max_idx {
+                                self.smart_playlist_history_selected_index += 1;
+                                Self::adjust_scroll_offset(
+                                    self.smart_playlist_history_selected_index,
+                                    &mut self.smart_playlist_history_scroll_offset,
+                                    layout.visible_count.max(1),
+                                );
+                            }
+                        }
+                    }
+                    return Ok(());
+                }
                 // 所有模式：歌词区域滚轮向下 -> 跳转到下一句歌词
                 if self.lyric_time_at_position(col, row).is_some() {
                     self.seek_by_lyric_wheel(1);
@@ -6022,6 +8397,53 @@ impl UserInterface {
                 if self.recommand && row <= 2 {
                     self.recommendation_scroll_offset += 3;
                     return Ok(());
+                }
+
+                if self.favorites_mode {
+                    if let Some(layout) = self.playlist_layout {
+                        if col < layout.left_width as usize {
+                            let max_offset =
+                                self.favorites.len().saturating_sub(layout.visible_count);
+                            if self.favorites_scroll_offset < max_offset {
+                                self.favorites_scroll_offset += 1;
+                                let total_len = self.favorites.len();
+                                if total_len > 0 {
+                                    let view_start = self.favorites_scroll_offset;
+                                    let view_end = self
+                                        .favorites_scroll_offset
+                                        .saturating_add(layout.visible_count)
+                                        .saturating_sub(1)
+                                        .min(total_len - 1);
+                                    if self.favorites_selected_index < view_start {
+                                        self.favorites_selected_index = view_start;
+                                    } else if self.favorites_selected_index > view_end {
+                                        self.favorites_selected_index = view_end;
+                                    }
+                                }
+                            }
+                            return Ok(());
+                        }
+                    }
+                }
+
+                if self.recent_play_mode {
+                    if let Some(layout) = self.playlist_layout {
+                        if col < layout.left_width as usize {
+                            let total_len = self.recent_play_list.len();
+                            if total_len > 0 {
+                                let max_idx = total_len - 1;
+                                if self.recent_play_selected_index < max_idx {
+                                    self.recent_play_selected_index += 1;
+                                    Self::adjust_scroll_offset(
+                                        self.recent_play_selected_index,
+                                        &mut self.recent_play_scroll_offset,
+                                        layout.visible_count.max(1),
+                                    );
+                                }
+                            }
+                            return Ok(());
+                        }
+                    }
                 }
 
                 if self.song_info_mode {
@@ -6159,25 +8581,16 @@ impl UserInterface {
                 } else if self.recent_play_mode {
                     if let Some(layout) = self.playlist_layout {
                         if col < layout.left_width as usize {
-                            let max_offset = self
-                                .recent_play_list
-                                .len()
-                                .saturating_sub(layout.visible_count);
-                            if self.recent_play_scroll_offset < max_offset {
-                                self.recent_play_scroll_offset += 1;
-                                let total_len = self.recent_play_list.len();
-                                if total_len > 0 {
-                                    let view_start = self.recent_play_scroll_offset;
-                                    let view_end = self
-                                        .recent_play_scroll_offset
-                                        .saturating_add(layout.visible_count)
-                                        .saturating_sub(1)
-                                        .min(total_len - 1);
-                                    if self.recent_play_selected_index < view_start {
-                                        self.recent_play_selected_index = view_start;
-                                    } else if self.recent_play_selected_index > view_end {
-                                        self.recent_play_selected_index = view_end;
-                                    }
+                            let total_len = self.recent_play_list.len();
+                            if total_len > 0 {
+                                let max_idx = total_len - 1;
+                                if self.recent_play_selected_index < max_idx {
+                                    self.recent_play_selected_index += 1;
+                                    Self::adjust_scroll_offset(
+                                        self.recent_play_selected_index,
+                                        &mut self.recent_play_scroll_offset,
+                                        layout.visible_count.max(1),
+                                    );
                                 }
                             }
                         }
@@ -6190,23 +8603,15 @@ impl UserInterface {
                                 let playlist = self.playlist.lock().unwrap();
                                 playlist.len()
                             };
-                            let max_offset = total_len.saturating_sub(layout.visible_count);
-                            if self.scroll_offset < max_offset {
-                                self.scroll_offset += 1;
-
-                                // 保持选中项处于当前可见区域，避免 draw 时被自动回拉
-                                if total_len > 0 {
-                                    let view_start = self.scroll_offset;
-                                    let view_end = self
-                                        .scroll_offset
-                                        .saturating_add(layout.visible_count)
-                                        .saturating_sub(1)
-                                        .min(total_len - 1);
-                                    if self.selected_index < view_start {
-                                        self.selected_index = view_start;
-                                    } else if self.selected_index > view_end {
-                                        self.selected_index = view_end;
-                                    }
+                            if total_len > 0 {
+                                let max_idx = total_len - 1;
+                                if self.selected_index < max_idx {
+                                    self.selected_index += 1;
+                                    Self::adjust_scroll_offset(
+                                        self.selected_index,
+                                        &mut self.scroll_offset,
+                                        layout.visible_count.max(1),
+                                    );
                                 }
                             }
                         }
@@ -6285,6 +8690,14 @@ impl UserInterface {
 
     /// 播放下一曲（manual: 是否为用户手动切换）
     fn play_next_with_flag(&mut self, manual: bool) {
+        if manual {
+            self.record_manual_transition_preference();
+        } else {
+            let current_file = self.audio_player.lock().unwrap().get_current_file();
+            if let Some(file) = current_file {
+                Self::record_effective_play_preference(&file.name, &file.path);
+            }
+        }
         // 在线搜索结果视图（网络/聚合/歌单歌曲）统一按在线结果模拟 1~5 播放模式
         if self.search_mode && self.online_search_mode && !self.online_search_results.is_empty() {
             // 手动切歌不计入节流窗口，并清空历史
@@ -6416,6 +8829,7 @@ impl UserInterface {
 
     /// 播放上一曲
     fn play_prev(&mut self) {
+        self.record_manual_transition_preference();
         // 在线搜索结果视图（网络/聚合/歌单歌曲）统一按在线结果切换上一首
         if self.search_mode
             && self.online_search_mode

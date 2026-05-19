@@ -1,6 +1,6 @@
 <div align="center">
 
-[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JA.md) | [한국어](README_KO.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
+[简体中文](README.md) | [繁體中文](README_TC.md) | [English](README_EN.md) | [日本語](README_JP.md) | [한국어](README_KR.md) | [Русский](README_RU.md) | [Français](README_FR.md) | [Deutsch](README_DE.md) | [Español](README_ES.md) | [Italiano](README_IT.md) | [Português](README_PT.md)
 
 # 🎵 Ter-Music-Rust - ターミナル音楽プレーヤー 🎵
 
@@ -8,7 +8,9 @@
 
 Rust で実装された、シンプルで実用的なターミナル向け音楽プレーヤーです。ローカル/ネットワークの楽曲検索とダウンロード、歌詞の自動取得と表示、コメント閲覧、言語・テーマ切り替えなどを備え、Windows・Linux・MacOS をサポートします。
 
-![preview](preview.gif)
+![preview](preview1.gif)
+
+![preview](preview2.gif)
 
 ![preview1](preview1.png)
 
@@ -229,7 +231,7 @@ cargo run --release -- -o d:\Music
 
 ## 🎮 キーボードショートカット
 
-### メイン画面
+### メイン画面操作キー
 
 | キー | 動作 |
 |------|------|
@@ -251,13 +253,15 @@ cargo run --release -- -o d:\Music
 | `o` | 音楽ディレクトリを開く |
 | `s` | ローカル曲検索 |
 | `n` | オンライン曲検索 |
-| `j` | アグリゲート検索 |
+| `j` | 統合楽曲検索 |
 | `p` | オンラインプレイリスト検索 |
-| `i` | 楽曲情報検索 |
-| `a` | おすすめ曲 |
+| `i` | 楽曲情報を表示 |
+| `a` | おすすめ曲をリクエスト |
+| `Shift+A` | スマートプレイリスト推薦 |
+| `Shift+S` | 類似曲推薦 |
 | `f` | お気に入り/解除 |
 | `v` | お気に入り一覧 |
-| `m` | ディレクトリ履歴 |
+| `m` | 音楽ディレクトリを表示 |
 | `h` | ヘルプ情報を表示 |
 | `c` | 曲コメント |
 | `l` | UI 言語切り替え |
@@ -268,12 +272,13 @@ cargo run --release -- -o d:\Music
 | `r` | おすすめ曲の切替 |
 | `y` | 歌詞翻訳 / 二言語表示切替 |
 | `b` | 最近の再生リストを開く |
+| `w` | スマートプレイリスト履歴を開く |
 | `x` | M3U プレイリストをインポート |
-| `e` | 現在のプレイリストを M3U としてエクスポート |
+| `e` | M3U プレイリストをエクスポート |
 | `u` | 歌詞時間補正モードに入る |
-| `q` | 終了 |
+| `q` | 音楽プレイヤーを終了 |
 
-### 検索画面
+### 楽曲検索キー
 
 | キー | 動作 |
 |------|------|
@@ -285,7 +290,7 @@ cargo run --release -- -o d:\Music
 | `s/n/j` | ローカル/オンライン/アグリゲート検索切り替え |
 | `Esc` | 検索終了 |
 
-### お気に入り画面
+### お気に入り一覧キー
 
 | キー | 動作 |
 |------|------|
@@ -294,7 +299,7 @@ cargo run --release -- -o d:\Music
 | `d` | お気に入り削除 |
 | `Esc` | プレイリストへ戻る |
 
-### ディレクトリ履歴画面
+### 音楽ディレクトリキー
 
 | キー | 動作 |
 |------|------|
@@ -303,16 +308,17 @@ cargo run --release -- -o d:\Music
 | `d` | 履歴削除 |
 | `Esc` | プレイリストへ戻る |
 
-### コメント画面
+### 楽曲コメントキー
 
 | キー | 動作 |
 |------|------|
 | `↑/↓` | コメント選択 |
 | `Enter` | 一覧/詳細切り替え |
+| `c` | AI コメント要約 |
 | `PgUp/PgDn` | ページ切り替え |
 | `Esc` | 歌詞画面へ戻る |
 
-### 楽曲情報画面
+### 楽曲情報キー
 
 | キー | 動作 |
 |------|------|
@@ -320,18 +326,40 @@ cargo run --release -- -o d:\Music
 | `i` | 楽曲情報を再取得 |
 | `Esc` | 歌詞画面へ戻る |
 
-### プレイリスト検索画面
+### スマートプレイリスト推薦キー
 
 | キー | 動作 |
 |------|------|
-| 文字入力 | プレイリスト検索キーワード入力 |
+| 文字入力 | スマートプレイリストの説明/テーマを入力 |
+| プリセット | プリセットのテーマをクリックして即推薦 |
 | `Backspace` | 文字削除 |
-| `Enter` | 検索/プレイリストへ入る/再生ダウンロード |
-| `↑/↓` | プレイリストまたは楽曲を選択 |
-| `PgUp/PgDn` | ページ切り替え |
-| `Esc` | 1つ前に戻る/検索終了 |
+| `Enter` | 推薦プレイリストを生成開始 / 選択曲を再生 |
+| `↑/↓` | 推薦曲を選択 |
+| マウスホイール | 曲リストを上下スクロール |
+| `d` | 現在のスマートプレイリスト履歴を削除 |
+| `Esc` | プレイリストへ戻る |
 
-### ヘルプ画面
+### スマートプレイリスト履歴キー
+
+| キー | 動作 |
+|------|------|
+| `↑/↓` | 履歴のスマートプレイリストを選択 |
+| `Enter` | 選択した履歴プレイリストを再度開いて再生 |
+| `PgUp/PgDn` | ページ切り替え |
+| `d` | 選択した履歴を削除 |
+| `Esc` | プレイリストへ戻る |
+
+### 最近の再生キー
+
+| キー | 動作 |
+|------|------|
+| `↑/↓` | 最近再生した曲を選択 |
+| `Enter` | 選択曲を再生 |
+| `PgUp/PgDn` | ページ切り替え |
+| `d` | 最近の再生履歴を削除 |
+| `Esc` | プレイリストへ戻る |
+
+### ヘルプ情報キー
 
 
 | キー | 動作 |
@@ -729,14 +757,31 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 初回は依存関係のダウンロードとコンパイルが発生するため時間がかかります。2 回目以降は大幅に高速化されます。
 
 ### Release のダウンロード
-[ter-music-rust-win.zip](https://storage.deepin.org/thread/20260517123828239_ter-music-rust-win.zip "附件(Attached)") 
-[ter-music-rust-mac.zip](https://storage.deepin.org/thread/202605171238414954_ter-music-rust-mac.zip "附件(Attached)") 
-[ter-music-rust-linux.zip](https://storage.deepin.org/thread/202605171238555697_ter-music-rust-linux.zip "附件(Attached)") 
-[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605171239035640_ter-music-rust_deb.zip "附件(Attached)")
+[ter-music-rust-win.zip](https://storage.deepin.org/thread/202605191650473525_ter-music-rust-win.zip "附件(Attached)")
+[ter-music-rust-mac.zip](https://storage.deepin.org/thread/20260519165110865_ter-music-rust-mac.zip "附件(Attached)")
+[ter-music-rust_deb.zip](https://storage.deepin.org/thread/202605191653509387_ter-music-rust_deb.zip "附件(Attached)")
 
 ---
 
 ## 📝 更新履歴
+
+## バージョン 2.2.0 (2026-05-20)
+
+### 🎉 新機能
+- ✨ **スマートプレイリスト推薦**：`Shift+A` でスマートプレイリスト入力モードに入り、説明を入力するかプリセットをクリックすると、モデルがテーマに沿ったプレイリスト 20~30 曲をストリーミングで推薦し、スマートプレイリスト推薦リストに 1 曲ずつ追加します。最初の 1 曲の解析が完了すると自動的に再生を開始します。スマートプレイリスト履歴として保存でき、`W` で履歴プレイリストを再度開けます。
+- ✨ **今日のおすすめ曲**：今日のおすすめ曲がストリーミング出力に変更されました。モデルが 1 曲返すたびに、すぐに上部の「今日のおすすめ曲」エリアに追加されるため、全件生成を待つ必要はありません。最初の曲が表示されたら「おすすめ曲を取得中...」のヒントを直ちに非表示にし、毎回 5~10 曲を推薦します。結果には推薦理由や余計なフィールドは含まれません。
+- ✨ **類似曲推薦**:再生中に `Shift+S` を押すと、現在再生中の曲のスタイル/ジャンル、言語、年代、BPM、ムード/雰囲気、ハーモニー/編曲の特徴、類似アーティスト/楽曲などの観点に基づいて、モデルがストリーミングで 5~10 曲の類似度の高い楽曲を推薦し、上部の「類似曲推薦 - ソース曲:」エリアに表示します。クリックまたは左右キーで選択し、Enter でダウンロード・再生できます。
+- ✨ **推薦最適化**:再生履歴 (`history.json`) のみに依存するのではなく、より正確な再生行動の嗜好情報 (`preferences.json`) を使用するようになりました。今日のおすすめ曲と類似曲推薦が取得完了した後、デフォルトでは最初の曲をハイライトしません。ユーザーが初めて矢印キーを押すかマウスをスクロールしてから、最初の曲から選択を開始します。上部の推薦バーは、読み込み中と結果表示の間をスムーズに切り替え、「おすすめ曲を取得中...」と曲名が同時に表示されることを避けます。
+
+- ✨ **`R` キー動作の改善**:`R` で今日のおすすめのオン/オフを切り替えられるようになり、オンにすると今日のおすすめを自動更新、オフにすると上部の推薦エリアをそのまま閉じます。オンにしかできなかった以前の動作を解消しました。
+
+
+### 🔧 不具合修正
+- 🐞 **Apple Music 曲の長さ欠落**:プリセットチャートをクリックしたり Apple Music リンクを入力してプレイリストをインポートした際、最初の曲のみ長さが表示され、他の曲の長さが `--:--` になる問題を修正しました。Apple Music は現在、URL の storefront(`cn` / `hk` / `tw` / `us` / `kr` / `jp` など)に応じて `amp-api.music.apple.com` を呼び出し、各曲の `durationInMillis` を安定して取得します。
+- 🐞 **プレイリスト URL インポートのサブタイトル誤表示**:プリセットチャート以外のオンライン URL をインポート後、プレイリスト検索のサブタイトルが実際のページタイトルではなく「ソース名 + URL/パラメータ」と表示される問題を修正しました。
+- 🐞 **スマートプレイリスト結果ページで Enter が再生できない**:スマートプレイリスト推薦リストの生成完了後、カーソルを移動して Enter を押しても選択中の曲を再生できず、履歴プレイリストを再度開かないと再生できない問題を修正しました。スマートプレイリスト結果ページに専用の Enter ブランチを追加し、`online_searching` の状態に左右されなくなりました。
+
+---
 
 ## バージョン 2.1.0 (2026-05-17)
 
@@ -746,29 +791,29 @@ Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" -Destination ".\target\rel
 - ✨ **マルチプラットフォーム URL 認識**：URL インポート入口での各プラットフォームリンクの認識・処理フローを改善し、クロスプラットフォームのプレイリストインポート体験を向上。
 
 - ✨ **Apple Music**：
-    `https://music.apple.com/cn/room/*`
-    `https://music.apple.com/cn/album/*/*`
-    `https://music.apple.com/cn/playlist/*/*`
-    `https://music.apple.com/cn/artist/*/*/top-songs`
-    `https://music.apple.com/cn/new/top-charts/songs`
+   - `https://music.apple.com/cn/room/*`
+   - `https://music.apple.com/cn/album/*/*`
+   - `https://music.apple.com/cn/playlist/*/*`
+   - `https://music.apple.com/cn/artist/*/*/top-songs`
+   - `https://music.apple.com/cn/new/top-charts/songs`
 
 - ✨ **Spotify Music**：
-    `https://open.spotify.com/album/*`
-    `https://open.spotify.com/artist/*`
-    `https://open.spotify.com/playlist/*`
-    `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
+   - `https://open.spotify.com/album/*`
+   - `https://open.spotify.com/artist/*`
+   - `https://open.spotify.com/playlist/*`
+   - `$env:SPOTIFY_PROXY="http://127.0.0.1:7890"`
 
 - ✨ **NetEase Music**：
-    `https://music.163.com/#/album?id=*`
-    `https://music.163.com/#/artist?id=*`
-    `https://music.163.com/#/playlist?id=*`
-    `https://music.163.com/#/discover/toplist?id=*`
+   - `https://music.163.com/#/album?id=*`
+   - `https://music.163.com/#/artist?id=*`
+   - `https://music.163.com/#/playlist?id=*`
+   - `https://music.163.com/#/discover/toplist?id=*`
 
 - ✨ **Other Music**：
-    `https://www.kuwo.cn/rankList`
-    `https://www.kuwo.cn/singer_detail/*`
-    `https://www.kuwo.cn/playlist_detail/*`
-    `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
+   - `https://www.kuwo.cn/rankList`
+   - `https://www.kuwo.cn/singer_detail/*`
+   - `https://www.kuwo.cn/playlist_detail/*`
+   - `https://www.kugou.com/yy/rank/home/1-*.html?from=rank`
 
 ---
 

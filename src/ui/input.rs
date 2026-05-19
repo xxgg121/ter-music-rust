@@ -118,10 +118,16 @@ impl super::UserInterface {
         match code {
             KeyCode::Esc => {
                 self.ai_recommend_input_mode = false;
+                self.ai_playlist_mode = false;
                 self.ai_recommend_input_value.clear();
             }
             KeyCode::Enter => {
-                self.start_ai_recommend_query();
+                if self.ai_playlist_mode {
+                    let query = self.ai_recommend_input_value.clone();
+                    self.start_ai_playlist_query_with_source(query, "输入描述");
+                } else {
+                    self.start_ai_recommend_query();
+                }
             }
             KeyCode::Backspace => {
                 self.ai_recommend_input_value.pop();
@@ -157,6 +163,10 @@ impl super::UserInterface {
                         self.comments_detail_mode = false;
                     }
                     self.song_info_mode = false;
+                } else if self.ai_playlist_results_mode
+                    && self.smart_playlist_history_return_to_history
+                {
+                    self.return_from_ai_playlist_results_to_history();
                 } else if self.help_mode {
                     self.help_mode = false;
                 } else if self.playlist_search_mode && self.current_playlist.is_some() {
@@ -181,6 +191,9 @@ impl super::UserInterface {
                     self.online_searching = false;
                     self.playlist_songs_rx = None;
                     if was_url_import {
+                        self.clear_lazy_online_page_state();
+                        self.online_list_url_import_source = None;
+                        self.online_list_url_import_pending_play = false;
                         self.search_input_focused = true;
                         self.search_query.clear();
                         self.active_preset_rank_title = None;
@@ -190,6 +203,24 @@ impl super::UserInterface {
                     } else {
                         self.search_input_focused = false;
                     }
+                } else if self.playlist_search_mode
+                    && self.current_playlist.is_none()
+                    && !self.search_input_focused
+                {
+                    self.clear_online_download_state();
+                    self.online_searching = false;
+                    self.playlist_search_rx = None;
+                    self.playlist_songs_rx = None;
+                    self.playlist_search_results.clear();
+                    self.online_search_results.clear();
+                    self.clear_lazy_online_page_state();
+                    self.online_list_url_import_source = None;
+                    self.online_list_url_import_pending_play = false;
+                    self.search_query.clear();
+                    self.search_input_focused = true;
+                    self.online_selected_index = 0;
+                    self.online_scroll_offset = 0;
+                    self.active_preset_rank_title = None;
                 } else {
                     self.clear_online_download_state();
                     self.search_mode = false;
@@ -212,16 +243,42 @@ impl super::UserInterface {
                     self.playlist_songs_rx = None;
                     self.playlist_search_results.clear();
                     self.current_playlist = None;
+                    self.clear_ai_playlist_results_state();
+                    self.smart_playlist_history_return_to_history = false;
+                    self.smart_playlist_history_active_index = None;
                 }
             }
             KeyCode::Enter => {
                 if self.comments_mode || self.help_mode {
                     handled_in_search = false;
+                } else if self.online_search_mode
+                    && online_input_focused
+                    && !self.search_query.trim().is_empty()
+                {
+                    if self.playlist_search_mode && self.current_playlist.is_none() {
+                        self.online_search_page = 1;
+                        self.start_online_search();
+                    } else if Self::is_online_list_url_input(&self.search_query) {
+                        self.start_online_list_url_import();
+                    } else {
+                        self.online_search_page = 1;
+                        self.start_online_search();
+                    }
                 } else if self.preset_rank_has_focus() {
                     let _ = self.activate_selected_preset_rank();
                 } else if self.try_use_selected_search_history() {
                 } else if self.preset_rank_grid_visible() {
                     let _ = self.activate_selected_preset_rank();
+                } else if self.ai_playlist_results_mode && self.search_mode {
+                    if !self.online_downloading {
+                        if let Some(song) = self.resolved_online_song_at(self.online_selected_index)
+                        {
+                            self.search_input_focused = false;
+                            self.main_focus = super::MainFocus::Playlist;
+                            self.online_auto_skip_times.clear();
+                            self.start_download_song(song);
+                        }
+                    }
                 } else if self.online_search_mode {
                     if self.online_searching || self.online_downloading {
                     } else if online_input_focused
@@ -255,13 +312,11 @@ impl super::UserInterface {
                     } else if !self.online_search_results.is_empty() {
                         if let Some(song) = self.resolved_online_song_at(self.online_selected_index)
                         {
+                            self.search_input_focused = false;
                             self.online_auto_skip_times.clear();
                             self.start_download_song(song);
                             self.search_input_focused = false;
                         }
-                    } else if online_input_focused && !self.search_query.is_empty() {
-                        self.online_search_page = 1;
-                        self.start_online_search();
                     }
                 } else if !self.search_results.is_empty() {
                     if let Some(&orig_idx) = self.search_results.get(self.search_selected_index) {
@@ -310,7 +365,9 @@ impl super::UserInterface {
                     self.move_preset_rank_selection(3);
                 } else if self.search_history_visible() {
                     let len = self.visible_search_history_items().len();
-                    if self.search_history_selected_index + 1 >= len && self.preset_rank_grid_visible() {
+                    if self.search_history_selected_index + 1 >= len
+                        && self.preset_rank_grid_visible()
+                    {
                         self.preset_rank_selected_index = Some(0);
                     } else {
                         self.move_search_history_selection(1);
